@@ -23,17 +23,17 @@ src/test/kotlin/com/stayops/channel/domain/model/
 **Channel 도메인 모델:**
 ```kotlin
 data class Channel(
-    override val id: String,
+    val id: String,
     val propertyId: String,
     val code: String,               // "FINESTAY", "AGODA", "AIRBNB" 등
     val name: String,               // 표시명
     val type: ChannelType,
     val config: ChannelConfig,
     val status: ChannelStatus,
-    override val version: Long = 0,
-    override val createdAt: Instant,
-    override val updatedAt: Instant
-) : AggregateRoot()
+    val version: Long = 0,
+    val createdAt: Instant,
+    val updatedAt: Instant
+)
 ```
 
 **ChannelConfig (VO):**
@@ -135,7 +135,7 @@ src/test/kotlin/com/stayops/channel/application/service/
 **SyncTask 도메인 모델:**
 ```kotlin
 data class SyncTask(
-    override val id: String,
+    val id: String,
     val propertyId: String,
     val channelCode: String,
     val type: SyncTaskType,
@@ -144,10 +144,10 @@ data class SyncTask(
     val retryCount: Int = 0,
     val maxRetries: Int = 3,
     val lastError: String? = null,
-    override val version: Long = 0,
-    override val createdAt: Instant,
-    override val updatedAt: Instant
-) : AggregateRoot()
+    val version: Long = 0,
+    val createdAt: Instant,
+    val updatedAt: Instant
+)
 ```
 
 **ChannelSyncAdapter (도메인 서비스 인터페이스):**

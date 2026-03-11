@@ -22,7 +22,7 @@ src/test/kotlin/com/stayops/guest/domain/model/
 **도메인 모델:**
 ```kotlin
 data class Guest(
-    override val id: String,
+    val id: String,
     val propertyId: String,
     val name: String,
     val phone: String,
@@ -30,10 +30,10 @@ data class Guest(
     val tier: GuestTier = GuestTier.NEW,
     val memo: String? = null,
     val visitSummary: VisitSummary = VisitSummary.EMPTY,
-    override val version: Long = 0,
-    override val createdAt: Instant,
-    override val updatedAt: Instant
-) : AggregateRoot()
+    val version: Long = 0,
+    val createdAt: Instant,
+    val updatedAt: Instant
+)
 ```
 
 **GuestTier 승급 기준:**

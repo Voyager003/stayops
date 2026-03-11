@@ -23,7 +23,7 @@ src/test/kotlin/com/stayops/auth/domain/model/
 **User 도메인 모델:**
 ```kotlin
 data class User(
-    override val id: String,
+    val id: String,
     val email: String,
     val passwordHash: String,
     val name: String,
@@ -31,10 +31,10 @@ data class User(
     val propertyAccess: List<PropertyAccess> = emptyList(),
     val status: UserStatus = UserStatus.ACTIVE,
     val lastLoginAt: Instant? = null,
-    override val version: Long = 0,
-    override val createdAt: Instant,
-    override val updatedAt: Instant
-) : AggregateRoot()
+    val version: Long = 0,
+    val createdAt: Instant,
+    val updatedAt: Instant
+)
 
 data class PropertyAccess(
     val propertyId: String,

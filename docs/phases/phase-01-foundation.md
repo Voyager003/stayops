@@ -11,24 +11,12 @@
 **생성할 파일:**
 ```
 src/main/kotlin/com/stayops/shared/domain/
-├── AggregateRoot.kt
-├── DomainEvent.kt
 ├── Money.kt
 └── DateRange.kt
 
 src/test/kotlin/com/stayops/shared/domain/
 ├── MoneyTest.kt
 └── DateRangeTest.kt
-```
-
-**AggregateRoot:**
-```kotlin
-abstract class AggregateRoot {
-    abstract val id: String
-    abstract val version: Long
-    abstract val createdAt: Instant
-    abstract val updatedAt: Instant
-}
 ```
 
 **Money:**

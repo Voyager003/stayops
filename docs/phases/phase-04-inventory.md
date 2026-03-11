@@ -20,17 +20,17 @@ src/test/kotlin/com/stayops/inventory/domain/model/
 **도메인 모델:**
 ```kotlin
 data class RoomInventory(
-    override val id: String,
+    val id: String,
     val propertyId: String,
     val roomTypeId: String,
     val date: LocalDate,
     val totalCount: Int,
     val reservedCount: Int,
     val blockedCount: Int = 0,
-    override val version: Long = 0,
-    override val createdAt: Instant,
-    override val updatedAt: Instant
-) : AggregateRoot() {
+    val version: Long = 0,
+    val createdAt: Instant,
+    val updatedAt: Instant
+) {
 
     val availableCount: Int
         get() = totalCount - reservedCount - blockedCount

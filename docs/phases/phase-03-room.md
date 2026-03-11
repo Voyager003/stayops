@@ -24,7 +24,7 @@ src/test/kotlin/com/stayops/room/domain/model/
 **RoomType 도메인 모델:**
 ```kotlin
 data class RoomType(
-    override val id: String,
+    val id: String,
     val propertyId: String,
     val name: String,
     val description: String,
@@ -32,26 +32,26 @@ data class RoomType(
     val basePrice: Money,
     val amenities: List<String>,
     val status: RoomTypeStatus,
-    override val version: Long = 0,
-    override val createdAt: Instant,
-    override val updatedAt: Instant
-) : AggregateRoot()
+    val version: Long = 0,
+    val createdAt: Instant,
+    val updatedAt: Instant
+)
 ```
 
 **Room 도메인 모델:**
 ```kotlin
 data class Room(
-    override val id: String,
+    val id: String,
     val propertyId: String,
     val roomTypeId: String,
     val roomNumber: String,
     val floor: Int,
     val status: RoomStatus,
     val memo: String? = null,
-    override val version: Long = 0,
-    override val createdAt: Instant,
-    override val updatedAt: Instant
-) : AggregateRoot()
+    val version: Long = 0,
+    val createdAt: Instant,
+    val updatedAt: Instant
+)
 ```
 
 **비즈니스 규칙:**

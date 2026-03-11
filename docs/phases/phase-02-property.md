@@ -24,7 +24,7 @@ src/test/kotlin/com/stayops/property/domain/model/
 **도메인 모델:**
 ```kotlin
 data class Property(
-    override val id: String,
+    val id: String,
     val ownerId: String,
     val name: String,
     val type: PropertyType,
@@ -34,10 +34,10 @@ data class Property(
     val status: PropertyStatus,
     val timezone: String = "Asia/Seoul",
     val currency: String = "KRW",
-    override val version: Long = 0,
-    override val createdAt: Instant = Instant.now(),
-    override val updatedAt: Instant = Instant.now()
-) : AggregateRoot()
+    val version: Long = 0,
+    val createdAt: Instant = Instant.now(),
+    val updatedAt: Instant = Instant.now()
+)
 ```
 
 **비즈니스 규칙:**

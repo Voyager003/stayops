@@ -29,7 +29,7 @@ src/test/kotlin/com/stayops/rate/domain/service/
 **RatePlan 도메인 모델:**
 ```kotlin
 data class RatePlan(
-    override val id: String,
+    val id: String,
     val propertyId: String,
     val roomTypeId: String,
     val name: String,
@@ -40,10 +40,10 @@ data class RatePlan(
     val price: Money,
     val priority: Int,
     val status: RatePlanStatus,
-    override val version: Long = 0,
-    override val createdAt: Instant,
-    override val updatedAt: Instant
-) : AggregateRoot()
+    val version: Long = 0,
+    val createdAt: Instant,
+    val updatedAt: Instant
+)
 ```
 
 **DayOfWeekRate (VO):**

@@ -29,7 +29,7 @@ src/test/kotlin/com/stayops/reservation/domain/model/
 **Reservation 도메인 모델:**
 ```kotlin
 data class Reservation(
-    override val id: String,
+    val id: String,
     val propertyId: String,
     val roomTypeId: String,
     val roomId: String? = null,
@@ -42,10 +42,10 @@ data class Reservation(
     val channel: BookingChannel,
     val pricing: ReservationPricing,
     val memo: String? = null,
-    override val version: Long = 0,
-    override val createdAt: Instant,
-    override val updatedAt: Instant
-) : AggregateRoot()
+    val version: Long = 0,
+    val createdAt: Instant,
+    val updatedAt: Instant
+)
 ```
 
 **BookingChannel (VO):**
