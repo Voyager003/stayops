@@ -1,0 +1,75 @@
+package com.stayops.property.domain.model
+
+import java.time.Instant
+
+@ConsistentCopyVisibility
+data class Property private constructor(
+    val id: String,
+    val ownerId: String,
+    val name: String,
+    val type: PropertyType,
+    val address: Address,
+    val contactInfo: ContactInfo,
+    val description: String,
+    val status: PropertyStatus,
+    val timezone: String,
+    val currency: String,
+    val version: Long,
+    val createdAt: Instant,
+    val updatedAt: Instant
+) {
+    fun activate(): Property {
+        require(status == PropertyStatus.INACTIVE) {
+            "INACTIVE 상태에서만 활성화할 수 있습니다: $status"
+        }
+        return copy(status = PropertyStatus.ACTIVE, updatedAt = Instant.now())
+    }
+
+    fun deactivate(): Property {
+        require(status == PropertyStatus.ACTIVE) {
+            "ACTIVE 상태에서만 비활성화할 수 있습니다: $status"
+        }
+        return copy(status = PropertyStatus.INACTIVE, updatedAt = Instant.now())
+    }
+
+    fun suspend(): Property {
+        require(status == PropertyStatus.ACTIVE) {
+            "ACTIVE 상태에서만 정지할 수 있습니다: $status"
+        }
+        return copy(status = PropertyStatus.SUSPENDED, updatedAt = Instant.now())
+    }
+
+    fun isBookable(): Boolean = status == PropertyStatus.ACTIVE
+
+    companion object {
+        fun create(
+            id: String,
+            ownerId: String,
+            name: String,
+            type: PropertyType,
+            address: Address,
+            contactInfo: ContactInfo,
+            description: String,
+            timezone: String = "Asia/Seoul",
+            currency: String = "KRW"
+        ): Property {
+            require(name.isNotBlank()) { "숙소명은 비어있을 수 없습니다" }
+            val now = Instant.now()
+            return Property(
+                id = id,
+                ownerId = ownerId,
+                name = name,
+                type = type,
+                address = address,
+                contactInfo = contactInfo,
+                description = description,
+                status = PropertyStatus.INACTIVE,
+                timezone = timezone,
+                currency = currency,
+                version = 0,
+                createdAt = now,
+                updatedAt = now
+            )
+        }
+    }
+}
