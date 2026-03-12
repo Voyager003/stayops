@@ -138,6 +138,8 @@ Refactor code + Update tests (must pass) → [STOP] → Validate with user → W
 
 All tests use **Kotest BehaviorSpec** with Given/When/Then structure.
 
+**Exception — Spring integration tests**: `kotest-extensions-spring` does not support Kotest 6.x (archived). Repository and API integration tests use `@SpringBootTest` + JUnit5 `@Nested` / `@Test` instead.
+
 ```kotlin
 class ReservationTest : BehaviorSpec({
     given("CONFIRMED 상태의 예약") {

@@ -71,5 +71,36 @@ data class Property private constructor(
                 updatedAt = now
             )
         }
+
+        // Reconstitutes a Property from persistence — bypasses business creation logic
+        fun reconstitute(
+            id: String,
+            ownerId: String,
+            name: String,
+            type: PropertyType,
+            address: Address,
+            contactInfo: ContactInfo,
+            description: String,
+            status: PropertyStatus,
+            timezone: String,
+            currency: String,
+            version: Long,
+            createdAt: Instant,
+            updatedAt: Instant
+        ): Property = Property(
+            id = id,
+            ownerId = ownerId,
+            name = name,
+            type = type,
+            address = address,
+            contactInfo = contactInfo,
+            description = description,
+            status = status,
+            timezone = timezone,
+            currency = currency,
+            version = version,
+            createdAt = createdAt,
+            updatedAt = updatedAt
+        )
     }
 }
