@@ -41,6 +41,16 @@ data class Property private constructor(
 
     fun isBookable(): Boolean = status == PropertyStatus.ACTIVE
 
+    fun updateInfo(
+        name: String = this.name,
+        description: String = this.description,
+        address: Address = this.address,
+        contactInfo: ContactInfo = this.contactInfo
+    ): Property {
+        require(name.isNotBlank()) { "숙소명은 비어있을 수 없습니다" }
+        return copy(name = name, description = description, address = address, contactInfo = contactInfo, updatedAt = Instant.now())
+    }
+
     companion object {
         fun create(
             id: String,

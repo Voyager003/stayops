@@ -167,6 +167,25 @@ class PropertyTest : BehaviorSpec({
         }
     }
 
+    given("숙소 정보 수정 시") {
+        val property = newProperty()
+
+        `when`("유효한 값으로 수정하면") {
+            val updated = property.updateInfo(name = "광안리 펜션", description = "새 설명")
+            then("이름과 설명이 변경된다") {
+                updated.name shouldBe "광안리 펜션"
+                updated.description shouldBe "새 설명"
+            }
+        }
+        `when`("이름을 빈 문자열로 수정하면") {
+            then("예외가 발생한다") {
+                shouldThrow<IllegalArgumentException> {
+                    property.updateInfo(name = "")
+                }
+            }
+        }
+    }
+
     given("ContactInfo 생성 시") {
         `when`("phone이 빈 문자열이면") {
             then("예외가 발생한다") {
