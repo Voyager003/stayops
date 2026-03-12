@@ -4,6 +4,25 @@ JWT 인증, 멀티 숙소 접근 권한, Redis Refresh Token 관리.
 
 ---
 
+## 기능적 요구사항
+
+- **회원가입·로그인**: 이메일/비밀번호 기반 회원가입 및 로그인을 지원해야 한다
+- **토큰 기반 인증**: Access Token(15분)과 Refresh Token(7일)으로 무상태 인증을 구현해야 한다
+- **멀티 숙소 접근 제어**: 사용자별로 접근 가능한 숙소 목록과 역할(OWNER/MANAGER/FRONT_DESK)을 관리해야 한다
+- **역할별 권한**: ADMIN은 전체 시스템, OWNER는 소유 숙소, MANAGER/FRONT_DESK는 배정된 숙소에만 접근 가능해야 한다
+- **로그아웃 즉시 무효화**: 로그아웃 시 Access Token을 즉시 무효화하고 Refresh Token을 삭제해야 한다
+
+## 기술적 도전 과제
+
+| 과제 | 설명 | 해결 전략 |
+|------|------|----------|
+| Stateless 토큰 즉시 무효화 | JWT는 서버에 상태가 없어 발급 후 무효화가 어려움 | Redis 블랙리스트 — 로그아웃 시 Access Token의 jti를 남은 TTL만큼 Redis에 저장 |
+| Refresh Token 탈취 방지 | Refresh Token이 탈취되면 7일간 악용 가능 | Redis에 저장하고 로그아웃/갱신 시 즉시 삭제, Refresh Rotation 적용 |
+| 기존 API 전체 인가 적용 | Phase 1~9의 모든 엔드포인트에 인증·인가를 소급 적용해야 함 | `JwtAuthenticationFilter`를 Security 필터 체인에 등록, 각 Controller에 `hasAccessTo(propertyId)` 검사 추가 |
+| Secret Key 관리 | JWT 서명 키가 256비트 이상이어야 하며 코드에 노출되면 안 됨 | `application-secret.yml` (gitignored) 또는 환경 변수에서 로드 |
+
+---
+
 ## Sub-steps
 
 ### Phase 10-1: User 도메인 모델 + 단위 테스트

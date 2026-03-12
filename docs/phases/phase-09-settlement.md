@@ -4,6 +4,22 @@
 
 ---
 
+## 기능적 요구사항
+
+- **기간별 정산 조회**: 시작일~종료일 범위의 총 매출·총 수수료·순 정산액을 집계하여 조회할 수 있어야 한다
+- **채널별 정산 분리**: 채널(FineStay, Agoda, Airbnb 등)별로 예약 건수·매출·수수료·순정산을 분리하여 확인할 수 있어야 한다
+- **정산 대상 필터링**: CHECKED_OUT과 NO_SHOW 상태의 예약만 정산에 포함해야 한다 (취소·미확정 제외)
+
+## 기술적 도전 과제
+
+| 과제 | 설명 | 해결 전략 |
+|------|------|----------|
+| 대량 데이터 집계 성능 | 수천 건의 예약을 기간·채널별로 실시간 집계해야 함 | MongoDB Aggregation Pipeline ($match → $group → $sum) — 애플리케이션이 아닌 DB 레벨에서 집계 |
+| 별도 도메인 모델 불필요 | 정산은 Reservation 데이터의 읽기 전용 뷰이므로 별도 Entity 불요 | DTO 기반 쿼리 서비스(`SettlementQueryService`) — 도메인 모델 없이 Aggregation 결과를 DTO로 직접 매핑 |
+| 금액 정밀도 | BigDecimal 기반 Money가 MongoDB에서 정확히 집계되어야 함 | Aggregation에서 `pricing.totalAmount`, `pricing.commissionAmount` 필드를 직접 $sum |
+
+---
+
 ## Sub-steps
 
 ### Phase 9-1: SettlementQueryService + MongoDB aggregation 구현

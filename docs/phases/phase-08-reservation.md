@@ -4,6 +4,26 @@
 
 ---
 
+## 기능적 요구사항
+
+- **예약 생성**: 객실타입·날짜·채널을 지정하여 예약을 생성하고, 재고 차감·요금 산정·고객 등록이 원자적으로 처리되어야 한다
+- **예약 라이프사이클**: PENDING → CONFIRMED → CHECKED_IN → CHECKED_OUT 상태 흐름과 취소(CANCELLED), 노쇼(NO_SHOW) 처리를 지원해야 한다
+- **체크인 시 객실 배정**: 체크인 시 실제 객실(Room)을 배정하고, 해당 Room 상태를 OCCUPIED로 전환해야 한다
+- **체크아웃 후 연동**: 체크아웃 시 객실 상태를 CLEANING으로 전환하고, 고객 방문 이력을 갱신하며, 채널 동기화를 트리거해야 한다
+- **채널별 수수료 추적**: FineStay(수수료 0%) vs OTA(수수료율 적용) 예약을 구분하여 정산 데이터를 추적해야 한다
+
+## 기술적 도전 과제
+
+| 과제 | 설명 | 해결 전략 |
+|------|------|----------|
+| 다중 BC 오케스트레이션 | 예약 1건 생성에 Room·Rate·Inventory·Guest·Channel 5개 BC가 관여 | Application Service에서 순서대로 조율, 실패 시 보상 트랜잭션 |
+| 동시 예약 Race Condition | 마지막 1실 동시 예약 시 1건만 성공해야 함 | Inventory의 낙관적 락 — version 충돌 시 409 Conflict 반환 |
+| 도메인 이벤트 전파 | 체크아웃 → Guest 등급 갱신, 예약 생성 → Channel 동기화 | Spring `ApplicationEventPublisher` + `@EventListener` |
+| 예약 가격 불변성 | 예약 후 요금제가 변경되어도 예약 시점의 가격이 보존되어야 함 | `ReservationPricing`에 스냅샷 저장 — 생성 후 변경 불가 |
+| 10-thread 동시성 테스트 | 동시 예약 시나리오를 자동화 테스트로 검증해야 함 | `CountDownLatch` + `ExecutorService`로 10개 스레드 동시 요청 |
+
+---
+
 ## Sub-steps
 
 ### Phase 8-1: Reservation 도메인 모델 + 단위 테스트
