@@ -16,7 +16,7 @@
 | 과제 | 설명 | 해결 전략 |
 |------|------|----------|
 | 등급 산정 복합 기준 | 방문 횟수 기준과 누적 지출 기준이 OR 조건으로 결합됨 (VIP: 20회+ OR 500만원+) | `calculateTier()`에서 두 기준 모두 평가, 높은 등급 반환 |
-| 크로스 BC 이벤트 | 체크아웃(Reservation BC) → 방문 기록 갱신(Guest BC) 연동 필요 | Spring `@EventListener`로 `ReservationCheckedOut` 이벤트 수신 (Phase 8에서 구현) |
+| 크로스 모듈 이벤트 | 체크아웃(reservation 모듈) → 방문 기록 갱신(guest 모듈) 연동 필요 | Spring `@EventListener`로 `ReservationCheckedOut` 이벤트 수신 (Phase 8에서 구현) |
 | 전화번호 유니크 | 같은 숙소 내 동일 전화번호 중복 등록 방지 | MongoDB 복합 유니크 인덱스 `{ propertyId: 1, phone: 1 }` |
 
 ---

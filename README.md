@@ -29,7 +29,7 @@
 
 - **동시성 제어** — 마지막 1객실 동시 예약 시 재고 정합성 보장
 - **데이터 일관성** — Outbox 패턴으로 메시지 브로커 없이 채널 간 Eventually Consistent 동기화
-- **도메인 모델링** — 9개 BC 분리, 순수 도메인 객체, 도메인 이벤트 기반 크로스 컨텍스트 연동
+- **도메인 모델링** — 8개 피처 모듈, 순수 도메인 객체, 도메인 이벤트 기반 크로스 모듈 연동
 
 ### 기능적 요구사항
 
@@ -58,7 +58,7 @@
 - **필수**
   - 낙관적 락 동시성 제어: 마지막 1객실 동시 예약 → 정확히 1건만 성공
   - Outbox 패턴: 메시지 브로커 없이 MongoDB + 스케줄러로 신뢰성 있는 비동기 동기화
-  - 도메인 이벤트: Bounded Context 간 결합도를 낮추면서 크로스 컨텍스트 연동
+  - 도메인 이벤트: 모듈 간 결합도를 낮추면서 크로스 모듈 연동
 - **권장**
   - 가상 채널 어댑터로 실제 OTA API 없이 동기화 플로우 검증
   - TDD 전 계층 적용 (Red-Green-Refactor)
@@ -71,38 +71,18 @@
 - **DDD**: 비즈니스 로직은 도메인 객체 내부에 위치
 - **Layered Architecture**: Controller → Service → Domain ← Repository
 
-### Bounded Context Map
+### 피처 모듈
 
-| # | Context | 설명 |
-|---|---------|------|
-| 1 | **Property** | 숙소 관리, 멀티 숙소 지원 (테넌트 경계) |
-| 2 | **Room** | 객실/객실타입 관리 |
-| 3 | **Inventory** | 날짜별 객실 재고, 낙관적 락 동시성 제어 |
-| 4 | **Guest** | 고객 등급, 방문/지출 이력 |
-| 5 | **Channel** | 판매 채널 관리 (FineStay/OTA), Outbox 기반 재고 동기화, 가상 채널 어댑터 |
-| 6 | **Rate** | 시즌/요일/채널별 동적 요금제, RateResolver |
-| 7 | **Reservation** | 예약 CRUD, 상태 전이, 채널별 정산예정 금액 |
-| 8 | **Settlement** | 채널별 수수료/실 정산액 집계 (MongoDB aggregation) |
-| 9 | **Auth** | JWT 인증, 멀티 숙소 접근 권한 |
-
-```
-                         ┌──────────┐
-                         │ Property │
-                         └────┬─────┘
-                              │ propertyId
-      ┌───────────┬───────────┼───────────┬──────────┬──────────┐
-      ▼           ▼           ▼           ▼          ▼          ▼
-  ┌──────┐  ┌─────────┐  ┌─────┐     ┌──────┐  ┌──────┐  ┌──────────┐
-  │ Room │  │Inventory│  │Guest│     │ Rate │  │ Auth │  │Settlement│
-  └──┬───┘  └────┬────┘  └──┬──┘     └──┬───┘  └──────┘  └────┬─────┘
-     │      ┌────┴────┐     │           │                      │
-     │      │ Channel │◄────┼───────────┼──────────────────────┘
-     │      └────┬────┘     │           │
-     ▼           ▼          ▼           ▼
-  ┌──────────────────────────────────────────────────────────────┐
-  │                     Reservation                              │
-  └──────────────────────────────────────────────────────────────┘
-```
+| 모듈 | 책임 | 핵심 모델 |
+|------|------|---------|
+| property | 숙소 정보, 상태 관리 | Property, Address |
+| room | 객실 타입/실물 객실, 상태 관리 | RoomType, Room |
+| inventory | 날짜별 재고, 동시성 제어 | RoomInventory |
+| guest | 게스트 정보, 방문 이력, 등급 | Guest, VisitSummary |
+| rate | 요금제, 날짜별 요금 산출 | RatePlan, RateResolver |
+| channel | 판매 채널, OTA 동기화 | Channel, SyncTask |
+| reservation | 예약 라이프사이클 (핵심) | Reservation |
+| shared/auth | JWT 인증, 멀티 숙소 접근 권한 | - |
 
 ### Reservation Flow
 
@@ -164,7 +144,7 @@ src/main/kotlin/com/stayops/
 | [Phase 4](docs/phases/phase-04-inventory.md) | Inventory 도메인 |
 | [Phase 5](docs/phases/phase-05-guest.md) | Guest 도메인 |
 | [Phase 6](docs/phases/phase-06-rate.md) | Rate 도메인 |
-| [Phase 7](docs/phases/phase-07-channel.md) | Channel — 채널 관리, OTA webhook, Outbox 동기화, 가상 채널 어댑터 |
+| [Phase 7](docs/phases/phase-07-channel.md) | Channel — 채널 관리, Outbox 동기화 |
 | [Phase 8](docs/phases/phase-08-reservation.md) | Reservation 도메인 |
 | [Phase 9](docs/phases/phase-09-settlement.md) | Settlement |
 | [Phase 10](docs/phases/phase-10-auth.md) | Auth |
