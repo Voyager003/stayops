@@ -40,8 +40,8 @@ class RoomInventoryTest : BehaviorSpec({
                 inventory.blockedCount shouldBe 0
                 inventory.availableCount shouldBe 5
             }
-            then("version이 0으로 초기화된다") {
-                inventory.version shouldBe 0
+            then("version이 null로 초기화된다") {
+                inventory.version shouldBe null
             }
         }
         `when`("totalCount가 0이면") {

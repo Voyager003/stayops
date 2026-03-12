@@ -12,7 +12,7 @@ data class RoomInventory private constructor(
     val totalCount: Int,
     val reservedCount: Int,
     val blockedCount: Int,
-    val version: Long,
+    val version: Long?,
     val createdAt: Instant,
     val updatedAt: Instant
 ) {
@@ -75,7 +75,7 @@ data class RoomInventory private constructor(
                 totalCount = totalCount,
                 reservedCount = 0,
                 blockedCount = 0,
-                version = 0,
+                version = null,
                 createdAt = now,
                 updatedAt = now
             )
@@ -90,7 +90,7 @@ data class RoomInventory private constructor(
             totalCount: Int,
             reservedCount: Int,
             blockedCount: Int,
-            version: Long,
+            version: Long?,
             createdAt: Instant,
             updatedAt: Instant
         ): RoomInventory = RoomInventory(
