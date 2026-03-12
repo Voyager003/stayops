@@ -4,6 +4,23 @@
 
 ---
 
+## 기능적 요구사항
+
+- **공통 Value Object**: 모든 BC에서 금액(Money)과 숙박 기간(DateRange)을 일관되게 표현해야 한다
+- **인프라 기반**: 예약·재고·채널 등 핵심 기능이 MongoDB 트랜잭션과 Redis 캐시 위에서 동작해야 한다
+- **통일된 에러 응답**: 클라이언트가 에러 코드 기반으로 분기 처리할 수 있는 표준 에러 포맷이 필요하다
+- **보안 스켈레톤**: Phase 10에서 JWT 인증을 적용하기 전까지 API 개발이 가능해야 한다
+
+## 기술적 도전 과제
+
+| 과제 | 설명 | 해결 전략 |
+|------|------|----------|
+| MongoDB 트랜잭션 | 단일 노드에서는 트랜잭션 불가 — Replica Set 필수 | Docker Compose로 단일 노드 Replica Set 구성 |
+| Value Object 불변성 | `data class`의 `copy()`가 팩토리 메서드를 우회할 수 있음 | `@ConsistentCopyVisibility` + `private constructor` |
+| 에러 응답 일관성 | 예외 유형별 HTTP 상태 코드 매핑 필요 | `@RestControllerAdvice` + sealed class 예외 계층 |
+
+---
+
 ## Sub-steps
 
 ### Phase 1-1: 공통 도메인 모델 + 단위 테스트
@@ -11,24 +28,12 @@
 **생성할 파일:**
 ```
 src/main/kotlin/com/stayops/shared/domain/
-├── AggregateRoot.kt
-├── DomainEvent.kt
 ├── Money.kt
 └── DateRange.kt
 
 src/test/kotlin/com/stayops/shared/domain/
 ├── MoneyTest.kt
 └── DateRangeTest.kt
-```
-
-**AggregateRoot:**
-```kotlin
-abstract class AggregateRoot {
-    abstract val id: String
-    abstract val version: Long
-    abstract val createdAt: Instant
-    abstract val updatedAt: Instant
-}
 ```
 
 **Money:**

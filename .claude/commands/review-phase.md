@@ -25,7 +25,7 @@ Phase 문서의 모든 sub-step에서 "생성할 파일" 목록을 추출하고,
 
 해당 Phase에서 생성된 도메인 모델 파일(`**/domain/model/**/*.kt`)을 검사:
 
-- **AggregateRoot 상속**: Aggregate Root 역할의 클래스가 `AggregateRoot`를 상속하는지
+- **Aggregate 식별**: Aggregate Root 역할의 클래스가 `id`, `version`, `createdAt`, `updatedAt` 필드를 갖는지
 - **팩토리 메서드**: `companion object`에 `of()`, `create()`, `from()` 등 팩토리 메서드가 있는지
 - **불변식 검증**: `init` 블록 또는 팩토리 메서드에서 `require()`/`check()`로 불변식을 검증하는지
 - **불변성**: `val` 프로퍼티만 사용하고, 상태 변경 시 `copy()` 또는 새 인스턴스를 반환하는지

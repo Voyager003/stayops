@@ -4,6 +4,23 @@
 
 ---
 
+## 기능적 요구사항
+
+- **객실타입 관리**: 숙소별로 객실타입(디럭스, 스위트 등)을 등록하고 기본 요금·최대 수용 인원·편의시설을 설정할 수 있어야 한다
+- **개별 객실 관리**: 객실타입에 속하는 개별 객실(호수, 층수)을 등록하고 상태를 관리할 수 있어야 한다
+- **객실 상태 전이**: 체크인(AVAILABLE → OCCUPIED), 체크아웃(OCCUPIED → CLEANING), 정비(AVAILABLE ↔ MAINTENANCE) 등 상태 흐름을 제어해야 한다
+- **체크인 시 객실 배정**: 예약 체크인 시 특정 Room을 배정할 수 있어야 한다 (Phase 8 연동)
+
+## 기술적 도전 과제
+
+| 과제 | 설명 | 해결 전략 |
+|------|------|----------|
+| 호수 유니크 제약 | 같은 숙소 내 동일 호수 중복 등록 방지 | MongoDB 복합 유니크 인덱스 `{ propertyId: 1, roomNumber: 1 }` |
+| 객실타입명 유니크 | 같은 숙소 내 동일 타입명 중복 방지 | MongoDB 복합 유니크 인덱스 `{ propertyId: 1, name: 1 }` |
+| 상태 전이 무결성 | 허용되지 않는 전이(e.g., CLEANING → OCCUPIED) 방지 | 도메인 모델에서 유효 전이만 허용, `when` 기반 상태 머신 |
+
+---
+
 ## Sub-steps
 
 ### Phase 3-1: RoomType + Room 도메인 모델 + 단위 테스트
@@ -24,7 +41,7 @@ src/test/kotlin/com/stayops/room/domain/model/
 **RoomType 도메인 모델:**
 ```kotlin
 data class RoomType(
-    override val id: String,
+    val id: String,
     val propertyId: String,
     val name: String,
     val description: String,
@@ -32,26 +49,26 @@ data class RoomType(
     val basePrice: Money,
     val amenities: List<String>,
     val status: RoomTypeStatus,
-    override val version: Long = 0,
-    override val createdAt: Instant,
-    override val updatedAt: Instant
-) : AggregateRoot()
+    val version: Long = 0,
+    val createdAt: Instant,
+    val updatedAt: Instant
+)
 ```
 
 **Room 도메인 모델:**
 ```kotlin
 data class Room(
-    override val id: String,
+    val id: String,
     val propertyId: String,
     val roomTypeId: String,
     val roomNumber: String,
     val floor: Int,
     val status: RoomStatus,
     val memo: String? = null,
-    override val version: Long = 0,
-    override val createdAt: Instant,
-    override val updatedAt: Instant
-) : AggregateRoot()
+    val version: Long = 0,
+    val createdAt: Instant,
+    val updatedAt: Instant
+)
 ```
 
 **비즈니스 규칙:**

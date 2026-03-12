@@ -138,7 +138,7 @@ FineStay 예약 생성
 
 ```
 src/main/kotlin/com/stayops/
-├── shared/          # AggregateRoot, Money, DateRange, 예외, 설정
+├── shared/          # Money, DateRange, 예외, 설정
 ├── property/        # 숙소 관리
 ├── room/            # 객실/객실타입
 ├── inventory/       # 날짜별 재고 + Redis 캐시

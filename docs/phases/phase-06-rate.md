@@ -4,6 +4,23 @@
 
 ---
 
+## 기능적 요구사항
+
+- **동적 요금제**: 시즌(성수기/비수기), 요일(주말/주중), 채널(자사/OTA)별로 차등 요금을 설정할 수 있어야 한다
+- **우선순위 기반 요금 결정**: 여러 요금제가 겹칠 때 우선순위(SPECIAL > CHANNEL_SPECIFIC > SEASONAL > WEEKDAY > 기본가)로 최종 요금을 결정해야 한다
+- **날짜별 요금 미리보기**: 특정 기간의 날짜별 적용 요금과 어떤 요금제가 적용되는지 확인할 수 있어야 한다
+- **채널 특화 요금**: OTA 채널별로 별도 요금을 설정할 수 있어야 한다 (e.g., Agoda만 10% 할인)
+
+## 기술적 도전 과제
+
+| 과제 | 설명 | 해결 전략 |
+|------|------|----------|
+| 복합 우선순위 해석 | 날짜·요일·채널 조건이 겹치는 다수의 요금제에서 하나를 선택해야 함 | `RateResolver` 도메인 서비스 — 조건 필터링 후 priority 내림차순 정렬, 첫 번째 매칭 반환 |
+| 날짜별 가격 차이 | 3박 예약 시 금·토·일 각각 다른 요금이 적용될 수 있음 | `resolveForDateRange()`가 날짜별로 `resolve()`를 호출하여 합산 |
+| 요금제 유효 기간 | dateRange가 null이면 상시 적용, 아니면 특정 기간에만 적용 | 필터링 단계에서 null 또는 해당 날짜 포함 여부 확인 |
+
+---
+
 ## Sub-steps
 
 ### Phase 6-1: RatePlan 도메인 모델 + RateResolver 도메인 서비스 + 단위 테스트
@@ -29,7 +46,7 @@ src/test/kotlin/com/stayops/rate/domain/service/
 **RatePlan 도메인 모델:**
 ```kotlin
 data class RatePlan(
-    override val id: String,
+    val id: String,
     val propertyId: String,
     val roomTypeId: String,
     val name: String,
@@ -40,10 +57,10 @@ data class RatePlan(
     val price: Money,
     val priority: Int,
     val status: RatePlanStatus,
-    override val version: Long = 0,
-    override val createdAt: Instant,
-    override val updatedAt: Instant
-) : AggregateRoot()
+    val version: Long = 0,
+    val createdAt: Instant,
+    val updatedAt: Instant
+)
 ```
 
 **DayOfWeekRate (VO):**
