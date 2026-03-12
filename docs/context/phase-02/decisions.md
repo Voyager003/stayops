@@ -20,26 +20,33 @@
 - **근거**: Phase 문서의 인덱스 제안은 참고용. 잘못된 도메인 모델은 수정 비용이 크지만, 인덱스는 나중에 추가해도 늦지 않다.
 - **적용**: CLAUDE.md에 "Schema Design Rules" 섹션으로 명문화
 
-## 4. 상태 전이 메서드란
-
-- **질문**: 상태 전이 메서드가 무엇인가?
-- **설명**: 도메인 객체의 상태(status)를 변경하는 메서드. `activate()`, `deactivate()`, `suspend()`가 해당.
-- **핵심 1**: 전이 가능 여부 검증이 도메인 내부에 있다 — 서비스 계층이 아닌 도메인 모델이 규칙을 소유.
-- **핵심 2**: 불변 객체 패턴 — 기존 인스턴스를 수정하지 않고 `copy()`로 새 인스턴스를 반환.
-- **허용 전이**: INACTIVE→ACTIVE(`activate`), ACTIVE→INACTIVE(`deactivate`), ACTIVE→SUSPENDED(`suspend`). SUSPENDED에서 나오는 경로는 미정의이므로 전부 예외.
-
-## 5. companion object란
+## 4. companion object란
 
 - **질문**: `companion object`는 무엇인가?
 - **설명**: Kotlin에 `static`이 없기 때문에 그 역할을 하는 클래스 내부의 싱글톤 객체. 인스턴스 없이 호출 가능한 메서드와 프로퍼티를 담는다.
 - **이 프로젝트에서의 용도**: 정적 팩토리 메서드(`create`, `of`, `from`)를 담는 용도로만 사용. Java의 `static factory method`와 동일 개념.
 
-## 6. companion object의 JVM 실체
+## 5. companion object의 JVM 실체
 
 - **질문**: JVM에서 객체가 실제로 어떻게 생성되는가?
 - **설명**: Kotlin 컴파일러가 `companion object`를 `static final` 내부 클래스(`Companion`)로 변환하고, 그 싱글톤 인스턴스를 `static` 필드로 보유.
 - **호출 흐름**: `Property.create()` → `Property.Companion.create()` → `new Property(...)` → 힙에 인스턴스 할당
 - **Java 상호운용**: `@JvmStatic` 없으면 Java에서 `Property.Companion.create()`로 호출해야 함. `@JvmStatic` 추가 시 진짜 static 메서드가 별도 생성되어 `Property.create()`로 호출 가능.
+
+## 6. PropertyDocument의 역할
+
+- **질문**: PropertyDocument의 역할은 무엇인가? Java의 toEntity와 동일한 역할인가?
+- **설명**: `PropertyDocument`는 MongoDB와 도메인 모델 사이의 변환을 담당하는 인프라 계층의 객체.
+  - `toDomain()`: Document → 도메인 모델 (`Property.reconstitute()` 호출)
+  - `from(property)`: 도메인 모델 → Document
+- **결론**: Java JPA의 `@Entity`와 `toEntity()` 조합과 역할이 동일하다. 도메인 모델이 MongoDB 어노테이션(`@Document`, `@Id`)에 오염되지 않도록 분리.
+
+## 7. @Transactional 제거 결정
+
+- **결정**: `PropertyApplication`에서 `@Transactional`을 제거
+- **원인**: Spring Boot 4.x가 `MongoTransactionManager`를 자동 구성하여, `@Transactional` 사용 시 MongoDB 트랜잭션을 시도한다. Testcontainers standalone MongoDB는 replica set이 아니므로 "Transaction numbers are only allowed on a replica set member or mongos" 오류 발생.
+- **근거**: Phase 2의 PropertyApplication은 단일 문서 CRUD만 수행. 단일 문서 연산은 MongoDB 레벨에서 이미 원자적이므로 애플리케이션 트랜잭션이 불필요하다.
+- **재도입 시점**: 멀티 도메인 오케스트레이션이 필요한 Phase 8(Reservation)에서 replica set 기반으로 재도입 예정.
 
 ## 교훈
 
