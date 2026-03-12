@@ -16,7 +16,7 @@
 
 | 과제 | 설명 | 해결 전략 |
 |------|------|----------|
-| 다중 BC 오케스트레이션 | 예약 1건 생성에 Room·Rate·Inventory·Guest·Channel 5개 BC가 관여 | Application Service에서 순서대로 조율, 실패 시 보상 트랜잭션 |
+| 다중 모듈 오케스트레이션 | 예약 1건 생성에 Room·Rate·Inventory·Guest·Channel 5개 모듈이 관여 | Application Service에서 순서대로 조율, 실패 시 보상 트랜잭션 |
 | 동시 예약 Race Condition | 마지막 1실 동시 예약 시 1건만 성공해야 함 | Inventory의 낙관적 락 — version 충돌 시 409 Conflict 반환 |
 | 도메인 이벤트 전파 | 체크아웃 → Guest 등급 갱신, 예약 생성 → Channel 동기화 | Spring `ApplicationEventPublisher` + `@EventListener` |
 | 예약 가격 불변성 | 예약 후 요금제가 변경되어도 예약 시점의 가격이 보존되어야 함 | `ReservationPricing`에 스냅샷 저장 — 생성 후 변경 불가 |
@@ -71,13 +71,13 @@ data class Reservation(
 **BookingChannel (VO):**
 ```kotlin
 data class BookingChannel(
-    val channelCode: String,                // Channel BC의 코드 참조 (e.g. "FINESTAY", "AGODA", "AIRBNB")
+    val channelCode: String,                // Channel 모듈의 채널 코드 (e.g. "FINESTAY", "AGODA", "AIRBNB")
     val externalReservationId: String? = null,
     val commissionRate: BigDecimal           // 0.15 = 15%
 )
 ```
 
-> `ChannelSource` enum 대신 `channelCode: String`을 사용한다. 채널 목록은 Channel BC가 관리하며, Reservation은 코드 문자열만 참조하여 BC 간 결합도를 낮춘다.
+> `ChannelSource` enum 대신 `channelCode: String`을 사용한다. 예약 시점의 채널 코드를 문자열로 보존하여 채널 정보 변경과 무관하게 예약 데이터의 일관성을 유지한다.
 
 **ReservationPricing (VO):**
 ```kotlin
@@ -168,11 +168,11 @@ src/test/kotlin/com/stayops/reservation/application/service/
 ```
 
 **예약 생성 플로우:**
-1. RoomType 존재 확인 (Room Context)
-2. Channel 유효성 확인 (Channel Context — channelCode로 조회)
-3. RateResolver로 날짜별 요금 산출 (Rate Context)
-4. 날짜별 재고 확인 + 차감 (Inventory Context, 트랜잭션)
-5. Guest 조회/생성 (Guest Context)
+1. RoomType 존재 확인 (room 모듈)
+2. Channel 유효성 확인 (channel 모듈 — channelCode로 조회)
+3. RateResolver로 날짜별 요금 산출 (rate 모듈)
+4. 날짜별 재고 확인 + 차감 (inventory 모듈, 트랜잭션)
+5. Guest 조회/생성 (guest 모듈)
 6. Reservation 생성 + 저장
 7. `ReservationCreated` 이벤트 발행
 

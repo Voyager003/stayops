@@ -138,6 +138,8 @@ Refactor code + Update tests (must pass) → [STOP] → Validate with user → W
 
 All tests use **Kotest BehaviorSpec** with Given/When/Then structure.
 
+**Exception — Spring integration tests**: `kotest-extensions-spring` does not support Kotest 6.x (archived). Repository and API integration tests use `@SpringBootTest` + JUnit5 `@Nested` / `@Test` instead.
+
 ```kotlin
 class ReservationTest : BehaviorSpec({
     given("CONFIRMED 상태의 예약") {
@@ -257,6 +259,17 @@ class ReservationTest : BehaviorSpec({
 
                 ---
 
+                ## Schema Design Rules
+
+                **Schema decisions are deferred until the domain model is stable.**
+
+                - Do not finalize MongoDB document structure or indexes until the domain model for the phase is complete and tested
+                - Phase documents may suggest index candidates — treat them as **reference only**, not implementation requirements
+                - Document schema (`@Document`, `@Field`, index annotations) lives in `infrastructure/persistence/` and must not influence domain model design
+                - When in doubt, defer: a missing index can be added later; a wrong domain model is costly to change
+
+                ---
+
                 ## Security Rules
 
                 - **Never hardcode secrets** — use `application-secret.yml` (gitignored) or environment variables
@@ -292,6 +305,7 @@ class ReservationTest : BehaviorSpec({
                 - Never hardcode secrets, API keys, or passwords in source code
                 - Never place business logic in controllers or repository implementations
                 - Never allow the domain layer to import from infrastructure or API layers
+                - Never finalize MongoDB schema or indexes before the domain model is complete and validated
 
 ---
 

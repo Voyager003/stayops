@@ -53,7 +53,7 @@ data class RatePlan(
     val type: RatePlanType,
     val dateRange: DateRange? = null,       // null이면 상시 적용
     val dayOfWeekRules: List<DayOfWeekRate>? = null,
-    val channelCode: String? = null,           // 채널 특화 요금 (Channel BC 코드 참조)
+    val channelCode: String? = null,           // 채널 특화 요금 (Channel 모듈 코드 참조)
     val price: Money,
     val priority: Int,
     val status: RatePlanStatus,
