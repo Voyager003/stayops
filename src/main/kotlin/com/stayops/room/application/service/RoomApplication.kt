@@ -1,0 +1,57 @@
+package com.stayops.room.application.service
+
+import com.stayops.room.api.dto.RoomStatusAction
+import com.stayops.room.domain.model.Room
+import com.stayops.room.domain.repository.RoomRepository
+import com.stayops.shared.exception.ConflictException
+import com.stayops.shared.exception.NotFoundException
+import org.springframework.stereotype.Service
+import java.util.UUID
+
+@Service
+class RoomApplication(
+    private val roomRepository: RoomRepository
+) {
+    fun createRoom(
+        propertyId: String,
+        roomTypeId: String,
+        roomNumber: String,
+        floor: Int
+    ): Room {
+        roomRepository.findByPropertyIdAndRoomNumber(propertyId, roomNumber)?.let {
+            throw ConflictException("ROOM_NUMBER_DUPLICATE", "해당 숙소에 이미 동일한 호수의 객실이 존재합니다: $roomNumber")
+        }
+        val room = Room.create(
+            id = UUID.randomUUID().toString(),
+            propertyId = propertyId,
+            roomTypeId = roomTypeId,
+            roomNumber = roomNumber,
+            floor = floor
+        )
+        return roomRepository.save(room)
+    }
+
+    fun getRoom(id: String): Room =
+        roomRepository.findById(id)
+            ?: throw NotFoundException("ROOM_NOT_FOUND", "객실을 찾을 수 없습니다: $id")
+
+    fun getRoomsByProperty(propertyId: String): List<Room> =
+        roomRepository.findByPropertyId(propertyId)
+
+    fun updateMemo(id: String, memo: String?): Room {
+        val room = getRoom(id)
+        return roomRepository.save(room.updateMemo(memo))
+    }
+
+    fun changeStatus(id: String, action: RoomStatusAction): Room {
+        val room = getRoom(id)
+        val updated = when (action) {
+            RoomStatusAction.CHECK_IN -> room.checkIn()
+            RoomStatusAction.CHECK_OUT -> room.checkOut()
+            RoomStatusAction.COMPLETE_CLEANING -> room.completeCleaning()
+            RoomStatusAction.START_MAINTENANCE -> room.startMaintenance()
+            RoomStatusAction.COMPLETE_MAINTENANCE -> room.completeMaintenance()
+        }
+        return roomRepository.save(updated)
+    }
+}
