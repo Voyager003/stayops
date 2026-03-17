@@ -12,8 +12,10 @@ import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolver
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
+import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.model.RoomTypeStatus
+import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
@@ -35,6 +37,7 @@ class ReservationApplicationTest : BehaviorSpec({
     val ratePlanRepository = mockk<RatePlanRepository>()
     val guestRepository = mockk<GuestRepository>()
     val inventoryApplication = mockk<RoomInventoryApplication>()
+    val roomRepository = mockk<RoomRepository>()
     val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
     val rateResolver = RateResolver()
 
@@ -45,6 +48,7 @@ class ReservationApplicationTest : BehaviorSpec({
         ratePlanRepository = ratePlanRepository,
         guestRepository = guestRepository,
         inventoryApplication = inventoryApplication,
+        roomRepository = roomRepository,
         eventPublisher = eventPublisher,
         rateResolver = rateResolver
     )
@@ -281,6 +285,66 @@ class ReservationApplicationTest : BehaviorSpec({
                         guestEmail = null, channelCode = "DIRECT"
                     )
                 }
+            }
+        }
+    }
+
+    // -- 체크인 --
+
+    given("체크인 시") {
+        `when`("CONFIRMED 예약에 AVAILABLE 객실을 배정하면") {
+            then("CHECKED_IN 상태로 변경되고 Room이 OCCUPIED로 전환된다") {
+                clearAllMocks()
+                val reservation = com.stayops.reservation.domain.model.Reservation.create(
+                    id = "rsv-ci1", propertyId = "prop-1", roomTypeId = "rt-1",
+                    guestId = "guest-1",
+                    guestInfo = com.stayops.reservation.domain.model.GuestInfo("홍길동", "010-1234-5678", null),
+                    dateRange = DateRange.of(checkIn, checkOut), numberOfGuests = 2,
+                    channel = com.stayops.reservation.domain.model.BookingChannel("DIRECT", null, BigDecimal.ZERO),
+                    pricing = com.stayops.reservation.domain.model.ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO)
+                ).confirm()
+                val room = Room.create(id = "room-101", propertyId = "prop-1", roomTypeId = "rt-1", roomNumber = "101", floor = 1)
+
+                every { reservationRepository.findById("rsv-ci1") } returns reservation
+                every { roomRepository.findById("room-101") } returns room
+                every { roomRepository.save(any()) } answers { firstArg() }
+                every { reservationRepository.save(any()) } answers { firstArg() }
+
+                val result = sut.checkInReservation("prop-1", "rsv-ci1", "room-101")
+
+                result.status shouldBe ReservationStatus.CHECKED_IN
+                result.roomId shouldBe "room-101"
+                verify { roomRepository.save(match { it.status == com.stayops.room.domain.model.RoomStatus.OCCUPIED }) }
+            }
+        }
+    }
+
+    // -- 체크아웃 --
+
+    given("체크아웃 시") {
+        `when`("CHECKED_IN 예약을 체크아웃하면") {
+            then("CHECKED_OUT 상태로 변경되고 Room이 CLEANING으로 전환된다") {
+                clearAllMocks()
+                val reservation = com.stayops.reservation.domain.model.Reservation.create(
+                    id = "rsv-co1", propertyId = "prop-1", roomTypeId = "rt-1",
+                    guestId = "guest-1",
+                    guestInfo = com.stayops.reservation.domain.model.GuestInfo("홍길동", "010-1234-5678", null),
+                    dateRange = DateRange.of(checkIn, checkOut), numberOfGuests = 2,
+                    channel = com.stayops.reservation.domain.model.BookingChannel("DIRECT", null, BigDecimal.ZERO),
+                    pricing = com.stayops.reservation.domain.model.ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO)
+                ).confirm().checkIn("room-101")
+                val room = Room.create(id = "room-101", propertyId = "prop-1", roomTypeId = "rt-1", roomNumber = "101", floor = 1).checkIn()
+
+                every { reservationRepository.findById("rsv-co1") } returns reservation
+                every { reservationRepository.save(any()) } answers { firstArg() }
+                every { roomRepository.findById("room-101") } returns room
+                every { roomRepository.save(any()) } answers { firstArg() }
+                justRun { eventPublisher.publishEvent(any()) }
+
+                val result = sut.checkOutReservation("prop-1", "rsv-co1")
+
+                result.status shouldBe ReservationStatus.CHECKED_OUT
+                verify { roomRepository.save(match { it.status == com.stayops.room.domain.model.RoomStatus.CLEANING }) }
             }
         }
     }

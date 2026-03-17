@@ -7,9 +7,12 @@ import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolver
 import com.stayops.reservation.domain.event.ReservationCancelled
+import com.stayops.reservation.domain.event.ReservationCheckedOut
 import com.stayops.reservation.domain.event.ReservationCreated
 import com.stayops.reservation.domain.model.*
 import com.stayops.reservation.domain.repository.ReservationRepository
+import com.stayops.room.domain.model.RoomStatus
+import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
@@ -29,6 +32,7 @@ class ReservationApplication(
     private val ratePlanRepository: RatePlanRepository,
     private val guestRepository: GuestRepository,
     private val inventoryApplication: RoomInventoryApplication,
+    private val roomRepository: RoomRepository,
     private val eventPublisher: ApplicationEventPublisher,
     private val rateResolver: RateResolver
 ) {
@@ -151,6 +155,49 @@ class ReservationApplication(
         )
 
         log.info("예약 취소: id={}", saved.id)
+        return saved
+    }
+
+    fun checkInReservation(propertyId: String, reservationId: String, roomId: String): Reservation {
+        val reservation = getReservation(propertyId, reservationId)
+
+        val room = roomRepository.findById(roomId)
+            ?: throw NotFoundException("ROOM_NOT_FOUND", "객실을 찾을 수 없습니다: $roomId")
+        check(room.status == RoomStatus.AVAILABLE) {
+            "AVAILABLE 상태의 객실만 배정할 수 있습니다: ${room.status}"
+        }
+
+        roomRepository.save(room.checkIn())
+        val checkedIn = reservation.checkIn(roomId)
+        val saved = reservationRepository.save(checkedIn)
+
+        log.info("체크인: reservationId={}, roomId={}", saved.id, roomId)
+        return saved
+    }
+
+    fun checkOutReservation(propertyId: String, reservationId: String): Reservation {
+        val reservation = getReservation(propertyId, reservationId)
+        val checkedOut = reservation.checkOut()
+        val saved = reservationRepository.save(checkedOut)
+
+        if (reservation.roomId != null) {
+            val room = roomRepository.findById(reservation.roomId!!)
+            if (room != null) {
+                roomRepository.save(room.checkOut())
+            }
+        }
+
+        eventPublisher.publishEvent(
+            ReservationCheckedOut(
+                reservationId = saved.id,
+                propertyId = reservation.propertyId,
+                guestId = reservation.guestId,
+                totalAmount = reservation.pricing.totalAmount,
+                stayNights = reservation.nightCount.toLong()
+            )
+        )
+
+        log.info("체크아웃: reservationId={}", saved.id)
         return saved
     }
 
