@@ -10,7 +10,7 @@
 - **예약 라이프사이클**: PENDING → CONFIRMED → CHECKED_IN → CHECKED_OUT 상태 흐름과 취소(CANCELLED), 노쇼(NO_SHOW) 처리를 지원해야 한다
 - **체크인 시 객실 배정**: 체크인 시 실제 객실(Room)을 배정하고, 해당 Room 상태를 OCCUPIED로 전환해야 한다
 - **체크아웃 후 연동**: 체크아웃 시 객실 상태를 CLEANING으로 전환하고, 고객 방문 이력을 갱신하며, 채널 동기화를 트리거해야 한다
-- **채널별 수수료 추적**: FineStay(수수료 0%) vs OTA(수수료율 적용) 예약을 구분하여 정산 데이터를 추적해야 한다
+- **채널별 수수료 추적**: 자사 숙소 예매 사이트(수수료 0%) vs OTA(수수료율 적용) 예약을 구분하여 정산 데이터를 추적해야 한다
 
 ## 기술적 도전 과제
 
@@ -71,7 +71,7 @@ data class Reservation(
 **BookingChannel (VO):**
 ```kotlin
 data class BookingChannel(
-    val channelCode: String,                // Channel 모듈의 채널 코드 (e.g. "FINESTAY", "AGODA", "AIRBNB")
+    val channelCode: String,                // Channel 모듈의 채널 코드 (e.g. "DIRECT", "AGODA", "BOOKING")
     val externalReservationId: String? = null,
     val commissionRate: BigDecimal           // 0.15 = 15%
 )
@@ -104,7 +104,7 @@ CONFIRMED → NO_SHOW     (noShow)
 ```
 
 **비즈니스 규칙:**
-- FINESTAY(DIRECT) 채널: commissionRate = 0
+- 자사 숙소 예매 사이트(DIRECT) 채널: commissionRate = 0
 - 체크인 시 roomId 배정 필수
 - 취소는 CONFIRMED 상태에서만 가능
 - 가격 변경 불가 (스냅샷)

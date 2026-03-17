@@ -23,7 +23,7 @@
 ### 프로젝트 달성 목표
 
 - 호텔 예약 PMS, CMS 시스템을 분석하여 숙소 운영의 핵심 도메인(객실·재고·예약·채널·정산)을 실제 서비스 수준으로 구현한다
-- 멀티 채널(FineStay + OTA) 환경에서 재고 정합성과 데이터 일관성을 보장하는 서버를 구축한다
+- 멀티 채널(자사 숙소 예매 사이트 + OTA) 환경에서 재고 정합성과 데이터 일관성을 보장하는 서버를 구축한다
 
 ### BE 역량 목표
 
@@ -40,7 +40,7 @@
   - 객실타입/객실 CRUD, 날짜별 재고 수량 관리
   - 동시 예약 요청 시 Race Condition 방어
 - **멀티 채널 판매**
-  - 자체 예약(FineStay) + OTA(Agoda, Airbnb 등) 채널 통합 관리
+  - 자사 숙소 예매 사이트(DIRECT) + OTA(Agoda, Airbnb 등) 채널 통합 관리
   - OTA Webhook 수신을 통한 외부 예약 자동 생성
   - Outbox 패턴 기반 채널 간 재고 동기화
 - **동적 요금 관리**
@@ -91,7 +91,7 @@
 ### Channel Sync Flow
 
 ```
-FineStay 예약 생성
+자사 숙소 예매 사이트 예약 생성
 → Inventory 차감
 → SyncTask(PENDING) 생성 (AGODA, AIRBNB 등 활성 OTA 대상)
 → SyncTaskScheduler 폴링

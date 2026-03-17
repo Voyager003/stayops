@@ -321,7 +321,7 @@ docs/phases/
 ├── phase-04-inventory.md     # RoomInventory 도메인 (동시성 제어)
 ├── phase-05-guest.md         # Guest 도메인 (등급, 방문 이력)
 ├── phase-06-rate.md          # RatePlan, RateResolver 도메인
-├── phase-07-channel.md       # Channel (FineStay/OTA), Outbox 동기화, 가상 채널 어댑터
+├── phase-07-channel.md       # Channel (자사 숙소 예매 사이트/OTA), Outbox 동기화, Mock OTA 서버
 ├── phase-08-reservation.md   # Reservation 도메인 (핵심, 8+ sub-steps)
 ├── phase-09-settlement.md    # Settlement (MongoDB aggregation)
 └── phase-10-auth.md          # Auth (JWT, Redis, 멀티 숙소 권한)
