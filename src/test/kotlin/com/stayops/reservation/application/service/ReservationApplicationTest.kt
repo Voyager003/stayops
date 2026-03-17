@@ -151,6 +151,98 @@ class ReservationApplicationTest : BehaviorSpec({
         }
     }
 
+    // -- 예약 확정 --
+
+    given("예약 확정 시") {
+        `when`("PENDING 상태의 예약을 확정하면") {
+            then("CONFIRMED 상태로 변경된다") {
+                clearAllMocks()
+                val reservation = com.stayops.reservation.domain.model.Reservation.create(
+                    id = "rsv-c1", propertyId = "prop-1", roomTypeId = "rt-1",
+                    guestId = "guest-1",
+                    guestInfo = com.stayops.reservation.domain.model.GuestInfo("홍길동", "010-1234-5678", null),
+                    dateRange = DateRange.of(checkIn, checkOut), numberOfGuests = 2,
+                    channel = com.stayops.reservation.domain.model.BookingChannel("DIRECT", null, BigDecimal.ZERO),
+                    pricing = com.stayops.reservation.domain.model.ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO)
+                )
+                every { reservationRepository.findById("rsv-c1") } returns reservation
+                every { reservationRepository.save(any()) } answers { firstArg() }
+
+                val result = sut.confirmReservation("prop-1", "rsv-c1")
+                result.status shouldBe ReservationStatus.CONFIRMED
+            }
+        }
+    }
+
+    // -- 예약 취소 --
+
+    given("예약 취소 시") {
+        `when`("CONFIRMED 상태의 예약을 취소하면") {
+            then("CANCELLED 상태로 변경되고 재고가 복원된다") {
+                clearAllMocks()
+                val reservation = com.stayops.reservation.domain.model.Reservation.create(
+                    id = "rsv-c2", propertyId = "prop-1", roomTypeId = "rt-1",
+                    guestId = "guest-1",
+                    guestInfo = com.stayops.reservation.domain.model.GuestInfo("홍길동", "010-1234-5678", null),
+                    dateRange = DateRange.of(checkIn, checkOut), numberOfGuests = 2,
+                    channel = com.stayops.reservation.domain.model.BookingChannel("DIRECT", null, BigDecimal.ZERO),
+                    pricing = com.stayops.reservation.domain.model.ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO)
+                ).confirm()
+                every { reservationRepository.findById("rsv-c2") } returns reservation
+                every { reservationRepository.save(any()) } answers { firstArg() }
+                every { inventoryApplication.release("prop-1", "rt-1", any()) } returns mockk()
+                justRun { eventPublisher.publishEvent(any()) }
+
+                val result = sut.cancelReservation("prop-1", "rsv-c2")
+
+                result.status shouldBe ReservationStatus.CANCELLED
+                verify(exactly = 2) { inventoryApplication.release("prop-1", "rt-1", any()) }
+            }
+        }
+
+        `when`("CHECKED_IN 상태의 예약을 취소하면") {
+            then("예외가 발생한다") {
+                clearAllMocks()
+                val reservation = com.stayops.reservation.domain.model.Reservation.create(
+                    id = "rsv-c3", propertyId = "prop-1", roomTypeId = "rt-1",
+                    guestId = "guest-1",
+                    guestInfo = com.stayops.reservation.domain.model.GuestInfo("홍길동", "010-1234-5678", null),
+                    dateRange = DateRange.of(checkIn, checkOut), numberOfGuests = 2,
+                    channel = com.stayops.reservation.domain.model.BookingChannel("DIRECT", null, BigDecimal.ZERO),
+                    pricing = com.stayops.reservation.domain.model.ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO)
+                ).confirm().checkIn("room-101")
+                every { reservationRepository.findById("rsv-c3") } returns reservation
+
+                shouldThrow<IllegalStateException> {
+                    sut.cancelReservation("prop-1", "rsv-c3")
+                }
+            }
+        }
+    }
+
+    // -- 노쇼 --
+
+    given("노쇼 처리 시") {
+        `when`("CONFIRMED 상태의 예약을 노쇼 처리하면") {
+            then("NO_SHOW 상태로 변경된다") {
+                clearAllMocks()
+                val reservation = com.stayops.reservation.domain.model.Reservation.create(
+                    id = "rsv-c4", propertyId = "prop-1", roomTypeId = "rt-1",
+                    guestId = "guest-1",
+                    guestInfo = com.stayops.reservation.domain.model.GuestInfo("홍길동", "010-1234-5678", null),
+                    dateRange = DateRange.of(checkIn, checkOut), numberOfGuests = 2,
+                    channel = com.stayops.reservation.domain.model.BookingChannel("DIRECT", null, BigDecimal.ZERO),
+                    pricing = com.stayops.reservation.domain.model.ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO)
+                ).confirm()
+                every { reservationRepository.findById("rsv-c4") } returns reservation
+                every { reservationRepository.save(any()) } answers { firstArg() }
+
+                val result = sut.noShowReservation("prop-1", "rsv-c4")
+                result.status shouldBe ReservationStatus.NO_SHOW
+            }
+        }
+    }
+
     // -- 예약 생성: 실패 --
 
     given("예약 생성 실패 시") {

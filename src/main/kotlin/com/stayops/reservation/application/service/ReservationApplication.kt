@@ -119,9 +119,11 @@ class ReservationApplication(
         return reservation
     }
 
-    fun getReservations(propertyId: String, status: ReservationStatus?): List<Reservation> =
-        if (status != null) reservationRepository.findByPropertyIdAndStatus(propertyId, status)
-        else reservationRepository.findByPropertyId(propertyId)
+    fun getReservations(propertyId: String): List<Reservation> =
+        reservationRepository.findByPropertyId(propertyId)
+
+    fun getReservationsByStatus(propertyId: String, status: ReservationStatus): List<Reservation> =
+        reservationRepository.findByPropertyIdAndStatus(propertyId, status)
 
     fun confirmReservation(propertyId: String, reservationId: String): Reservation {
         val reservation = getReservation(propertyId, reservationId)
