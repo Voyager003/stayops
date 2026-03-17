@@ -44,6 +44,32 @@
   - 순서 보장 불가 — 같은 객실의 연속 변경이 역순으로 도착할 수 있음
   - **현재 프로젝트에서는 단일 인스턴스 + Mock OTA 2~3개이므로 실질적 영향 없음. 메시징 시스템 도입 대비 직접 호출이 합리적**
 
+## 코드 리뷰 미해결 이슈 (추후 수정)
+
+### CRITICAL
+
+- **C2: application 레이어가 infrastructure 구현체 직접 의존** — `ChannelSyncApplication`이 `ChannelAdapterRegistry`를, `WebhookApplication`이 `HmacSignatureVerifier`를 직접 import. 도메인 인터페이스로 추상화 필요
+- **C3: findChannel에서 propertyId 검증 누락** — channelId로만 조회하여 다른 숙소의 채널에 접근 가능 (테넌트 격리 실패). updateChannel, deleteChannel 등 모든 메서드에 영향
+- **C4: retryTask에서 propertyId 검증 누락** — taskId로만 조회하여 다른 숙소의 태스크 재시도 가능 (테넌트 격리 실패)
+- **C5: 채널/매핑 없는 SyncTask를 COMPLETED 처리** — 설정 오류를 성공으로 숨겨 대시보드 오염. FAILED 처리로 변경 필요
+
+### HIGH
+
+- **H1: API Request DTO에 Bean Validation 미적용** — `@Valid`, `@NotBlank`, `@DecimalMin` 등 누락
+- **H2: Webhook eventId/eventType 빈 문자열 허용** — 누락 시 빈 문자열로 처리되어 이후 중복 판단 오류
+- **H3: Webhook 중복 체크 TOCTOU 레이스** — 동시 요청 시 DuplicateKeyException 미처리, 500 에러 반환
+- **H4: Mock OTA Thread.sleep이 서블릿 스레드 블로킹** — 타임아웃 시뮬레이션에서 스레드풀 고갈 가능
+- **H5: ChannelApi에서 channelId와 channelCode 경로 혼용** — 같은 경로에서 의미가 달라 혼동 가능
+
+### MEDIUM
+
+- **M2: updateChannel이 reconstitute()로 검증 우회** — 도메인 불변식을 건너뜀
+- **M3~4: 테스트 커버리지 부족** — updateChannel, deleteChannel, getSyncTasks 등 미테스트
+- **M5: ProcessedWebhookEvent에 private constructor 패턴 미적용**
+- **M6: PMS-MockOTA 간 HMAC 구현 중복**
+- **M8: HttpChannelSyncAdapter에 타임아웃 미설정** — OTA 장애 시 무한 대기 가능
+- **M10: WebhookEvent sealed interface 미사용** — dead code
+
 ## 기존 코드 처리
 
 - **결정**: Phase 7-1(Channel 도메인), 7-2(Repository), 7-3(SyncTask) 코드를 폐기하고 새로 작성
