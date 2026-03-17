@@ -2,7 +2,7 @@
 
 ## Q1. GuestTier는 모든 숙소에 적용되는가
 
-GuestTier는 FineStay(채널)와 무관한 PMS 내부 고객 등급이다. 모든 숙소가 등급 제도를 운영하지 않을 수 있으므로, `tier: GuestTier?`로 nullable 처리하여 등급 미사용 숙소를 표현할 수 있다. 현재 Phase 범위에서는 Property 도메인 수정 없이 nullable로 대응한다.
+GuestTier는 자사 숙소 예매 사이트(채널)와 무관한 PMS 내부 고객 등급이다. 모든 숙소가 등급 제도를 운영하지 않을 수 있으므로, `tier: GuestTier?`로 nullable 처리하여 등급 미사용 숙소를 표현할 수 있다. 현재 Phase 범위에서는 Property 도메인 수정 없이 nullable로 대응한다.
 
 ---
 

@@ -17,7 +17,7 @@
 |------|------|----------|
 | 테넌트 격리 | 모든 쿼리에 propertyId 조건이 누락되면 데이터 유출 발생 | 모든 Repository 메서드에 propertyId 파라미터 필수화 |
 | 상태 전이 규칙 | 허용되지 않는 상태 전이(e.g., INACTIVE → SUSPENDED)를 방지해야 함 | 도메인 모델 내부에서 상태 전이 검증, 위반 시 예외 |
-| FINESTAY 자동 생성 | 숙소 등록 시 자사 채널(FINESTAY)이 자동으로 함께 생성되어야 함 | Phase 7에서 PropertyCreated 이벤트 또는 Application Service 연동 |
+| 자사 숙소 예매 사이트 자동 생성 | 숙소 등록 시 자사 직영 채널(DIRECT)이 자동으로 함께 생성되어야 함 | Phase 7에서 PropertyCreated 이벤트 또는 Application Service 연동 |
 
 ---
 
