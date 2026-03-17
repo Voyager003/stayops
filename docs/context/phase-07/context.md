@@ -25,6 +25,25 @@
 - **배경**: 프로덕션에서 ARI는 Availability, Rate, Restriction 세 가지. Channex는 Availability와 Rate/Restriction을 분리된 API로 처리
 - **선택 근거**: 핵심 오버부킹 방지 로직에 집중. Rate/Restriction은 동일 구조로 확장 가능하므로 Phase 7 이후에 추가
 
+## Outbox 패턴 + HTTP 직접 호출
+
+- **결정**: Transactional Outbox(SyncTask in MongoDB) + 스케줄러가 OTA에 직접 HTTP 호출
+- **배경**: 전통적 Outbox는 DB에 저장 후 메시징 시스템(Kafka 등)에 발행하지만, 우리는 메시징 시스템 없이 HTTP로 직접 호출한다
+- **Outbox가 필요한 이유**:
+  - 재고 차감과 OTA 알림은 서로 다른 시스템(MongoDB vs 외부 HTTP)에서 일어남
+  - 재고 차감 후 앱이 crash하면 OTA에 알림이 소실 → 오버부킹 위험
+  - 같은 트랜잭션에 SyncTask를 저장하여 "재고 변경됐는데 알림 소실" 방지
+  - MongoDB replica set의 멀티 도큐먼트 트랜잭션으로 원자성 보장
+- **@Async 대신 Outbox를 선택한 이유**:
+  - @Async는 메시지가 메모리에만 존재하여 앱 재시작 시 소실
+  - Sync Dashboard(채널별 성공/실패/대기 조회)에는 영속적 기록이 필수
+  - 실패 건 수동 재시도 기능에도 영속 상태가 필요
+- **메시징 시스템(Kafka 등) 없이 HTTP 직접 호출의 트레이드오프**:
+  - 스케줄러 병목 — 하나의 OTA가 느리면 뒤의 모든 태스크가 밀림
+  - Scale-out 시 중복 처리 — 멀티 인스턴스에서 같은 SyncTask를 동시에 가져감 (분산 락 필요)
+  - 순서 보장 불가 — 같은 객실의 연속 변경이 역순으로 도착할 수 있음
+  - **현재 프로젝트에서는 단일 인스턴스 + Mock OTA 2~3개이므로 실질적 영향 없음. 메시징 시스템 도입 대비 직접 호출이 합리적**
+
 ## 기존 코드 처리
 
 - **결정**: Phase 7-1(Channel 도메인), 7-2(Repository), 7-3(SyncTask) 코드를 폐기하고 새로 작성
