@@ -1,6 +1,5 @@
 package com.stayops.channel.application.service
 
-import com.stayops.channel.api.dto.CreateChannelRequest
 import com.stayops.channel.domain.model.*
 import com.stayops.channel.domain.repository.ChannelMappingRepository
 import com.stayops.channel.domain.repository.ChannelRepository
@@ -43,15 +42,18 @@ class ChannelApplicationTest : BehaviorSpec({
                 clearAllMocks()
                 every { channelRepository.save(any()) } answers { firstArg() }
 
-                val request = CreateChannelRequest(
+                val result = sut.createOtaChannel(
+                    propertyId = "prop-1",
                     code = "AGODA",
                     name = "Agoda",
                     commissionRate = BigDecimal("0.15"),
-                    apiEndpoint = "https://mock-ota/ari",
-                    webhookSecret = "secret"
+                    connectionInfo = ChannelConnectionInfo(
+                        apiEndpoint = "https://mock-ota/ari",
+                        apiKey = null,
+                        apiSecret = null,
+                        webhookSecret = "secret"
+                    )
                 )
-
-                val result = sut.createOtaChannel("prop-1", request)
 
                 result.code shouldBe "AGODA"
                 result.type shouldBe ChannelType.OTA

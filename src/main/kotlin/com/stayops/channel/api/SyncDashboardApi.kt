@@ -17,8 +17,8 @@ class SyncDashboardApi(
 
     @GetMapping("/sync-dashboard")
     fun getDashboard(@PathVariable propertyId: String): ResponseEntity<SyncDashboardResponse> {
-        val dashboard = syncDashboardApplication.getDashboard(propertyId)
-        return ResponseEntity.ok(dashboard)
+        val result = syncDashboardApplication.getDashboard(propertyId)
+        return ResponseEntity.ok(SyncDashboardResponse.from(result))
     }
 
     @GetMapping("/sync-tasks")

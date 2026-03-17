@@ -1,9 +1,8 @@
 package com.stayops.channel.application.service
 
-import com.stayops.channel.api.dto.ChannelSyncStatusResponse
-import com.stayops.channel.api.dto.SyncDashboardResponse
-import com.stayops.channel.api.dto.SyncSummary
-import com.stayops.channel.domain.model.ChannelStatus
+import com.stayops.channel.application.dto.ChannelSyncStatus
+import com.stayops.channel.application.dto.SyncDashboardResult
+import com.stayops.channel.application.dto.SyncSummary
 import com.stayops.channel.domain.model.ChannelType
 import com.stayops.channel.domain.model.SyncTaskStatus
 import com.stayops.channel.domain.repository.ChannelRepository
@@ -16,7 +15,7 @@ class SyncDashboardApplication(
     private val syncTaskRepository: SyncTaskRepository
 ) {
 
-    fun getDashboard(propertyId: String): SyncDashboardResponse {
+    fun getDashboard(propertyId: String): SyncDashboardResult {
         val channels = channelRepository.findByPropertyId(propertyId)
             .filter { it.type == ChannelType.OTA }
 
@@ -24,7 +23,7 @@ class SyncDashboardApplication(
             val counts = syncTaskRepository.countByPropertyIdAndChannelCodeGroupByStatus(
                 propertyId, channel.code
             )
-            ChannelSyncStatusResponse(
+            ChannelSyncStatus(
                 channelCode = channel.code,
                 channelName = channel.name,
                 status = channel.status,
@@ -40,7 +39,7 @@ class SyncDashboardApplication(
             totalFailed = channelStatuses.sumOf { it.failedCount }
         )
 
-        return SyncDashboardResponse(channels = channelStatuses, summary = summary)
+        return SyncDashboardResult(channels = channelStatuses, summary = summary)
     }
 
     fun getSyncTasks(

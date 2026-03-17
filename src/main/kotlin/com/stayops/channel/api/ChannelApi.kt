@@ -2,6 +2,7 @@ package com.stayops.channel.api
 
 import com.stayops.channel.api.dto.*
 import com.stayops.channel.application.service.ChannelApplication
+import com.stayops.channel.domain.model.ChannelConnectionInfo
 import com.stayops.channel.domain.model.MappingEntry
 import com.stayops.channel.domain.model.MappingType
 import org.springframework.http.HttpStatus
@@ -19,7 +20,18 @@ class ChannelApi(
         @PathVariable propertyId: String,
         @RequestBody request: CreateChannelRequest
     ): ResponseEntity<ChannelResponse> {
-        val channel = channelApplication.createOtaChannel(propertyId, request)
+        val channel = channelApplication.createOtaChannel(
+            propertyId = propertyId,
+            code = request.code,
+            name = request.name,
+            commissionRate = request.commissionRate,
+            connectionInfo = ChannelConnectionInfo(
+                apiEndpoint = request.apiEndpoint,
+                apiKey = request.apiKey,
+                apiSecret = request.apiSecret,
+                webhookSecret = request.webhookSecret
+            )
+        )
         return ResponseEntity.status(HttpStatus.CREATED).body(ChannelResponse.from(channel))
     }
 
@@ -44,7 +56,16 @@ class ChannelApi(
         @PathVariable channelId: String,
         @RequestBody request: UpdateChannelRequest
     ): ResponseEntity<ChannelResponse> {
-        val channel = channelApplication.updateChannel(propertyId, channelId, request)
+        val channel = channelApplication.updateChannel(
+            propertyId = propertyId,
+            channelId = channelId,
+            name = request.name,
+            commissionRate = request.commissionRate,
+            apiEndpoint = request.apiEndpoint,
+            apiKey = request.apiKey,
+            apiSecret = request.apiSecret,
+            webhookSecret = request.webhookSecret
+        )
         return ResponseEntity.ok(ChannelResponse.from(channel))
     }
 

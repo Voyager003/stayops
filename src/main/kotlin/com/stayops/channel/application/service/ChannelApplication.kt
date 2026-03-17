@@ -1,12 +1,12 @@
 package com.stayops.channel.application.service
 
-import com.stayops.channel.api.dto.CreateChannelRequest
-import com.stayops.channel.api.dto.UpdateChannelRequest
 import com.stayops.channel.domain.model.*
 import com.stayops.channel.domain.repository.ChannelMappingRepository
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.shared.exception.NotFoundException
 import org.springframework.stereotype.Service
+import java.math.BigDecimal
+import java.time.Instant
 import java.util.UUID
 
 @Service
@@ -15,19 +15,20 @@ class ChannelApplication(
     private val channelMappingRepository: ChannelMappingRepository
 ) {
 
-    fun createOtaChannel(propertyId: String, request: CreateChannelRequest): Channel {
+    fun createOtaChannel(
+        propertyId: String,
+        code: String,
+        name: String,
+        commissionRate: BigDecimal,
+        connectionInfo: ChannelConnectionInfo
+    ): Channel {
         val channel = Channel.createOta(
             id = UUID.randomUUID().toString(),
             propertyId = propertyId,
-            code = request.code,
-            name = request.name,
-            commissionRate = request.commissionRate,
-            connectionInfo = ChannelConnectionInfo(
-                apiEndpoint = request.apiEndpoint,
-                apiKey = request.apiKey,
-                apiSecret = request.apiSecret,
-                webhookSecret = request.webhookSecret
-            )
+            code = code,
+            name = name,
+            commissionRate = commissionRate,
+            connectionInfo = connectionInfo
         )
         return channelRepository.save(channel)
     }
@@ -39,27 +40,36 @@ class ChannelApplication(
         channelRepository.findById(channelId)
             ?: throw NotFoundException(code = "CHANNEL_NOT_FOUND", message = "채널을 찾을 수 없습니다: $channelId")
 
-    fun updateChannel(propertyId: String, channelId: String, request: UpdateChannelRequest): Channel {
+    fun updateChannel(
+        propertyId: String,
+        channelId: String,
+        name: String? = null,
+        commissionRate: BigDecimal? = null,
+        apiEndpoint: String? = null,
+        apiKey: String? = null,
+        apiSecret: String? = null,
+        webhookSecret: String? = null
+    ): Channel {
         val channel = findChannel(propertyId, channelId)
         val updated = Channel.reconstitute(
             id = channel.id,
             propertyId = channel.propertyId,
             code = channel.code,
-            name = request.name ?: channel.name,
+            name = name ?: channel.name,
             type = channel.type,
-            commissionRate = request.commissionRate ?: channel.commissionRate,
+            commissionRate = commissionRate ?: channel.commissionRate,
             connectionInfo = if (channel.connectionInfo != null) {
                 ChannelConnectionInfo(
-                    apiEndpoint = request.apiEndpoint ?: channel.connectionInfo!!.apiEndpoint,
-                    apiKey = request.apiKey ?: channel.connectionInfo!!.apiKey,
-                    apiSecret = request.apiSecret ?: channel.connectionInfo!!.apiSecret,
-                    webhookSecret = request.webhookSecret ?: channel.connectionInfo!!.webhookSecret
+                    apiEndpoint = apiEndpoint ?: channel.connectionInfo!!.apiEndpoint,
+                    apiKey = apiKey ?: channel.connectionInfo!!.apiKey,
+                    apiSecret = apiSecret ?: channel.connectionInfo!!.apiSecret,
+                    webhookSecret = webhookSecret ?: channel.connectionInfo!!.webhookSecret
                 )
             } else channel.connectionInfo,
             status = channel.status,
             version = channel.version,
             createdAt = channel.createdAt,
-            updatedAt = java.time.Instant.now()
+            updatedAt = Instant.now()
         )
         return channelRepository.save(updated)
     }
