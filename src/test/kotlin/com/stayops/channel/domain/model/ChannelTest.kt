@@ -3,213 +3,244 @@ package com.stayops.channel.domain.model
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.types.shouldBeInstanceOf
 import java.math.BigDecimal
 
 class ChannelTest : BehaviorSpec({
 
-    // -----------------------------------------
-    // DIRECT 채널 생성
-    // -----------------------------------------
+    fun otaConnectionInfo() = ChannelConnectionInfo(
+        apiEndpoint = "https://mock-ota.stayops.com/api/v1/ari",
+        apiKey = "test-api-key",
+        apiSecret = "test-api-secret",
+        webhookSecret = "webhook-secret-256bit"
+    )
 
-    given("DIRECT(FineStay) 채널을 생성할 때") {
-        `when`("유효한 정보로 생성하면") {
+    // -- DIRECT 채널 생성 --
+
+    given("DIRECT 채널 생성 시") {
+        `when`("createDirect() 호출하면") {
             val channel = Channel.createDirect(
                 id = "ch-1",
                 propertyId = "prop-1"
             )
 
+            then("ACTIVE 상태로 생성된다") {
+                channel.status shouldBe ChannelStatus.ACTIVE
+            }
             then("type이 DIRECT이다") {
                 channel.type shouldBe ChannelType.DIRECT
             }
-            then("code가 FINESTAY이다") {
-                channel.code shouldBe "FINESTAY"
+            then("commissionRate이 0이다") {
+                channel.commissionRate shouldBe BigDecimal.ZERO
             }
-            then("policy가 DirectPolicy이다") {
-                channel.policy.shouldBeInstanceOf<ChannelPolicy.DirectPolicy>()
+            then("connectionInfo가 null이다") {
+                channel.connectionInfo shouldBe null
             }
-            then("수수료율이 0이다") {
-                channel.policy.commissionRate shouldBe BigDecimal.ZERO
+            then("code가 DIRECT이다") {
+                channel.code shouldBe "DIRECT"
             }
-            then("상태가 ACTIVE이다") {
-                channel.status shouldBe ChannelStatus.ACTIVE
+            then("version이 0이다") {
+                channel.version shouldBe 0L
             }
         }
     }
 
-    // -----------------------------------------
-    // OTA 채널 생성
-    // -----------------------------------------
+    // -- OTA 채널 생성 --
 
-    given("OTA 채널을 생성할 때") {
+    given("OTA 채널 생성 시") {
         `when`("유효한 정보로 생성하면") {
+            val info = otaConnectionInfo()
             val channel = Channel.createOta(
                 id = "ch-2",
                 propertyId = "prop-1",
                 code = "AGODA",
-                name = "아고다",
+                name = "Agoda",
                 commissionRate = BigDecimal("0.15"),
-                webhookSecret = "secret-key-123"
+                connectionInfo = info
             )
 
+            then("ACTIVE 상태로 생성된다") {
+                channel.status shouldBe ChannelStatus.ACTIVE
+            }
             then("type이 OTA이다") {
                 channel.type shouldBe ChannelType.OTA
             }
-            then("code가 AGODA이다") {
-                channel.code shouldBe "AGODA"
+            then("commissionRate이 설정된 값이다") {
+                channel.commissionRate shouldBe BigDecimal("0.15")
             }
-            then("policy가 OtaPolicy이다") {
-                channel.policy.shouldBeInstanceOf<ChannelPolicy.OtaPolicy>()
-            }
-            then("수수료율이 0.15이다") {
-                channel.policy.commissionRate shouldBe BigDecimal("0.15")
-            }
-            then("webhookSecret이 설정된다") {
-                val otaPolicy = channel.policy as ChannelPolicy.OtaPolicy
-                otaPolicy.webhookSecret shouldBe "secret-key-123"
-            }
-            then("상태가 ACTIVE이다") {
-                channel.status shouldBe ChannelStatus.ACTIVE
+            then("connectionInfo가 설정된 값이다") {
+                channel.connectionInfo shouldBe info
             }
         }
 
-        `when`("수수료율이 0이면") {
-            then("IllegalArgumentException이 발생한다") {
+        `when`("code가 빈 문자열이면") {
+            then("예외가 발생한다") {
                 shouldThrow<IllegalArgumentException> {
                     Channel.createOta(
                         id = "ch-3",
                         propertyId = "prop-1",
-                        code = "AGODA",
-                        name = "아고다",
-                        commissionRate = BigDecimal.ZERO,
-                        webhookSecret = "secret"
+                        code = "",
+                        name = "Agoda",
+                        commissionRate = BigDecimal("0.15"),
+                        connectionInfo = otaConnectionInfo()
                     )
                 }
             }
         }
 
-        `when`("webhookSecret이 공백이면") {
-            then("IllegalArgumentException이 발생한다") {
+        `when`("name이 빈 문자열이면") {
+            then("예외가 발생한다") {
                 shouldThrow<IllegalArgumentException> {
                     Channel.createOta(
                         id = "ch-4",
                         propertyId = "prop-1",
                         code = "AGODA",
-                        name = "아고다",
+                        name = "",
                         commissionRate = BigDecimal("0.15"),
-                        webhookSecret = "  "
+                        connectionInfo = otaConnectionInfo()
                     )
                 }
             }
         }
 
-        `when`("code가 공백이면") {
-            then("IllegalArgumentException이 발생한다") {
+        `when`("commissionRate이 0이면") {
+            then("예외가 발생한다") {
                 shouldThrow<IllegalArgumentException> {
                     Channel.createOta(
                         id = "ch-5",
                         propertyId = "prop-1",
-                        code = "  ",
-                        name = "아고다",
-                        commissionRate = BigDecimal("0.15"),
-                        webhookSecret = "secret"
+                        code = "AGODA",
+                        name = "Agoda",
+                        commissionRate = BigDecimal.ZERO,
+                        connectionInfo = otaConnectionInfo()
                     )
                 }
             }
         }
 
-        `when`("name이 공백이면") {
-            then("IllegalArgumentException이 발생한다") {
+        `when`("commissionRate이 1보다 크면") {
+            then("예외가 발생한다") {
                 shouldThrow<IllegalArgumentException> {
                     Channel.createOta(
                         id = "ch-6",
                         propertyId = "prop-1",
                         code = "AGODA",
-                        name = "  ",
-                        commissionRate = BigDecimal("0.15"),
-                        webhookSecret = "secret"
+                        name = "Agoda",
+                        commissionRate = BigDecimal("1.01"),
+                        connectionInfo = otaConnectionInfo()
                     )
                 }
             }
         }
 
-        `when`("수수료율이 1을 초과하면") {
-            then("IllegalArgumentException이 발생한다") {
-                shouldThrow<IllegalArgumentException> {
-                    Channel.createOta(
-                        id = "ch-7",
-                        propertyId = "prop-1",
-                        code = "AGODA",
-                        name = "아고다",
-                        commissionRate = BigDecimal("1.01"),
-                        webhookSecret = "secret"
-                    )
-                }
-            }
-        }
     }
 
-    // -----------------------------------------
-    // 상태 전이
-    // -----------------------------------------
+    // -- 상태 전이: ACTIVE --
 
-    given("ACTIVE 상태의 채널이") {
+    given("ACTIVE 상태의 채널") {
         val channel = Channel.createOta(
-            id = "ch-1",
+            id = "ch-10",
             propertyId = "prop-1",
             code = "AGODA",
-            name = "아고다",
+            name = "Agoda",
             commissionRate = BigDecimal("0.15"),
-            webhookSecret = "secret"
+            connectionInfo = otaConnectionInfo()
         )
 
-        `when`("비활성화하면") {
+        `when`("deactivate() 호출 시") {
             val deactivated = channel.deactivate()
+
             then("상태가 INACTIVE로 변경된다") {
                 deactivated.status shouldBe ChannelStatus.INACTIVE
             }
         }
 
-        `when`("일시 중지하면") {
+        `when`("suspend() 호출 시") {
             val suspended = channel.suspend()
+
             then("상태가 SUSPENDED로 변경된다") {
                 suspended.status shouldBe ChannelStatus.SUSPENDED
             }
         }
-    }
 
-    given("INACTIVE 상태의 채널이") {
-        val channel = Channel.createOta(
-            id = "ch-1",
-            propertyId = "prop-1",
-            code = "AGODA",
-            name = "아고다",
-            commissionRate = BigDecimal("0.15"),
-            webhookSecret = "secret"
-        ).deactivate()
-
-        `when`("활성화하면") {
-            val activated = channel.activate()
-            then("상태가 ACTIVE로 변경된다") {
-                activated.status shouldBe ChannelStatus.ACTIVE
+        `when`("activate() 호출 시") {
+            then("이미 ACTIVE이므로 예외가 발생한다") {
+                shouldThrow<IllegalStateException> {
+                    channel.activate()
+                }
             }
         }
     }
 
-    given("SUSPENDED 상태의 채널이") {
-        val channel = Channel.createOta(
-            id = "ch-1",
-            propertyId = "prop-1",
-            code = "AGODA",
-            name = "아고다",
-            commissionRate = BigDecimal("0.15"),
-            webhookSecret = "secret"
-        ).suspend()
+    // -- 상태 전이: INACTIVE --
 
-        `when`("활성화하면") {
+    given("INACTIVE 상태의 채널") {
+        val channel = Channel.createOta(
+            id = "ch-11",
+            propertyId = "prop-1",
+            code = "BOOKING",
+            name = "Booking.com",
+            commissionRate = BigDecimal("0.18"),
+            connectionInfo = otaConnectionInfo()
+        ).deactivate()
+
+        `when`("activate() 호출 시") {
             val activated = channel.activate()
+
             then("상태가 ACTIVE로 변경된다") {
                 activated.status shouldBe ChannelStatus.ACTIVE
+            }
+        }
+
+        `when`("deactivate() 호출 시") {
+            then("이미 INACTIVE이므로 예외가 발생한다") {
+                shouldThrow<IllegalStateException> {
+                    channel.deactivate()
+                }
+            }
+        }
+
+        `when`("suspend() 호출 시") {
+            then("INACTIVE에서는 정지할 수 없으므로 예외가 발생한다") {
+                shouldThrow<IllegalStateException> {
+                    channel.suspend()
+                }
+            }
+        }
+    }
+
+    // -- 상태 전이: SUSPENDED --
+
+    given("SUSPENDED 상태의 채널") {
+        val channel = Channel.createOta(
+            id = "ch-12",
+            propertyId = "prop-1",
+            code = "EXPEDIA",
+            name = "Expedia",
+            commissionRate = BigDecimal("0.20"),
+            connectionInfo = otaConnectionInfo()
+        ).suspend()
+
+        `when`("activate() 호출 시") {
+            val activated = channel.activate()
+
+            then("상태가 ACTIVE로 변경된다") {
+                activated.status shouldBe ChannelStatus.ACTIVE
+            }
+        }
+
+        `when`("deactivate() 호출 시") {
+            then("SUSPENDED에서는 비활성화할 수 없으므로 예외가 발생한다") {
+                shouldThrow<IllegalStateException> {
+                    channel.deactivate()
+                }
+            }
+        }
+
+        `when`("suspend() 호출 시") {
+            then("이미 SUSPENDED이므로 예외가 발생한다") {
+                shouldThrow<IllegalStateException> {
+                    channel.suspend()
+                }
             }
         }
     }

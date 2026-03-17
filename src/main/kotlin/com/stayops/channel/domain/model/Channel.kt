@@ -10,33 +10,51 @@ data class Channel private constructor(
     val code: String,
     val name: String,
     val type: ChannelType,
-    val policy: ChannelPolicy,
+    val commissionRate: BigDecimal,
+    val connectionInfo: ChannelConnectionInfo?,
     val status: ChannelStatus,
-    val version: Long?,
+    val version: Long,
     val createdAt: Instant,
     val updatedAt: Instant
 ) {
-    fun activate(): Channel = copy(status = ChannelStatus.ACTIVE, updatedAt = Instant.now())
 
-    fun deactivate(): Channel = copy(status = ChannelStatus.INACTIVE, updatedAt = Instant.now())
+    fun activate(): Channel {
+        check(status != ChannelStatus.ACTIVE) {
+            "이미 ACTIVE 상태입니다: $code"
+        }
+        return copy(status = ChannelStatus.ACTIVE, updatedAt = Instant.now())
+    }
 
-    fun suspend(): Channel = copy(status = ChannelStatus.SUSPENDED, updatedAt = Instant.now())
+    fun deactivate(): Channel {
+        check(status == ChannelStatus.ACTIVE) {
+            "ACTIVE 상태에서만 비활성화할 수 있습니다: $status"
+        }
+        return copy(status = ChannelStatus.INACTIVE, updatedAt = Instant.now())
+    }
+
+    fun suspend(): Channel {
+        check(status == ChannelStatus.ACTIVE) {
+            "ACTIVE 상태에서만 정지할 수 있습니다: $status"
+        }
+        return copy(status = ChannelStatus.SUSPENDED, updatedAt = Instant.now())
+    }
 
     companion object {
-        private const val FINESTAY_CODE = "FINESTAY"
-        private const val FINESTAY_NAME = "FineStay"
+        private const val DIRECT_CODE = "DIRECT"
+        private const val DIRECT_NAME = "자사 예매 사이트"
 
         fun createDirect(id: String, propertyId: String): Channel {
             val now = Instant.now()
             return Channel(
                 id = id,
                 propertyId = propertyId,
-                code = FINESTAY_CODE,
-                name = FINESTAY_NAME,
+                code = DIRECT_CODE,
+                name = DIRECT_NAME,
                 type = ChannelType.DIRECT,
-                policy = ChannelPolicy.DirectPolicy(),
+                commissionRate = BigDecimal.ZERO,
+                connectionInfo = null,
                 status = ChannelStatus.ACTIVE,
-                version = null,
+                version = 0L,
                 createdAt = now,
                 updatedAt = now
             )
@@ -48,10 +66,12 @@ data class Channel private constructor(
             code: String,
             name: String,
             commissionRate: BigDecimal,
-            webhookSecret: String
+            connectionInfo: ChannelConnectionInfo
         ): Channel {
             require(code.isNotBlank()) { "채널 코드는 공백일 수 없습니다." }
             require(name.isNotBlank()) { "채널 이름은 공백일 수 없습니다." }
+            require(commissionRate > BigDecimal.ZERO) { "OTA 수수료율은 0보다 커야 합니다: $commissionRate" }
+            require(commissionRate <= BigDecimal.ONE) { "수수료율은 1 이하여야 합니다: $commissionRate" }
 
             val now = Instant.now()
             return Channel(
@@ -60,9 +80,10 @@ data class Channel private constructor(
                 code = code,
                 name = name,
                 type = ChannelType.OTA,
-                policy = ChannelPolicy.OtaPolicy.of(commissionRate, webhookSecret),
+                commissionRate = commissionRate,
+                connectionInfo = connectionInfo,
                 status = ChannelStatus.ACTIVE,
-                version = null,
+                version = 0L,
                 createdAt = now,
                 updatedAt = now
             )
@@ -74,9 +95,10 @@ data class Channel private constructor(
             code: String,
             name: String,
             type: ChannelType,
-            policy: ChannelPolicy,
+            commissionRate: BigDecimal,
+            connectionInfo: ChannelConnectionInfo?,
             status: ChannelStatus,
-            version: Long?,
+            version: Long,
             createdAt: Instant,
             updatedAt: Instant
         ): Channel = Channel(
@@ -85,7 +107,8 @@ data class Channel private constructor(
             code = code,
             name = name,
             type = type,
-            policy = policy,
+            commissionRate = commissionRate,
+            connectionInfo = connectionInfo,
             status = status,
             version = version,
             createdAt = createdAt,
