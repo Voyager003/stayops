@@ -4,6 +4,7 @@ import com.stayops.settlement.application.dto.ChannelSettlement
 import com.stayops.settlement.application.dto.SettlementSummary
 import com.stayops.settlement.application.service.SettlementQueryService
 import com.stayops.shared.domain.Money
+import com.stayops.shared.security.PropertyAccessChecker
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.jupiter.api.Nested
@@ -16,8 +17,9 @@ import java.time.LocalDate
 class SettlementApiTest {
 
     private val settlementQueryService = mockk<SettlementQueryService>()
+    private val propertyAccessChecker = mockk<PropertyAccessChecker>(relaxed = true)
     private val mockMvc: MockMvc = MockMvcBuilders
-        .standaloneSetup(SettlementApi(settlementQueryService))
+        .standaloneSetup(SettlementApi(settlementQueryService, propertyAccessChecker))
         .build()
 
     private val startDate = LocalDate.of(2026, 4, 1)

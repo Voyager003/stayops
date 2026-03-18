@@ -5,6 +5,7 @@ import com.stayops.rate.api.dto.DayOfWeekRuleRequest
 import com.stayops.rate.api.dto.RatePlanResponse
 import com.stayops.rate.api.dto.RatePreviewResponse
 import com.stayops.rate.application.service.RatePlanApplication
+import com.stayops.shared.security.PropertyAccessChecker
 import com.stayops.rate.domain.model.DayOfWeekRate
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
@@ -26,7 +27,8 @@ import java.time.LocalDate
 @RestController
 @RequestMapping("/api/v1/properties/{pid}")
 class RatePlanApi(
-    private val ratePlanApplication: RatePlanApplication
+    private val ratePlanApplication: RatePlanApplication,
+    private val propertyAccessChecker: PropertyAccessChecker
 ) {
     @PostMapping("/rate-plans")
     @ResponseStatus(HttpStatus.CREATED)
@@ -34,6 +36,7 @@ class RatePlanApi(
         @PathVariable pid: String,
         @RequestBody @Valid request: CreateRatePlanRequest
     ): RatePlanResponse {
+        propertyAccessChecker.requireAccess(pid)
         val dateRange = if (request.dateRangeStart != null && request.dateRangeEnd != null) {
             DateRange.of(request.dateRangeStart, request.dateRangeEnd)
         } else null
@@ -55,15 +58,20 @@ class RatePlanApi(
     }
 
     @GetMapping("/rate-plans")
-    fun getRatePlans(@PathVariable pid: String): List<RatePlanResponse> =
-        ratePlanApplication.getRatePlans(pid).map { RatePlanResponse.from(it) }
+    fun getRatePlans(@PathVariable pid: String): List<RatePlanResponse> {
+        propertyAccessChecker.requireAccess(pid)
+        return ratePlanApplication.getRatePlans(pid).map { RatePlanResponse.from(it) }
+    }
 
     @DeleteMapping("/rate-plans/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun deleteRatePlan(
         @PathVariable pid: String,
         @PathVariable id: String
-    ) = ratePlanApplication.deleteRatePlan(id)
+    ) {
+        propertyAccessChecker.requireAccess(pid)
+        ratePlanApplication.deleteRatePlan(id)
+    }
 
     @GetMapping("/rates/preview")
     fun previewRates(
@@ -73,9 +81,11 @@ class RatePlanApi(
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) startDate: LocalDate,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) endDate: LocalDate,
         @RequestParam(required = false) channelCode: String?
-    ): List<RatePreviewResponse> =
-        ratePlanApplication.previewRates(pid, roomTypeId, Money.of(basePrice), startDate, endDate, channelCode)
+    ): List<RatePreviewResponse> {
+        propertyAccessChecker.requireAccess(pid)
+        return ratePlanApplication.previewRates(pid, roomTypeId, Money.of(basePrice), startDate, endDate, channelCode)
             .map { RatePreviewResponse.from(it) }
+    }
 
     private fun DayOfWeekRuleRequest.toDomain() = DayOfWeekRate(
         daysOfWeek = daysOfWeek.map { DayOfWeek.valueOf(it) }.toSet(),

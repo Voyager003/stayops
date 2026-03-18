@@ -4,10 +4,15 @@ import com.stayops.auth.api.dto.AuthResponse
 import com.stayops.auth.api.dto.LoginRequest
 import com.stayops.auth.api.dto.SignupRequest
 import com.stayops.auth.application.service.AuthService
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import jakarta.servlet.http.HttpSession
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -15,6 +20,8 @@ import org.springframework.web.bind.annotation.*
 class AuthApi(
     private val authService: AuthService
 ) {
+
+    private val securityContextRepository = HttpSessionSecurityContextRepository()
 
     @PostMapping("/signup")
     fun signup(@Valid @RequestBody request: SignupRequest): ResponseEntity<AuthResponse> {
@@ -29,16 +36,24 @@ class AuthApi(
     @PostMapping("/login")
     fun login(
         @Valid @RequestBody request: LoginRequest,
-        session: HttpSession
+        httpRequest: HttpServletRequest,
+        httpResponse: HttpServletResponse
     ): ResponseEntity<AuthResponse> {
         val member = authService.login(request.email, request.password)
-        session.setAttribute("memberId", member.id)
+
+        val authentication = UsernamePasswordAuthenticationToken(member, null, emptyList())
+        val context = SecurityContextHolder.createEmptyContext()
+        context.authentication = authentication
+        SecurityContextHolder.setContext(context)
+        securityContextRepository.saveContext(context, httpRequest, httpResponse)
+
         return ResponseEntity.ok(AuthResponse.from(member))
     }
 
     @PostMapping("/logout")
     fun logout(session: HttpSession): ResponseEntity<Void> {
         authService.logout(session)
+        SecurityContextHolder.clearContext()
         return ResponseEntity.noContent().build()
     }
 }

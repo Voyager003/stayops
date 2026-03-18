@@ -3,6 +3,7 @@ package com.stayops.guest.api
 import com.stayops.guest.api.dto.GuestResponse
 import com.stayops.guest.api.dto.UpdateGuestRequest
 import com.stayops.guest.application.service.GuestApplication
+import com.stayops.shared.security.PropertyAccessChecker
 import com.stayops.guest.domain.model.GuestTier
 import jakarta.validation.Valid
 import org.springframework.web.bind.annotation.GetMapping
@@ -16,28 +17,35 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/api/v1/properties/{pid}")
 class GuestApi(
-    private val guestApplication: GuestApplication
+    private val guestApplication: GuestApplication,
+    private val propertyAccessChecker: PropertyAccessChecker
 ) {
     @GetMapping("/guests")
     fun getGuests(
         @PathVariable pid: String,
         @RequestParam(required = false) tier: GuestTier?,
         @RequestParam(required = false) name: String?
-    ): List<GuestResponse> =
-        guestApplication.getGuests(pid, tier, name).map { GuestResponse.from(it) }
+    ): List<GuestResponse> {
+        propertyAccessChecker.requireAccess(pid)
+        return guestApplication.getGuests(pid, tier, name).map { GuestResponse.from(it) }
+    }
 
     @GetMapping("/guests/{guestId}")
     fun getGuest(
         @PathVariable pid: String,
         @PathVariable guestId: String
-    ): GuestResponse =
-        GuestResponse.from(guestApplication.getGuest(guestId))
+    ): GuestResponse {
+        propertyAccessChecker.requireAccess(pid)
+        return GuestResponse.from(guestApplication.getGuest(guestId))
+    }
 
     @PutMapping("/guests/{guestId}")
     fun updateGuest(
         @PathVariable pid: String,
         @PathVariable guestId: String,
         @RequestBody @Valid request: UpdateGuestRequest
-    ): GuestResponse =
-        GuestResponse.from(guestApplication.updateGuest(guestId, request.name, request.memo))
+    ): GuestResponse {
+        propertyAccessChecker.requireAccess(pid)
+        return GuestResponse.from(guestApplication.updateGuest(guestId, request.name, request.memo))
+    }
 }

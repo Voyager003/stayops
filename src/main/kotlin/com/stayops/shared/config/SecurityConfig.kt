@@ -23,6 +23,7 @@ class SecurityConfig {
             cors { configurationSource = corsConfigurationSource() }
             authorizeHttpRequests {
                 authorize("/api/v1/auth/**", permitAll)
+                authorize("/api/v1/properties/*/channels/webhook/**", permitAll)
                 authorize(anyRequest, authenticated)
             }
         }

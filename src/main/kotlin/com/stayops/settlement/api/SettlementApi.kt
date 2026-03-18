@@ -2,6 +2,7 @@ package com.stayops.settlement.api
 
 import com.stayops.settlement.api.dto.SettlementResponse
 import com.stayops.settlement.application.service.SettlementQueryService
+import com.stayops.shared.security.PropertyAccessChecker
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.time.LocalDate
@@ -9,7 +10,8 @@ import java.time.LocalDate
 @RestController
 @RequestMapping("/api/v1/properties/{propertyId}/settlements")
 class SettlementApi(
-    private val settlementQueryService: SettlementQueryService
+    private val settlementQueryService: SettlementQueryService,
+    private val propertyAccessChecker: PropertyAccessChecker
 ) {
 
     @GetMapping
@@ -18,6 +20,7 @@ class SettlementApi(
         @RequestParam startDate: LocalDate,
         @RequestParam endDate: LocalDate
     ): ResponseEntity<SettlementResponse> {
+        propertyAccessChecker.requireAccess(propertyId)
         val summary = settlementQueryService.getSettlementSummary(propertyId, startDate, endDate)
         return ResponseEntity.ok(SettlementResponse.from(summary))
     }

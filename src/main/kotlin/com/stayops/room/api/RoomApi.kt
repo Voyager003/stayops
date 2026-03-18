@@ -4,6 +4,7 @@ import com.stayops.room.api.dto.CreateRoomRequest
 import com.stayops.room.api.dto.RoomResponse
 import com.stayops.room.api.dto.UpdateRoomStatusRequest
 import com.stayops.room.application.service.RoomApplication
+import com.stayops.shared.security.PropertyAccessChecker
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
@@ -20,7 +21,8 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/api/v1/properties/{pid}/rooms")
 class RoomApi(
-    private val roomApplication: RoomApplication
+    private val roomApplication: RoomApplication,
+    private val propertyAccessChecker: PropertyAccessChecker
 ) {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -28,6 +30,7 @@ class RoomApi(
         @PathVariable pid: String,
         @RequestBody @Valid request: CreateRoomRequest
     ): RoomResponse {
+        propertyAccessChecker.requireAccess(pid)
         val room = roomApplication.createRoom(
             propertyId = pid,
             roomTypeId = request.roomTypeId,
@@ -38,26 +41,37 @@ class RoomApi(
     }
 
     @GetMapping
-    fun getAll(@PathVariable pid: String): List<RoomResponse> =
-        roomApplication.getRoomsByProperty(pid).map { RoomResponse.from(it) }
+    fun getAll(@PathVariable pid: String): List<RoomResponse> {
+        propertyAccessChecker.requireAccess(pid)
+        return roomApplication.getRoomsByProperty(pid).map { RoomResponse.from(it) }
+    }
 
     @GetMapping("/{id}")
     fun getOne(
         @PathVariable pid: String,
         @PathVariable id: String
-    ): RoomResponse = RoomResponse.from(roomApplication.getRoom(id))
+    ): RoomResponse {
+        propertyAccessChecker.requireAccess(pid)
+        return RoomResponse.from(roomApplication.getRoom(id))
+    }
 
     @PutMapping("/{id}")
     fun updateMemo(
         @PathVariable pid: String,
         @PathVariable id: String,
         @RequestParam memo: String?
-    ): RoomResponse = RoomResponse.from(roomApplication.updateMemo(id, memo))
+    ): RoomResponse {
+        propertyAccessChecker.requireAccess(pid)
+        return RoomResponse.from(roomApplication.updateMemo(id, memo))
+    }
 
     @PatchMapping("/{id}/status")
     fun changeStatus(
         @PathVariable pid: String,
         @PathVariable id: String,
         @RequestBody @Valid request: UpdateRoomStatusRequest
-    ): RoomResponse = RoomResponse.from(roomApplication.changeStatus(id, request.action))
+    ): RoomResponse {
+        propertyAccessChecker.requireAccess(pid)
+        return RoomResponse.from(roomApplication.changeStatus(id, request.action))
+    }
 }
