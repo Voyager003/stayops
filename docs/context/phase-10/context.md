@@ -28,3 +28,24 @@
 
 - **결정**: `BusinessException`(400) 대신 `ConflictException`(409) 사용
 - **이유**: 이메일 중복은 리소스 충돌이므로 HTTP 409 Conflict가 의미적으로 적합
+
+## 코드 리뷰 반영
+
+- **C1 해결**: PropertyAccessChecker — 인증 없으면 silent return → ForbiddenException 발생으로 변경
+- **C2 해결**: 로그인 실패 시 이메일 없음/비밀번호 틀림을 동일한 응답으로 통합 (이메일 열거 공격 방지)
+
+## 코드 리뷰 미해결 이슈 (추후 수정)
+
+### C3: Member Serializable 미구현
+- **현상**: Member가 세션 principal로 저장되지만 `java.io.Serializable` 미구현
+- **현재 영향 없음**: 서버 메모리 세션 사용 중이므로 직렬화 불필요
+- **Redis 세션 전환 시 대응 필요**: `spring-session-data-redis` 도입 시 `NotSerializableException` 발생
+- **해결 방안**: (A) Member에 Serializable 구현 또는 (B) 세션에 memberId만 저장하고 매 요청마다 DB 조회
+
+### H1: 세션 고정 공격 미방어
+- 로그인 시 기존 세션 무효화 없이 SecurityContext만 설정
+- 대응: 로그인 시 `httpRequest.getSession(false)?.invalidate()` 후 새 세션 생성
+
+### H5: passwordHash가 data class toString()에 노출
+- Member가 로그에 출력되면 해시 노출 가능
+- 대응: `toString()` 오버라이드하여 passwordHash 제외
