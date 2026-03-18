@@ -3,9 +3,9 @@ package com.stayops.auth.application.service
 import com.stayops.auth.domain.model.Member
 import com.stayops.auth.domain.model.MemberRole
 import com.stayops.auth.domain.repository.MemberRepository
+import com.stayops.auth.domain.model.MemberStatus
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.ConflictException
-import com.stayops.shared.exception.NotFoundException
 import jakarta.servlet.http.HttpSession
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
@@ -35,13 +35,12 @@ class AuthService(
 
     fun login(email: String, password: String): Member {
         val member = memberRepository.findByEmail(email)
-            ?: throw NotFoundException("MEMBER_NOT_FOUND", "존재하지 않는 이메일입니다: $email")
 
-        if (!passwordEncoder.matches(password, member.passwordHash)) {
-            throw BusinessException("INVALID_PASSWORD", "비밀번호가 일치하지 않습니다.")
+        if (member == null || !passwordEncoder.matches(password, member.passwordHash)) {
+            throw BusinessException("INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다.")
         }
 
-        if (member.status != com.stayops.auth.domain.model.MemberStatus.ACTIVE) {
+        if (member.status != MemberStatus.ACTIVE) {
             throw BusinessException("INACTIVE_MEMBER", "비활성화된 회원입니다.")
         }
 

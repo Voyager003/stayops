@@ -6,7 +6,6 @@ import com.stayops.auth.domain.model.MemberRole
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.GlobalExceptionHandler
-import com.stayops.shared.exception.NotFoundException
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
@@ -100,26 +99,13 @@ class AuthApiTest {
         }
 
         @Test
-        fun `존재하지 않는 이메일이면 404를 반환한다`() {
+        fun `잘못된 자격증명이면 400을 반환한다`() {
             every { authService.login(any(), any()) } throws
-                NotFoundException("MEMBER_NOT_FOUND", "존재하지 않는 이메일입니다")
+                BusinessException("INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다.")
 
             mockMvc.post("/api/v1/auth/login") {
                 contentType = MediaType.APPLICATION_JSON
-                content = """{"email":"unknown@stayops.com","password":"password123"}"""
-            }.andExpect {
-                status { isNotFound() }
-            }
-        }
-
-        @Test
-        fun `비밀번호가 틀리면 400을 반환한다`() {
-            every { authService.login(any(), any()) } throws
-                BusinessException("INVALID_PASSWORD", "비밀번호가 일치하지 않습니다")
-
-            mockMvc.post("/api/v1/auth/login") {
-                contentType = MediaType.APPLICATION_JSON
-                content = """{"email":"test@stayops.com","password":"wrong"}"""
+                content = """{"email":"unknown@stayops.com","password":"wrong"}"""
             }.andExpect {
                 status { isBadRequest() }
             }

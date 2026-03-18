@@ -6,7 +6,6 @@ import com.stayops.auth.domain.model.MemberStatus
 import com.stayops.auth.domain.repository.MemberRepository
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.ConflictException
-import com.stayops.shared.exception.NotFoundException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
@@ -83,18 +82,19 @@ class AuthServiceTest : BehaviorSpec({
         }
 
         `when`("존재하지 않는 이메일이면") {
-            then("예외가 발생한다") {
+            then("동일한 에러 메시지로 예외가 발생한다") {
                 clearAllMocks()
                 every { memberRepository.findByEmail("unknown@stayops.com") } returns null
 
-                shouldThrow<NotFoundException> {
+                val exception = shouldThrow<BusinessException> {
                     sut.login("unknown@stayops.com", "password123")
                 }
+                exception.code shouldBe "INVALID_CREDENTIALS"
             }
         }
 
         `when`("비밀번호가 틀리면") {
-            then("예외가 발생한다") {
+            then("동일한 에러 메시지로 예외가 발생한다") {
                 clearAllMocks()
                 val member = Member.create(
                     id = "member-1",
@@ -106,9 +106,10 @@ class AuthServiceTest : BehaviorSpec({
                 every { memberRepository.findByEmail("test@stayops.com") } returns member
                 every { passwordEncoder.matches("wrong-password", "hashed-password") } returns false
 
-                shouldThrow<BusinessException> {
+                val exception = shouldThrow<BusinessException> {
                     sut.login("test@stayops.com", "wrong-password")
                 }
+                exception.code shouldBe "INVALID_CREDENTIALS"
             }
         }
 
