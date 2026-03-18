@@ -5,11 +5,16 @@ import com.stayops.property.api.dto.CreatePropertyRequest
 import com.stayops.property.api.dto.UpdatePropertyRequest
 import com.stayops.property.domain.model.PropertyType
 import com.stayops.property.infrastructure.persistence.PropertyMongoDataRepository
+import com.stayops.auth.domain.model.Member
+import com.stayops.auth.domain.model.MemberRole
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
@@ -31,8 +36,19 @@ class PropertyApiTest @Autowired constructor(
 
     @BeforeEach
     fun setUp() {
+        val admin = Member.create(
+            id = "test-admin", email = "admin@test.com",
+            passwordHash = "hashed", name = "테스트관리자", role = MemberRole.ADMIN
+        )
+        SecurityContextHolder.getContext().authentication =
+            UsernamePasswordAuthenticationToken(admin, null, emptyList())
         mockMvc = MockMvcBuilders.webAppContextSetup(context).build()
         mongoDataRepository.deleteAll()
+    }
+
+    @AfterEach
+    fun tearDown() {
+        SecurityContextHolder.clearContext()
     }
 
     private fun createRequest(name: String = "해운대 펜션") = CreatePropertyRequest(

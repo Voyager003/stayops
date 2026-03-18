@@ -5,11 +5,16 @@ import com.stayops.room.api.dto.CreateRoomRequest
 import com.stayops.room.api.dto.UpdateRoomStatusRequest
 import com.stayops.room.api.dto.RoomStatusAction
 import com.stayops.room.infrastructure.persistence.RoomMongoDataRepository
+import com.stayops.auth.domain.model.Member
+import com.stayops.auth.domain.model.MemberRole
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
@@ -34,8 +39,19 @@ class RoomApiTest @Autowired constructor(
 
     @BeforeEach
     fun setUp() {
+        val admin = Member.create(
+            id = "test-admin", email = "admin@test.com",
+            passwordHash = "hashed", name = "테스트관리자", role = MemberRole.ADMIN
+        )
+        SecurityContextHolder.getContext().authentication =
+            UsernamePasswordAuthenticationToken(admin, null, emptyList())
         mockMvc = MockMvcBuilders.webAppContextSetup(context).build()
         mongoDataRepository.deleteAll()
+    }
+
+    @AfterEach
+    fun tearDown() {
+        SecurityContextHolder.clearContext()
     }
 
     private fun createRequest(roomNumber: String = "101") = CreateRoomRequest(
