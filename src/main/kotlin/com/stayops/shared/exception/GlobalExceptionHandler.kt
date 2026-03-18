@@ -36,6 +36,13 @@ class GlobalExceptionHandler {
             ErrorResponse(code = ex.code, message = ex.message, timestamp = Instant.now())
         )
     }
+
+    @ExceptionHandler(ForbiddenException::class)
+    fun handleForbiddenException(ex: ForbiddenException): ResponseEntity<ErrorResponse> {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(
+            ErrorResponse(code = ex.code, message = ex.message, timestamp = Instant.now())
+        )
+    }
 }
 
 data class ErrorResponse(

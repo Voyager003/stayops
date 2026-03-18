@@ -5,6 +5,8 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.annotation.web.invoke
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
+import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.web.cors.CorsConfiguration
 import org.springframework.web.cors.CorsConfigurationSource
@@ -19,10 +21,17 @@ class SecurityConfig {
         http {
             csrf { disable() }
             cors { configurationSource = corsConfigurationSource() }
-            authorizeHttpRequests { authorize(anyRequest, permitAll) }
+            authorizeHttpRequests {
+                authorize("/api/v1/auth/**", permitAll)
+                authorize("/api/v1/properties/*/channels/webhook/**", permitAll)
+                authorize(anyRequest, authenticated)
+            }
         }
         return http.build()
     }
+
+    @Bean
+    fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder()
 
     @Bean
     fun corsConfigurationSource(): CorsConfigurationSource {

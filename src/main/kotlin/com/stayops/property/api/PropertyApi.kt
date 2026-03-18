@@ -4,6 +4,7 @@ import com.stayops.property.api.dto.CreatePropertyRequest
 import com.stayops.property.api.dto.PropertyResponse
 import com.stayops.property.api.dto.UpdatePropertyRequest
 import com.stayops.property.application.service.PropertyApplication
+import com.stayops.shared.security.PropertyAccessChecker
 import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo
 import jakarta.validation.Valid
@@ -20,7 +21,8 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/api/v1/properties")
 class PropertyApi(
-    private val propertyApplication: PropertyApplication
+    private val propertyApplication: PropertyApplication,
+    private val propertyAccessChecker: PropertyAccessChecker
 ) {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -43,14 +45,17 @@ class PropertyApi(
         propertyApplication.getAllProperties().map { PropertyResponse.from(it) }
 
     @GetMapping("/{pid}")
-    fun getOne(@PathVariable pid: String): PropertyResponse =
-        PropertyResponse.from(propertyApplication.getProperty(pid))
+    fun getOne(@PathVariable pid: String): PropertyResponse {
+        propertyAccessChecker.requireAccess(pid)
+        return PropertyResponse.from(propertyApplication.getProperty(pid))
+    }
 
     @PutMapping("/{pid}")
     fun update(
         @PathVariable pid: String,
         @RequestBody @Valid request: UpdatePropertyRequest
     ): PropertyResponse {
+        propertyAccessChecker.requireAccess(pid)
         val property = propertyApplication.updateProperty(
             id = pid,
             name = request.name,
