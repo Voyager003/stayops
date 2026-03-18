@@ -75,9 +75,9 @@ db.reservations.aggregate([
   { $group: {
       _id: "$channel.channelCode",
       reservationCount: { $sum: 1 },
-      totalRevenue: { $sum: "$pricing.totalAmount.amount" },
-      totalCommission: { $sum: "$pricing.commissionAmount.amount" },
-      netSettlement: { $sum: "$pricing.netAmount.amount" }
+      totalRevenue: { $sum: "$pricing.totalAmount" },
+      totalCommission: { $sum: "$pricing.commissionAmount" },
+      netSettlement: { $sum: "$pricing.netAmount" }
   }}
 ])
 ```
@@ -96,13 +96,12 @@ db.reservations.aggregate([
 **생성할 파일:**
 ```
 src/main/kotlin/com/stayops/settlement/api/
-├── SettlementController.kt
+├── SettlementApi.kt
 └── dto/
-    ├── SettlementSummaryResponse.kt
-    └── ChannelSettlementResponse.kt
+    └── SettlementResponse.kt
 
 src/test/kotlin/com/stayops/settlement/api/
-└── SettlementControllerTest.kt
+└── SettlementApiTest.kt
 ```
 
 **API 엔드포인트:**
