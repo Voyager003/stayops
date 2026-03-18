@@ -5,6 +5,7 @@ import com.stayops.auth.domain.model.MemberRole
 import com.stayops.auth.domain.model.MemberStatus
 import com.stayops.auth.domain.repository.MemberRepository
 import com.stayops.shared.exception.BusinessException
+import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -46,7 +47,7 @@ class AuthServiceTest : BehaviorSpec({
                 clearAllMocks()
                 every { memberRepository.existsByEmail("existing@stayops.com") } returns true
 
-                shouldThrow<BusinessException> {
+                shouldThrow<ConflictException> {
                     sut.signup(
                         email = "existing@stayops.com",
                         password = "password123",

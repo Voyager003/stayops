@@ -4,6 +4,7 @@ import com.stayops.auth.domain.model.Member
 import com.stayops.auth.domain.model.MemberRole
 import com.stayops.auth.domain.repository.MemberRepository
 import com.stayops.shared.exception.BusinessException
+import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
 import jakarta.servlet.http.HttpSession
 import org.springframework.security.crypto.password.PasswordEncoder
@@ -18,7 +19,7 @@ class AuthService(
 
     fun signup(email: String, password: String, name: String): Member {
         if (memberRepository.existsByEmail(email)) {
-            throw BusinessException("DUPLICATE_EMAIL", "이미 사용 중인 이메일입니다: $email")
+            throw ConflictException("DUPLICATE_EMAIL", "이미 사용 중인 이메일입니다: $email")
         }
 
         val member = Member.create(
