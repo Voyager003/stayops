@@ -207,6 +207,25 @@ class BookingApplicationTest : BehaviorSpec({
             }
         }
 
+        `when`("클라이언트가 보낸 금액이 DB 금액과 다르면") {
+            clearAllMocks()
+            val reservation = pendingReservation()
+            val payment = pendingPayment()  // amount = 200,000원
+            every { reservationRepository.findById("rsv-1") } returns reservation
+            every { paymentRepository.findByReservationId("rsv-1") } returns payment
+
+            then("예외가 발생하고 Toss 승인이 호출되지 않는다") {
+                shouldThrow<BusinessException> {
+                    service.confirmPayment(
+                        memberId = "member-1", reservationId = "rsv-1",
+                        paymentKey = "toss_pk_123", orderId = payment.orderId,
+                        amount = BigDecimal(1_000)  // 200,000원을 1,000원으로 조작
+                    )
+                }
+                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any()) }
+            }
+        }
+
         `when`("다른 사용자의 예약에 결제하면") {
             clearAllMocks()
             every { reservationRepository.findById("rsv-1") } returns pendingReservation(memberId = "member-1")

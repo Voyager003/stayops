@@ -166,7 +166,15 @@ class BookingApplication(
         val payment = paymentRepository.findByReservationId(reservationId)
             ?: throw NotFoundException("PAYMENT_NOT_FOUND", "결제 정보를 찾을 수 없습니다: $reservationId")
 
-        // 3. Toss Payments 승인
+        // 3. 금액 검증 — 클라이언트가 보낸 금액과 DB 금액 비교
+        if (payment.amount.amount.compareTo(amount) != 0) {
+            throw BusinessException(
+                "AMOUNT_MISMATCH",
+                "결제 금액이 일치하지 않습니다. 예상: ${payment.amount.amount}, 요청: $amount"
+            )
+        }
+
+        // 4. Toss Payments 승인
         val confirmResult = paymentGateway.confirm(paymentKey, orderId, amount)
 
         // 4. Payment 승인
