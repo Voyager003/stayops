@@ -198,21 +198,27 @@ class BookingApplication(
         val payment = paymentRepository.findByReservationId(reservationId)
             ?: throw NotFoundException("PAYMENT_NOT_FOUND", "결제 정보를 찾을 수 없습니다: $reservationId")
 
-        // 3. Toss 환불
-        paymentGateway.cancel(payment.paymentKey!!, "고객 요청에 의한 취소")
+        // 3. 상태에 따라 분기
+        val cancelledReservation: Reservation
+        val cancelledPayment: Payment
 
-        // 4. Payment 취소
-        val cancelledPayment = paymentRepository.save(payment.cancel())
+        if (reservation.status == ReservationStatus.PENDING) {
+            // PENDING: 결제 전이므로 Toss 환불 불필요
+            cancelledReservation = reservationRepository.save(reservation.cancelPending())
+            cancelledPayment = paymentRepository.save(payment.fail("고객 요청에 의한 취소"))
+        } else {
+            // CONFIRMED: Toss 환불 필요
+            paymentGateway.cancel(payment.paymentKey!!, "고객 요청에 의한 취소")
+            cancelledPayment = paymentRepository.save(payment.cancel())
+            cancelledReservation = reservationRepository.save(reservation.cancel())
+        }
 
-        // 5. Reservation 취소
-        val cancelledReservation = reservationRepository.save(reservation.cancel())
-
-        // 6. 재고 복원
+        // 4. 재고 복원
         reservation.dateRange.allDates().forEach { date ->
             inventoryApplication.release(reservation.propertyId, reservation.roomTypeId, date)
         }
 
-        log.info("예약 취소: reservationId={}", reservationId)
+        log.info("예약 취소: reservationId={}, 이전상태={}", reservationId, reservation.status)
         return BookingResult(cancelledReservation, cancelledPayment)
     }
 }

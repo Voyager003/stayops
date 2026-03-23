@@ -81,7 +81,17 @@ Phase 11-10 E2E 테스트 작성 중 발견된 사항:
 - `lateinit var`로 선언 시 생성자 주입 시점에 초기화되지 않을 수 있음
 - 생성자 파라미터에 `@MockkBean`을 직접 선언하는 것이 안전
 
-### C4: OWNER / MANAGER role 구분 없음
+### C4 (해결됨): cancelBooking() PENDING 취소 시 NPE
+- **문제**: `cancelBooking()`이 CONFIRMED 취소만 고려하여 PENDING 취소 시 3중 에러 발생
+  - `payment.paymentKey!!` → NPE (Toss 승인 전이므로 null)
+  - `payment.cancel()` → IllegalStateException (APPROVED에서만 가능)
+  - `reservation.cancel()` → IllegalStateException (CONFIRMED에서만 가능)
+- **해결**: `reservation.status`에 따라 분기
+  - PENDING: `cancelPending()` + `payment.fail()` — Toss 환불 호출 없음
+  - CONFIRMED: 기존 로직 유지 — Toss 환불 + `payment.cancel()` + `reservation.cancel()`
+- **커밋**: 코드 리뷰 C1 수정
+
+### C5: OWNER / MANAGER role 구분 없음
 - `MemberRole.OWNER`와 `MemberRole.MANAGER`가 코드상 동일하게 동작
 - `PropertyRole.OWNER`와 `PropertyRole.MANAGER`를 분기하는 로직 없음
 - YAGNI 원칙상 현재 불필요하나, 향후 정리 필요할 수 있음

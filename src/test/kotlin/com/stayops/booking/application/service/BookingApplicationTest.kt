@@ -226,6 +226,27 @@ class BookingApplicationTest : BehaviorSpec({
 
     given("예약 취소 시") {
 
+        `when`("PENDING 예약을 취소하면") {
+            clearAllMocks()
+            val reservation = pendingReservation()
+            val payment = pendingPayment()
+            every { reservationRepository.findById("rsv-1") } returns reservation
+            every { paymentRepository.findByReservationId("rsv-1") } returns payment
+            every { reservationRepository.save(any()) } answers { firstArg() }
+            every { paymentRepository.save(any()) } answers { firstArg() }
+            every { inventoryApplication.release(any(), any(), any()) } returns mockk()
+
+            val result = service.cancelBooking(memberId = "member-1", reservationId = "rsv-1")
+
+            then("Toss 환불 없이 예약 취소 + 재고 복원") {
+                result.reservation.status shouldBe ReservationStatus.CANCELLED
+                result.payment.status shouldBe PaymentStatus.FAILED
+                result.payment.failReason shouldBe "고객 요청에 의한 취소"
+                verify(exactly = 0) { paymentGateway.cancel(any(), any()) }
+                verify(exactly = 2) { inventoryApplication.release("prop-1", "rt-1", any()) }
+            }
+        }
+
         `when`("CONFIRMED 예약을 취소하면") {
             clearAllMocks()
             val reservation = pendingReservation().confirm()
