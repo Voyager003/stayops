@@ -12,8 +12,8 @@
 | 11-6 | Payment 인프라 (MongoDB + Toss Client) | 완료 | `cb4b5da` |
 | 11-7 | BookingApplication (핵심 오케스트레이션) | 완료 | `ce2610c` |
 | 11-8 | Booking API + MyPage API | 완료 | `8e5b74c` |
-| 11-9 | PENDING TTL 스케줄러 | 완료 | 미커밋 |
-| 11-10 | E2E 통합 테스트 | 미진행 | |
+| 11-9 | PENDING TTL 스케줄러 | 완료 | `11b8382` |
+| 11-10 | E2E 통합 테스트 | 완료 | 미커밋 |
 
 ## 설계 결정
 
@@ -59,7 +59,29 @@
   - Redis는 이미 프로젝트에 포함되어 있으므로 인프라 추가 불필요
 - Redis Keyspace Notification은 전달 보장 없음(서버 다운 시 유실) → 반드시 @Scheduled와 병행
 
-### C3: OWNER / MANAGER role 구분 없음
+### C3: MongoDB 통합 테스트 주의사항
+Phase 11-10 E2E 테스트 작성 중 발견된 사항:
+
+**Replica Set 연결 필수**
+- `@Transactional`은 MongoDB Replica Set에서만 동작
+- Testcontainers `@ServiceConnection`은 Standalone URL을 제공하여 트랜잭션 실패
+- `mongo.replicaSetUrl`을 `DynamicPropertyRegistrar`로 직접 등록해야 함
+
+**데이터 정리: deleteMany vs dropCollection**
+- `dropCollection`은 컬렉션과 함께 유니크 인덱스도 삭제 → `@PostConstruct`로 생성한 인덱스가 복구 안 됨 → 다른 테스트의 DuplicateKeyException 검증 실패
+- `deleteMany(Document())`로 도큐먼트만 삭제하고 인덱스를 보존해야 함
+
+**@Version과 save() 동작**
+- version 0인 객체를 `save()` → insert 수행
+- save()가 반환한 객체(version 1+)로 다시 save() → update 수행
+- version 0인 원본 객체로 다시 save() → insert 시도 → DuplicateKeyException
+- 상태 변경 후 저장 시 반드시 save() 반환값을 사용할 것
+
+**@MockkBean 초기화**
+- `lateinit var`로 선언 시 생성자 주입 시점에 초기화되지 않을 수 있음
+- 생성자 파라미터에 `@MockkBean`을 직접 선언하는 것이 안전
+
+### C4: OWNER / MANAGER role 구분 없음
 - `MemberRole.OWNER`와 `MemberRole.MANAGER`가 코드상 동일하게 동작
 - `PropertyRole.OWNER`와 `PropertyRole.MANAGER`를 분기하는 로직 없음
 - YAGNI 원칙상 현재 불필요하나, 향후 정리 필요할 수 있음
