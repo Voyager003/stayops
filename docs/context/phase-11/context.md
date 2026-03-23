@@ -91,7 +91,12 @@ Phase 11-10 E2E 테스트 작성 중 발견된 사항:
   - CONFIRMED: 기존 로직 유지 — Toss 환불 + `payment.cancel()` + `reservation.cancel()`
 - **커밋**: 코드 리뷰 C1 수정
 
-### C5: OWNER / MANAGER role 구분 없음
+### C5 (이슈 없음): inventoryApplication.reserve() 트랜잭션 참여 여부
+- **우려**: `createBooking()`의 `@Transactional` 안에서 호출되는 `inventoryApplication.reserve()`가 별도 트랜잭션을 시작하면, rollback 시 재고만 차감된 채 남을 수 있음
+- **확인 결과**: `reserve()`에 `@Transactional`이 없으므로 부모 트랜잭션에 자연스럽게 참여 → 문제 없음
+- **참고**: `reserve()` 내부의 Redis 캐시 evict는 MongoDB 트랜잭션에 포함되지 않지만, 캐시 evict는 "다음 조회 시 DB에서 다시 읽기"이므로 정합성 영향 없음
+
+### C6: OWNER / MANAGER role 구분 없음
 - `MemberRole.OWNER`와 `MemberRole.MANAGER`가 코드상 동일하게 동작
 - `PropertyRole.OWNER`와 `PropertyRole.MANAGER`를 분기하는 로직 없음
 - YAGNI 원칙상 현재 불필요하나, 향후 정리 필요할 수 있음
