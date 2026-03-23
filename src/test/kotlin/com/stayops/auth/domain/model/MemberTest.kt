@@ -102,6 +102,15 @@ class MemberTest : BehaviorSpec({
                 member.hasAccessTo("prop-1") shouldBe false
             }
         }
+
+        `when`("CUSTOMER 역할이면") {
+            then("어떤 숙소에도 접근 불가하다") {
+                val customer = createMember(role = MemberRole.CUSTOMER)
+
+                customer.hasAccessTo("prop-1") shouldBe false
+                customer.propertyAccess shouldBe emptyList()
+            }
+        }
     }
 
     given("grantAccess 시") {
