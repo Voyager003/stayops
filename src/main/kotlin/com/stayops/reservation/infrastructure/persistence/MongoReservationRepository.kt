@@ -77,9 +77,11 @@ class MongoReservationRepository(
 
     override fun findExpiredPending(now: Instant): List<Reservation> {
         val query = Query(
-            Criteria.where("status").`is`(ReservationStatus.PENDING.name)
-                .and("expiresAt").lt(now)
-                .and("expiresAt").ne(null)
+            Criteria().andOperator(
+                Criteria.where("status").`is`(ReservationStatus.PENDING.name),
+                Criteria.where("expiresAt").lt(now),
+                Criteria.where("expiresAt").ne(null)
+            )
         )
         return mongoTemplate.find(query, ReservationDocument::class.java).map { it.toDomain() }
     }
