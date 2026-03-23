@@ -24,6 +24,10 @@ class SecurityConfig {
             authorizeHttpRequests {
                 authorize("/api/v1/auth/**", permitAll)
                 authorize("/api/v1/properties/*/channels/webhook/**", permitAll)
+                authorize("/api/v1/booking/auth/**", permitAll)
+                authorize("/api/v1/booking/properties/**", permitAll)
+                authorize("/api/v1/booking/reservations/**", authenticated)
+                authorize("/api/v1/booking/my/**", authenticated)
                 authorize(anyRequest, authenticated)
             }
         }
