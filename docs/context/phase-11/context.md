@@ -100,3 +100,36 @@ Phase 11-10 E2E 테스트 작성 중 발견된 사항:
 - `MemberRole.OWNER`와 `MemberRole.MANAGER`가 코드상 동일하게 동작
 - `PropertyRole.OWNER`와 `PropertyRole.MANAGER`를 분기하는 로직 없음
 - YAGNI 원칙상 현재 불필요하나, 향후 정리 필요할 수 있음
+
+## HIGH 이슈 (코드 리뷰)
+
+### H1: paymentGateway.confirm() 실패 시 에러 처리 없음
+- Toss API 4xx/5xx, 네트워크 타임아웃 시 raw exception이 클라이언트에 전파
+- Toss가 실제 승인했으나 응답 타임아웃인 경우 Payment가 PENDING 상태로 남아 불일치 발생
+- 에러 catch 후 Payment.fail() 처리 + 의미 있는 에러 메시지 반환 필요
+
+### H2: paymentGateway.cancel() 실패 시 전체 롤백
+- Toss cancel API 실패 시 @Transactional rollback → 예약이 CONFIRMED 상태로 유지
+- 고객이 취소를 요청했는데 취소가 안 되는 상황
+- cancel 실패 시 재시도 로직 또는 수동 처리 플래그 필요
+
+### H3: 읽기 메서드에 @Transactional(readOnly = true) 미적용
+- `getMyReservations()`, `getMyReservation()` 등 읽기 전용 메서드에 readOnly 미설정
+- 기능 문제는 없으나 Spring 최적화(읽기 전용 트랜잭션) 미활용
+
+### H4: PendingReservationScheduler 개별 처리에 트랜잭션 없음
+- 각 만료 예약 처리 시 reservation.save() 성공 후 inventory.release() 실패하면 예약은 취소됐는데 재고 미복원
+- 개별 예약 처리를 트랜잭션으로 묶어야 함
+
+### H5: memberId, status + expiresAt 인덱스 누락
+- `findByMemberId` — 마이페이지 매 조회 시 full collection scan
+- `findExpiredPending` — status + expiresAt 복합 인덱스 없음, 스케줄러 매분 실행
+- MongoReservationRepository.createIndexes()에 인덱스 추가 필요
+
+### H6: searchProperties()가 전체 데이터를 메모리에 로드
+- `propertyRepository.findAll().filter { it.isBookable() }` — 전체 로드 후 인메모리 필터
+- 숙소 수 증가 시 성능 문제, 쿼리 레벨 필터링 필요
+
+### H7: PendingReservationScheduler 패키지 위치
+- payment.infrastructure.scheduler에 위치하지만 Reservation, Payment, Inventory 세 도메인을 오케스트레이션
+- booking.infrastructure.scheduler 또는 공유 패키지로 이동 고려
