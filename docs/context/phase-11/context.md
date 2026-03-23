@@ -9,10 +9,10 @@
 | 11-3 | Security Config + 고객 인증 API | 완료 | `342d12c` |
 | 11-4 | 숙소 검색 API (Public) | 완료 | `28ea3d8` |
 | 11-5 | Reservation 도메인 변경 (memberId, expiresAt) | 완료 | `f190bb0` |
-| 11-6 | Payment 인프라 (MongoDB + Toss Client) | 완료 | 미커밋 |
-| 11-7 | BookingApplication (핵심 오케스트레이션) | 미진행 | |
-| 11-8 | Booking API + MyPage API | 미진행 | |
-| 11-9 | PENDING TTL 스케줄러 | 미진행 | |
+| 11-6 | Payment 인프라 (MongoDB + Toss Client) | 완료 | `cb4b5da` |
+| 11-7 | BookingApplication (핵심 오케스트레이션) | 완료 | `ce2610c` |
+| 11-8 | Booking API + MyPage API | 완료 | `8e5b74c` |
+| 11-9 | PENDING TTL 스케줄러 | 완료 | 미커밋 |
 | 11-10 | E2E 통합 테스트 | 미진행 | |
 
 ## 설계 결정
@@ -50,7 +50,16 @@
 - 기존 `ReservationApplication`의 `createReservation()`, `cancelReservation()`, `checkInReservation()`, `checkOutReservation()` 모두 다중 도큐먼트 write에 트랜잭션 없음
 - Phase 11-7에서 BookingApplication에 적용할 때 기존 코드도 함께 수정할지, 별도 작업으로 분리할지 결정 필요
 
-### C2: OWNER / MANAGER role 구분 없음
+### C2: PENDING TTL 스케줄러 실시간성 개선
+- 현재 `@Scheduled(fixedRate = 60_000)`로 1분마다 만료 예약 처리 → 최대 1분 지연
+- **개선 방안**: Redis Keyspace Notification 조합
+  - 예약 생성 시 Redis에 `SET pending:{reservationId} EX 900` (15분 TTL) 저장
+  - Redis 키 만료 이벤트 수신 → 즉시 취소 + 재고 복원 (실시간)
+  - `@Scheduled`는 이벤트 유실 대비 안전망으로 유지
+  - Redis는 이미 프로젝트에 포함되어 있으므로 인프라 추가 불필요
+- Redis Keyspace Notification은 전달 보장 없음(서버 다운 시 유실) → 반드시 @Scheduled와 병행
+
+### C3: OWNER / MANAGER role 구분 없음
 - `MemberRole.OWNER`와 `MemberRole.MANAGER`가 코드상 동일하게 동작
 - `PropertyRole.OWNER`와 `PropertyRole.MANAGER`를 분기하는 로직 없음
 - YAGNI 원칙상 현재 불필요하나, 향후 정리 필요할 수 있음
