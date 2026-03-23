@@ -1,0 +1,65 @@
+package com.stayops.payment.infrastructure.external
+
+import com.stayops.payment.domain.service.PaymentCancelResult
+import com.stayops.payment.domain.service.PaymentConfirmResult
+import com.stayops.payment.domain.service.PaymentGateway
+import org.springframework.stereotype.Component
+import org.springframework.web.client.RestClient
+import java.math.BigDecimal
+import java.time.Instant
+import java.time.OffsetDateTime
+
+@Component
+class TossPaymentsClient(
+    private val restClient: RestClient
+) : PaymentGateway {
+
+    override fun confirm(paymentKey: String, orderId: String, amount: BigDecimal): PaymentConfirmResult {
+        val response = restClient.post()
+            .uri("/confirm")
+            .body(TossConfirmRequest(paymentKey, orderId, amount))
+            .retrieve()
+            .body(TossConfirmResponse::class.java)!!
+
+        return PaymentConfirmResult(
+            paymentKey = response.paymentKey,
+            orderId = response.orderId,
+            method = response.method,
+            approvedAt = response.approvedAt?.let { OffsetDateTime.parse(it).toInstant() }
+        )
+    }
+
+    override fun cancel(paymentKey: String, cancelReason: String): PaymentCancelResult {
+        val response = restClient.post()
+            .uri("/$paymentKey/cancel")
+            .body(TossCancelRequest(cancelReason))
+            .retrieve()
+            .body(TossCancelResponse::class.java)!!
+
+        return PaymentCancelResult(paymentKey = response.paymentKey)
+    }
+}
+
+data class TossConfirmRequest(
+    val paymentKey: String,
+    val orderId: String,
+    val amount: BigDecimal
+)
+
+data class TossConfirmResponse(
+    val paymentKey: String,
+    val orderId: String,
+    val status: String,
+    val method: String?,
+    val totalAmount: BigDecimal,
+    val approvedAt: String?
+)
+
+data class TossCancelRequest(
+    val cancelReason: String
+)
+
+data class TossCancelResponse(
+    val paymentKey: String,
+    val status: String
+)
