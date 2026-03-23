@@ -105,6 +105,18 @@ class BookingApplicationTest : BehaviorSpec({
         memberId = memberId
     )
 
+    fun expiredReservation(memberId: String = "member-1") = Reservation.create(
+        id = "rsv-1", propertyId = "prop-1", roomTypeId = "rt-1",
+        guestId = "guest-1",
+        guestInfo = GuestInfo("김고객", "010-1111-2222", null),
+        dateRange = DateRange.of(checkIn, checkOut),
+        numberOfGuests = 2,
+        channel = BookingChannel("DIRECT", commissionRate = BigDecimal.ZERO),
+        pricing = ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO),
+        memberId = memberId,
+        expiresAt = Instant.now().minusSeconds(60)  // 1분 전 만료
+    )
+
     fun pendingPayment(reservationId: String = "rsv-1", memberId: String = "member-1") = Payment.create(
         id = "pay-1", reservationId = reservationId, memberId = memberId,
         amount = Money.won(200_000)
@@ -204,6 +216,25 @@ class BookingApplicationTest : BehaviorSpec({
                 result.payment.status shouldBe PaymentStatus.APPROVED
                 result.payment.paymentKey shouldBe "toss_pk_123"
                 result.reservation.status shouldBe ReservationStatus.CONFIRMED
+            }
+        }
+
+        `when`("만료된 PENDING 예약에 결제하면") {
+            clearAllMocks()
+            val reservation = expiredReservation()
+            val payment = pendingPayment()
+            every { reservationRepository.findById("rsv-1") } returns reservation
+            every { paymentRepository.findByReservationId("rsv-1") } returns payment
+
+            then("예외가 발생하고 Toss 승인이 호출되지 않는다") {
+                shouldThrow<BusinessException> {
+                    service.confirmPayment(
+                        memberId = "member-1", reservationId = "rsv-1",
+                        paymentKey = "toss_pk_123", orderId = payment.orderId,
+                        amount = BigDecimal(200_000)
+                    )
+                }
+                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any()) }
             }
         }
 

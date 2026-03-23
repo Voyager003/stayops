@@ -166,7 +166,12 @@ class BookingApplication(
         val payment = paymentRepository.findByReservationId(reservationId)
             ?: throw NotFoundException("PAYMENT_NOT_FOUND", "결제 정보를 찾을 수 없습니다: $reservationId")
 
-        // 3. 금액 검증 — 클라이언트가 보낸 금액과 DB 금액 비교
+        // 3. 만료 검증 — expiresAt이 지났으면 결제 불가
+        if (reservation.expiresAt != null && Instant.now().isAfter(reservation.expiresAt)) {
+            throw BusinessException("RESERVATION_EXPIRED", "결제 가능 시간이 만료되었습니다")
+        }
+
+        // 4. 금액 검증 — 클라이언트가 보낸 금액과 DB 금액 비교
         if (payment.amount.amount.compareTo(amount) != 0) {
             throw BusinessException(
                 "AMOUNT_MISMATCH",
