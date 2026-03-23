@@ -18,6 +18,8 @@ data class Reservation private constructor(
     val channel: BookingChannel,
     val pricing: ReservationPricing,
     val memo: String?,
+    val memberId: String?,
+    val expiresAt: Instant?,
     val version: Long,
     val createdAt: Instant,
     val updatedAt: Instant
@@ -55,6 +57,13 @@ data class Reservation private constructor(
         return copy(status = ReservationStatus.CANCELLED, updatedAt = Instant.now())
     }
 
+    fun cancelPending(): Reservation {
+        check(status == ReservationStatus.PENDING) {
+            "PENDING 상태에서만 취소할 수 있습니다: $status"
+        }
+        return copy(status = ReservationStatus.CANCELLED, updatedAt = Instant.now())
+    }
+
     fun noShow(): Reservation {
         check(status == ReservationStatus.CONFIRMED) {
             "CONFIRMED 상태에서만 노쇼 처리할 수 있습니다: $status"
@@ -75,7 +84,9 @@ data class Reservation private constructor(
             dateRange: DateRange,
             numberOfGuests: Int,
             channel: BookingChannel,
-            pricing: ReservationPricing
+            pricing: ReservationPricing,
+            memberId: String? = null,
+            expiresAt: Instant? = null
         ): Reservation {
             require(numberOfGuests >= 1) { "투숙 인원은 1명 이상이어야 합니다: $numberOfGuests" }
 
@@ -94,6 +105,8 @@ data class Reservation private constructor(
                 channel = channel,
                 pricing = pricing,
                 memo = null,
+                memberId = memberId,
+                expiresAt = expiresAt,
                 version = 0L,
                 createdAt = now,
                 updatedAt = now
@@ -114,6 +127,8 @@ data class Reservation private constructor(
             channel: BookingChannel,
             pricing: ReservationPricing,
             memo: String?,
+            memberId: String? = null,
+            expiresAt: Instant? = null,
             version: Long,
             createdAt: Instant,
             updatedAt: Instant
@@ -131,6 +146,8 @@ data class Reservation private constructor(
             channel = channel,
             pricing = pricing,
             memo = memo,
+            memberId = memberId,
+            expiresAt = expiresAt,
             version = version,
             createdAt = createdAt,
             updatedAt = updatedAt

@@ -60,6 +60,8 @@ class MongoSettlementQueryRepositoryTest @Autowired constructor(
             netAmount = netAmount
         ),
         memo = null,
+        memberId = null,
+        expiresAt = null,
         version = 0L,
         createdAt = Instant.now(),
         updatedAt = Instant.now()

@@ -11,6 +11,7 @@ import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.stereotype.Repository
+import java.time.Instant
 import java.time.LocalDate
 
 @Repository
@@ -70,6 +71,18 @@ class MongoReservationRepository(
 
     override fun findByPropertyIdAndChannelCode(propertyId: String, channelCode: String): List<Reservation> =
         mongo.findByPropertyIdAndChannelChannelCode(propertyId, channelCode).map { it.toDomain() }
+
+    override fun findByMemberId(memberId: String): List<Reservation> =
+        mongo.findByMemberId(memberId).map { it.toDomain() }
+
+    override fun findExpiredPending(now: Instant): List<Reservation> {
+        val query = Query(
+            Criteria.where("status").`is`(ReservationStatus.PENDING.name)
+                .and("expiresAt").lt(now)
+                .and("expiresAt").ne(null)
+        )
+        return mongoTemplate.find(query, ReservationDocument::class.java).map { it.toDomain() }
+    }
 }
 
 interface ReservationMongoDataRepository : MongoRepository<ReservationDocument, String> {
@@ -77,4 +90,5 @@ interface ReservationMongoDataRepository : MongoRepository<ReservationDocument, 
     fun findByPropertyIdAndStatus(propertyId: String, status: ReservationStatus): List<ReservationDocument>
     fun findByPropertyIdAndGuestId(propertyId: String, guestId: String): List<ReservationDocument>
     fun findByPropertyIdAndChannelChannelCode(propertyId: String, channelCode: String): List<ReservationDocument>
+    fun findByMemberId(memberId: String): List<ReservationDocument>
 }
