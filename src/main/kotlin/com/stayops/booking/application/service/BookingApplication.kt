@@ -134,6 +134,19 @@ class BookingApplication(
         return BookingResult(reservation, payment)
     }
 
+    fun getMyReservations(memberId: String): List<Reservation> {
+        return reservationRepository.findByMemberId(memberId)
+    }
+
+    fun getMyReservation(memberId: String, reservationId: String): Reservation {
+        val reservation = reservationRepository.findById(reservationId)
+            ?: throw NotFoundException("RESERVATION_NOT_FOUND", "예약을 찾을 수 없습니다: $reservationId")
+        if (reservation.memberId != memberId) {
+            throw ForbiddenException("ACCESS_DENIED", "본인의 예약만 조회할 수 있습니다")
+        }
+        return reservation
+    }
+
     @Transactional
     fun confirmPayment(
         memberId: String,
