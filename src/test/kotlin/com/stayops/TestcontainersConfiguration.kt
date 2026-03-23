@@ -6,6 +6,7 @@ import io.lettuce.core.resource.DnsResolvers
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection
 import org.springframework.context.annotation.Bean
+import org.springframework.test.context.DynamicPropertyRegistrar
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.mongodb.MongoDBContainer
 import org.testcontainers.utility.DockerImageName
@@ -14,9 +15,13 @@ import org.testcontainers.utility.DockerImageName
 class TestcontainersConfiguration {
 
     @Bean
-    @ServiceConnection
     fun mongoDbContainer(): MongoDBContainer {
-        return MongoDBContainer(DockerImageName.parse("mongo:latest"))
+        return MongoDBContainer(DockerImageName.parse("mongo:8"))
+    }
+
+    @Bean
+    fun mongoDbProperties(mongo: MongoDBContainer) = DynamicPropertyRegistrar { registry ->
+        registry.add("spring.data.mongodb.uri") { mongo.replicaSetUrl }
     }
 
     @Bean
