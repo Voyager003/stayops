@@ -1,6 +1,6 @@
 package com.stayops.payment.infrastructure.persistence
 
-import com.stayops.IntegrationTestSupport
+import com.stayops.TestcontainersConfiguration
 import com.stayops.payment.domain.model.Payment
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentRepository
@@ -10,12 +10,16 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 import java.time.Instant
 
+@SpringBootTest
+@Import(TestcontainersConfiguration::class)
 class MongoPaymentRepositoryTest @Autowired constructor(
     private val paymentRepository: PaymentRepository,
     private val mongoDataRepository: PaymentMongoDataRepository
-) : IntegrationTestSupport() {
+) {
 
     @BeforeEach
     fun setUp() {

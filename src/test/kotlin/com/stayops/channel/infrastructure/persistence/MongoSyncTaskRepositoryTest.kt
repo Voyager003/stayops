@@ -1,6 +1,6 @@
 package com.stayops.channel.infrastructure.persistence
 
-import com.stayops.IntegrationTestSupport
+import com.stayops.TestcontainersConfiguration
 import com.stayops.channel.domain.model.SyncTask
 import com.stayops.channel.domain.model.SyncTaskStatus
 import com.stayops.channel.domain.model.SyncTaskType
@@ -10,12 +10,16 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 import java.time.Instant
 
+@SpringBootTest
+@Import(TestcontainersConfiguration::class)
 class MongoSyncTaskRepositoryTest @Autowired constructor(
     private val syncTaskRepository: SyncTaskRepository,
     private val mongoDataRepository: SyncTaskMongoDataRepository
-) : IntegrationTestSupport() {
+) {
 
     @BeforeEach
     fun setUp() {

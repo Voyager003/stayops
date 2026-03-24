@@ -1,6 +1,6 @@
 package com.stayops.guest.api
 
-import com.stayops.IntegrationTestSupport
+import com.stayops.TestcontainersConfiguration
 import com.stayops.guest.api.dto.UpdateGuestRequest
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.infrastructure.persistence.GuestDocument
@@ -20,13 +20,17 @@ import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.put
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 import tools.jackson.databind.ObjectMapper
 
+@SpringBootTest
+@Import(TestcontainersConfiguration::class)
 class GuestApiTest @Autowired constructor(
     private val context: WebApplicationContext,
     private val objectMapper: ObjectMapper,
     private val mongoDataRepository: GuestMongoDataRepository
-) : IntegrationTestSupport() {
+) {
     private lateinit var mockMvc: MockMvc
 
     private val pid = "prop-1"

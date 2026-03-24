@@ -1,6 +1,6 @@
 package com.stayops.room.infrastructure.persistence
 
-import com.stayops.IntegrationTestSupport
+import com.stayops.TestcontainersConfiguration
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.model.RoomTypeStatus
 import com.stayops.room.domain.repository.RoomTypeRepository
@@ -10,12 +10,16 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 import org.springframework.dao.DuplicateKeyException
 
+@SpringBootTest
+@Import(TestcontainersConfiguration::class)
 class MongoRoomTypeRepositoryTest @Autowired constructor(
     private val roomTypeRepository: RoomTypeRepository,
     private val mongoDataRepository: RoomTypeMongoDataRepository
-) : IntegrationTestSupport() {
+) {
     @BeforeEach
     fun setUp() {
         mongoDataRepository.deleteAll()

@@ -1,6 +1,6 @@
 package com.stayops.booking
 
-import com.stayops.IntegrationTestSupport
+import com.stayops.TestcontainersConfiguration
 import com.stayops.auth.domain.model.Member
 import com.stayops.auth.domain.model.MemberRole
 import com.stayops.auth.domain.repository.MemberRepository
@@ -27,11 +27,15 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 import org.springframework.data.mongodb.core.MongoTemplate
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
+@SpringBootTest
+@Import(TestcontainersConfiguration::class)
 class BookingE2ETest @Autowired constructor(
     private val bookingApplication: BookingApplication,
     private val propertyRepository: PropertyRepository,
@@ -43,7 +47,7 @@ class BookingE2ETest @Autowired constructor(
     private val paymentRepository: PaymentRepository,
     private val mongoTemplate: MongoTemplate,
     @MockkBean private val paymentGateway: PaymentGateway
-) : IntegrationTestSupport() {
+) {
 
     private val checkIn = LocalDate.of(2026, 5, 1)
     private val checkOut = LocalDate.of(2026, 5, 3)

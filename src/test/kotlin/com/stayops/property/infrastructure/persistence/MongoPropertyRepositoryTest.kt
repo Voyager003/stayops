@@ -1,6 +1,6 @@
 package com.stayops.property.infrastructure.persistence
 
-import com.stayops.IntegrationTestSupport
+import com.stayops.TestcontainersConfiguration
 import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo
 import com.stayops.property.domain.model.Property
@@ -12,11 +12,15 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 
+@SpringBootTest
+@Import(TestcontainersConfiguration::class)
 class MongoPropertyRepositoryTest @Autowired constructor(
     private val propertyRepository: PropertyRepository,
     private val mongoDataRepository: PropertyMongoDataRepository
-) : IntegrationTestSupport() {
+) {
     @BeforeEach
     fun setUp() {
         mongoDataRepository.deleteAll()

@@ -1,6 +1,6 @@
 package com.stayops.rate.infrastructure.persistence
 
-import com.stayops.IntegrationTestSupport
+import com.stayops.TestcontainersConfiguration
 import com.stayops.rate.domain.model.DayOfWeekRate
 import com.stayops.rate.domain.model.RatePlan
 import com.stayops.rate.domain.model.RatePlanStatus
@@ -13,13 +13,17 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 import java.time.DayOfWeek
 import java.time.LocalDate
 
+@SpringBootTest
+@Import(TestcontainersConfiguration::class)
 class MongoRatePlanRepositoryTest @Autowired constructor(
     private val ratePlanRepository: RatePlanRepository,
     private val mongoDataRepository: RatePlanMongoDataRepository
-) : IntegrationTestSupport() {
+) {
 
     @BeforeEach
     fun setUp() {

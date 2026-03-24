@@ -1,6 +1,6 @@
 package com.stayops.auth.infrastructure.persistence
 
-import com.stayops.IntegrationTestSupport
+import com.stayops.TestcontainersConfiguration
 import com.stayops.auth.domain.model.Member
 import com.stayops.auth.domain.model.MemberRole
 import com.stayops.auth.domain.model.PropertyRole
@@ -10,11 +10,15 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 
+@SpringBootTest
+@Import(TestcontainersConfiguration::class)
 class MongoMemberRepositoryTest @Autowired constructor(
     private val memberRepository: MemberRepository,
     private val mongoDataRepository: MemberMongoDataRepository
-) : IntegrationTestSupport() {
+) {
 
     @BeforeEach
     fun setUp() {

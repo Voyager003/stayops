@@ -1,8 +1,12 @@
 package com.stayops
 
 import org.junit.jupiter.api.Test
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 
-class StayopsApplicationTests : IntegrationTestSupport() {
+@SpringBootTest
+@Import(TestcontainersConfiguration::class)
+class StayopsApplicationTests {
 
     @Test
     fun contextLoads() {

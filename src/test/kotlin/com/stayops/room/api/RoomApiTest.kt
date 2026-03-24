@@ -1,6 +1,6 @@
 package com.stayops.room.api
 
-import com.stayops.IntegrationTestSupport
+import com.stayops.TestcontainersConfiguration
 import com.stayops.room.api.dto.CreateRoomRequest
 import com.stayops.room.api.dto.UpdateRoomStatusRequest
 import com.stayops.room.api.dto.RoomStatusAction
@@ -21,13 +21,17 @@ import org.springframework.test.web.servlet.patch
 import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 import tools.jackson.databind.ObjectMapper
 
+@SpringBootTest
+@Import(TestcontainersConfiguration::class)
 class RoomApiTest @Autowired constructor(
     private val context: WebApplicationContext,
     private val objectMapper: ObjectMapper,
     private val mongoDataRepository: RoomMongoDataRepository
-) : IntegrationTestSupport() {
+) {
     private lateinit var mockMvc: MockMvc
 
     private val pid = "prop-1"

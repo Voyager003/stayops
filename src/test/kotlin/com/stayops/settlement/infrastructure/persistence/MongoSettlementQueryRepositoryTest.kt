@@ -1,6 +1,6 @@
 package com.stayops.settlement.infrastructure.persistence
 
-import com.stayops.IntegrationTestSupport
+import com.stayops.TestcontainersConfiguration
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.infrastructure.persistence.ReservationDocument
 import com.stayops.reservation.infrastructure.persistence.ReservationMongoDataRepository
@@ -11,14 +11,18 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
+@SpringBootTest
+@Import(TestcontainersConfiguration::class)
 class MongoSettlementQueryRepositoryTest @Autowired constructor(
     private val settlementQueryRepository: SettlementQueryRepository,
     private val reservationMongoDataRepository: ReservationMongoDataRepository
-) : IntegrationTestSupport() {
+) {
 
     @BeforeEach
     fun setUp() {

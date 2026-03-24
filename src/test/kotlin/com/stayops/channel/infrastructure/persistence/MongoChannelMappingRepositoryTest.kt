@@ -1,6 +1,6 @@
 package com.stayops.channel.infrastructure.persistence
 
-import com.stayops.IntegrationTestSupport
+import com.stayops.TestcontainersConfiguration
 import com.stayops.channel.domain.model.ChannelMapping
 import com.stayops.channel.domain.model.MappingEntry
 import com.stayops.channel.domain.model.MappingType
@@ -11,12 +11,16 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 import org.springframework.dao.DuplicateKeyException
 
+@SpringBootTest
+@Import(TestcontainersConfiguration::class)
 class MongoChannelMappingRepositoryTest @Autowired constructor(
     private val mappingRepository: ChannelMappingRepository,
     private val mongoDataRepository: ChannelMappingMongoDataRepository
-) : IntegrationTestSupport() {
+) {
 
     @BeforeEach
     fun setUp() {

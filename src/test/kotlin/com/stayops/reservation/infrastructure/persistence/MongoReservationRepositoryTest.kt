@@ -1,6 +1,6 @@
 package com.stayops.reservation.infrastructure.persistence
 
-import com.stayops.IntegrationTestSupport
+import com.stayops.TestcontainersConfiguration
 import com.stayops.reservation.domain.model.*
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.shared.domain.DateRange
@@ -10,13 +10,17 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 import java.math.BigDecimal
 import java.time.LocalDate
 
+@SpringBootTest
+@Import(TestcontainersConfiguration::class)
 class MongoReservationRepositoryTest @Autowired constructor(
     private val reservationRepository: ReservationRepository,
     private val mongoDataRepository: ReservationMongoDataRepository
-) : IntegrationTestSupport() {
+) {
 
     @BeforeEach
     fun setUp() {

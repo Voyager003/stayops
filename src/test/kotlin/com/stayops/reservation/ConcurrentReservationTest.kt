@@ -1,6 +1,6 @@
 package com.stayops.reservation
 
-import com.stayops.IntegrationTestSupport
+import com.stayops.TestcontainersConfiguration
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.infrastructure.persistence.ChannelDocument
 import com.stayops.channel.infrastructure.persistence.ChannelMongoDataRepository
@@ -20,11 +20,15 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 import java.time.LocalDate
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 
+@SpringBootTest
+@Import(TestcontainersConfiguration::class)
 class ConcurrentReservationTest @Autowired constructor(
     private val reservationApplication: ReservationApplication,
     private val reservationMongoDataRepository: ReservationMongoDataRepository,
@@ -32,7 +36,7 @@ class ConcurrentReservationTest @Autowired constructor(
     private val channelMongoDataRepository: ChannelMongoDataRepository,
     private val inventoryMongoDataRepository: RoomInventoryMongoDataRepository,
     private val guestMongoDataRepository: GuestMongoDataRepository
-) : IntegrationTestSupport() {
+) {
 
     @BeforeEach
     fun setUp() {

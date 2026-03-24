@@ -1,6 +1,6 @@
 package com.stayops.property.api
 
-import com.stayops.IntegrationTestSupport
+import com.stayops.TestcontainersConfiguration
 import com.stayops.property.api.dto.CreatePropertyRequest
 import com.stayops.property.api.dto.UpdatePropertyRequest
 import com.stayops.property.domain.model.PropertyType
@@ -21,13 +21,17 @@ import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.put
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 import tools.jackson.databind.ObjectMapper
 
+@SpringBootTest
+@Import(TestcontainersConfiguration::class)
 class PropertyApiTest @Autowired constructor(
     private val context: WebApplicationContext,
     private val objectMapper: ObjectMapper,
     private val mongoDataRepository: PropertyMongoDataRepository
-) : IntegrationTestSupport() {
+) {
     private lateinit var mockMvc: MockMvc
 
     @BeforeEach
