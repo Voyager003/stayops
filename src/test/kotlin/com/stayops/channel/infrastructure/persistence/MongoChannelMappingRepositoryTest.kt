@@ -1,6 +1,6 @@
 package com.stayops.channel.infrastructure.persistence
 
-import com.stayops.TestcontainersConfiguration
+import com.stayops.IntegrationTestSupport
 import com.stayops.channel.domain.model.ChannelMapping
 import com.stayops.channel.domain.model.MappingEntry
 import com.stayops.channel.domain.model.MappingType
@@ -16,11 +16,11 @@ import org.springframework.context.annotation.Import
 import org.springframework.dao.DuplicateKeyException
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(IntegrationTestSupport.LettuceConfig::class)
 class MongoChannelMappingRepositoryTest @Autowired constructor(
     private val mappingRepository: ChannelMappingRepository,
     private val mongoDataRepository: ChannelMappingMongoDataRepository
-) {
+) : IntegrationTestSupport() {
 
     @BeforeEach
     fun setUp() {

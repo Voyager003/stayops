@@ -1,6 +1,6 @@
 package com.stayops.settlement.infrastructure.persistence
 
-import com.stayops.TestcontainersConfiguration
+import com.stayops.IntegrationTestSupport
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.infrastructure.persistence.ReservationDocument
 import com.stayops.reservation.infrastructure.persistence.ReservationMongoDataRepository
@@ -18,11 +18,11 @@ import java.time.Instant
 import java.time.LocalDate
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(IntegrationTestSupport.LettuceConfig::class)
 class MongoSettlementQueryRepositoryTest @Autowired constructor(
     private val settlementQueryRepository: SettlementQueryRepository,
     private val reservationMongoDataRepository: ReservationMongoDataRepository
-) {
+) : IntegrationTestSupport() {
 
     @BeforeEach
     fun setUp() {

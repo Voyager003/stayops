@@ -1,6 +1,6 @@
 package com.stayops.reservation
 
-import com.stayops.TestcontainersConfiguration
+import com.stayops.IntegrationTestSupport
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.infrastructure.persistence.ChannelDocument
 import com.stayops.channel.infrastructure.persistence.ChannelMongoDataRepository
@@ -28,7 +28,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(IntegrationTestSupport.LettuceConfig::class)
 class ConcurrentReservationTest @Autowired constructor(
     private val reservationApplication: ReservationApplication,
     private val reservationMongoDataRepository: ReservationMongoDataRepository,
@@ -36,7 +36,7 @@ class ConcurrentReservationTest @Autowired constructor(
     private val channelMongoDataRepository: ChannelMongoDataRepository,
     private val inventoryMongoDataRepository: RoomInventoryMongoDataRepository,
     private val guestMongoDataRepository: GuestMongoDataRepository
-) {
+) : IntegrationTestSupport() {
 
     @BeforeEach
     fun setUp() {

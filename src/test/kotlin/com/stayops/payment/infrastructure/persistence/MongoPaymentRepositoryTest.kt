@@ -1,6 +1,6 @@
 package com.stayops.payment.infrastructure.persistence
 
-import com.stayops.TestcontainersConfiguration
+import com.stayops.IntegrationTestSupport
 import com.stayops.payment.domain.model.Payment
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentRepository
@@ -15,11 +15,11 @@ import org.springframework.context.annotation.Import
 import java.time.Instant
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(IntegrationTestSupport.LettuceConfig::class)
 class MongoPaymentRepositoryTest @Autowired constructor(
     private val paymentRepository: PaymentRepository,
     private val mongoDataRepository: PaymentMongoDataRepository
-) {
+) : IntegrationTestSupport() {
 
     @BeforeEach
     fun setUp() {

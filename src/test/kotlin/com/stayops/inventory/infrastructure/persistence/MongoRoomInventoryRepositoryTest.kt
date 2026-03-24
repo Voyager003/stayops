@@ -1,6 +1,6 @@
 package com.stayops.inventory.infrastructure.persistence
 
-import com.stayops.TestcontainersConfiguration
+import com.stayops.IntegrationTestSupport
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import org.assertj.core.api.Assertions.assertThat
@@ -15,11 +15,11 @@ import org.springframework.dao.OptimisticLockingFailureException
 import java.time.LocalDate
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(IntegrationTestSupport.LettuceConfig::class)
 class MongoRoomInventoryRepositoryTest @Autowired constructor(
     private val inventoryRepository: RoomInventoryRepository,
     private val mongoDataRepository: RoomInventoryMongoDataRepository
-) {
+) : IntegrationTestSupport() {
     private val today = LocalDate.of(2026, 3, 12)
 
     @BeforeEach

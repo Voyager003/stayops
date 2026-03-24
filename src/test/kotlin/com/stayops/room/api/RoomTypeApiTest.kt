@@ -1,6 +1,6 @@
 package com.stayops.room.api
 
-import com.stayops.TestcontainersConfiguration
+import com.stayops.IntegrationTestSupport
 import com.stayops.room.api.dto.CreateRoomTypeRequest
 import com.stayops.room.api.dto.UpdateRoomTypeRequest
 import com.stayops.room.infrastructure.persistence.RoomTypeMongoDataRepository
@@ -27,12 +27,12 @@ import tools.jackson.databind.ObjectMapper
 import java.math.BigDecimal
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(IntegrationTestSupport.LettuceConfig::class)
 class RoomTypeApiTest @Autowired constructor(
     private val context: WebApplicationContext,
     private val objectMapper: ObjectMapper,
     private val mongoDataRepository: RoomTypeMongoDataRepository
-) {
+) : IntegrationTestSupport() {
     private lateinit var mockMvc: MockMvc
 
     private val pid = "prop-1"

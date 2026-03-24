@@ -1,6 +1,6 @@
 package com.stayops.room.infrastructure.persistence
 
-import com.stayops.TestcontainersConfiguration
+import com.stayops.IntegrationTestSupport
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomStatus
 import com.stayops.room.domain.repository.RoomRepository
@@ -14,11 +14,11 @@ import org.springframework.context.annotation.Import
 import org.springframework.dao.DuplicateKeyException
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(IntegrationTestSupport.LettuceConfig::class)
 class MongoRoomRepositoryTest @Autowired constructor(
     private val roomRepository: RoomRepository,
     private val mongoDataRepository: RoomMongoDataRepository
-) {
+) : IntegrationTestSupport() {
     @BeforeEach
     fun setUp() {
         mongoDataRepository.deleteAll()

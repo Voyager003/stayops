@@ -1,6 +1,6 @@
 package com.stayops.channel.infrastructure.persistence
 
-import com.stayops.TestcontainersConfiguration
+import com.stayops.IntegrationTestSupport
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.model.ChannelConnectionInfo
 import com.stayops.channel.domain.model.ChannelStatus
@@ -17,11 +17,11 @@ import org.springframework.dao.DuplicateKeyException
 import java.math.BigDecimal
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(IntegrationTestSupport.LettuceConfig::class)
 class MongoChannelRepositoryTest @Autowired constructor(
     private val channelRepository: ChannelRepository,
     private val mongoDataRepository: ChannelMongoDataRepository
-) {
+) : IntegrationTestSupport() {
 
     @BeforeEach
     fun setUp() {

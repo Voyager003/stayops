@@ -1,6 +1,6 @@
 package com.stayops.rate.api
 
-import com.stayops.TestcontainersConfiguration
+import com.stayops.IntegrationTestSupport
 import com.stayops.rate.api.dto.CreateRatePlanRequest
 import com.stayops.rate.api.dto.DayOfWeekRuleRequest
 import com.stayops.rate.domain.model.RatePlanType
@@ -27,12 +27,12 @@ import tools.jackson.databind.ObjectMapper
 import java.time.LocalDate
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(IntegrationTestSupport.LettuceConfig::class)
 class RatePlanApiTest @Autowired constructor(
     private val context: WebApplicationContext,
     private val objectMapper: ObjectMapper,
     private val mongoDataRepository: RatePlanMongoDataRepository
-) {
+) : IntegrationTestSupport() {
     private lateinit var mockMvc: MockMvc
 
     private val pid = "prop-1"

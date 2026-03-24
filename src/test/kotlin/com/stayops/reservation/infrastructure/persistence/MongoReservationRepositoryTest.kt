@@ -1,6 +1,6 @@
 package com.stayops.reservation.infrastructure.persistence
 
-import com.stayops.TestcontainersConfiguration
+import com.stayops.IntegrationTestSupport
 import com.stayops.reservation.domain.model.*
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.shared.domain.DateRange
@@ -16,11 +16,11 @@ import java.math.BigDecimal
 import java.time.LocalDate
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(IntegrationTestSupport.LettuceConfig::class)
 class MongoReservationRepositoryTest @Autowired constructor(
     private val reservationRepository: ReservationRepository,
     private val mongoDataRepository: ReservationMongoDataRepository
-) {
+) : IntegrationTestSupport() {
 
     @BeforeEach
     fun setUp() {

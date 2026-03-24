@@ -1,6 +1,6 @@
 package com.stayops.booking
 
-import com.stayops.TestcontainersConfiguration
+import com.stayops.IntegrationTestSupport
 import com.stayops.auth.domain.model.Member
 import com.stayops.auth.domain.model.MemberRole
 import com.stayops.auth.domain.repository.MemberRepository
@@ -35,7 +35,7 @@ import java.time.Instant
 import java.time.LocalDate
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(IntegrationTestSupport.LettuceConfig::class)
 class BookingE2ETest @Autowired constructor(
     private val bookingApplication: BookingApplication,
     private val propertyRepository: PropertyRepository,
@@ -47,7 +47,7 @@ class BookingE2ETest @Autowired constructor(
     private val paymentRepository: PaymentRepository,
     private val mongoTemplate: MongoTemplate,
     @MockkBean private val paymentGateway: PaymentGateway
-) {
+) : IntegrationTestSupport() {
 
     private val checkIn = LocalDate.of(2026, 5, 1)
     private val checkOut = LocalDate.of(2026, 5, 3)

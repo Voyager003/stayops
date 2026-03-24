@@ -1,6 +1,6 @@
 package com.stayops.inventory.api
 
-import com.stayops.TestcontainersConfiguration
+import com.stayops.IntegrationTestSupport
 import com.stayops.inventory.api.dto.InitializeInventoryRequest
 import com.stayops.inventory.api.dto.InventoryUpdateAction
 import com.stayops.inventory.api.dto.UpdateInventoryRequest
@@ -28,13 +28,13 @@ import tools.jackson.databind.ObjectMapper
 import java.time.LocalDate
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(IntegrationTestSupport.LettuceConfig::class)
 class RoomInventoryApiTest @Autowired constructor(
     private val context: WebApplicationContext,
     private val objectMapper: ObjectMapper,
     private val mongoDataRepository: RoomInventoryMongoDataRepository,
     private val redisTemplate: StringRedisTemplate
-) {
+) : IntegrationTestSupport() {
     private lateinit var mockMvc: MockMvc
 
     private val pid = "prop-1"

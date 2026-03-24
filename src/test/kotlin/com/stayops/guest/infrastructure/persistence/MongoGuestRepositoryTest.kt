@@ -1,6 +1,6 @@
 package com.stayops.guest.infrastructure.persistence
 
-import com.stayops.TestcontainersConfiguration
+import com.stayops.IntegrationTestSupport
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.model.GuestTier
 import com.stayops.guest.domain.repository.GuestRepository
@@ -17,11 +17,11 @@ import org.springframework.dao.DuplicateKeyException
 import java.time.LocalDate
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(IntegrationTestSupport.LettuceConfig::class)
 class MongoGuestRepositoryTest @Autowired constructor(
     private val guestRepository: GuestRepository,
     private val mongoDataRepository: GuestMongoDataRepository
-) {
+) : IntegrationTestSupport() {
 
     @BeforeEach
     fun setUp() {
