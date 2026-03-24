@@ -16,7 +16,7 @@ class TestcontainersConfiguration {
 
     @Bean
     fun mongoDbContainer(): MongoDBContainer {
-        return MongoDBContainer(DockerImageName.parse("mongo:8"))
+        return MongoDBContainer(DockerImageName.parse("mongo:8")).apply { start() }
     }
 
     @Bean
