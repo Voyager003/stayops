@@ -3,6 +3,8 @@ services:
     image: ghcr.io/voyager003/stayops:latest
     environment:
       - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATA_MONGODB_URI=mongodb://mongodb:27017/stayops?replicaSet=rs0
+      - SPRING_DATA_REDIS_HOST=redis
       - TOSS_SECRET_KEY=${TOSS_SECRET_KEY}
     depends_on:
       mongodb:
