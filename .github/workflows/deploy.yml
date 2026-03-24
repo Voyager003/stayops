@@ -1,8 +1,13 @@
-name: Deploy
+name: CD
 
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.claude/**'
+      - 'LICENSE'
   workflow_dispatch:
 
 permissions:
