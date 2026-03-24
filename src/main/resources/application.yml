@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: stayops
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/stayops?replicaSet=rs0
+    redis:
+      host: localhost
+      port: 6379
+
+toss:
+  payments:
+    secret-key: ${TOSS_SECRET_KEY:test_sk_default}
+    base-url: ${TOSS_BASE_URL:https://api.tosspayments.com/v1/payments}
