@@ -25,4 +25,7 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - run: ./gradlew test --build-cache
+      - name: Verify Docker
+        run: docker info && docker version
+
+      - run: ./gradlew test --build-cache --info 2>&1 | grep -E "Testcontainers|Container|mongo|redis|DynamicProperty|profiles|FAILED|BUILD" | tail -100
