@@ -27,7 +27,7 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - run: ./gradlew test
+      - run: ./gradlew test --build-cache
 
   build-and-push:
     needs: test
