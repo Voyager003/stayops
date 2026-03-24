@@ -29,7 +29,7 @@
 
 - **동시성 제어** — 마지막 1객실 동시 예약 시 재고 정합성 보장
 - **데이터 일관성** — Outbox 패턴으로 메시지 브로커 없이 채널 간 Eventually Consistent 동기화
-- **도메인 모델링** — 8개 피처 모듈, 순수 도메인 객체, 도메인 이벤트 기반 크로스 모듈 연동
+- **도메인 모델링** — 11개 피처 모듈, 순수 도메인 객체, 도메인 이벤트 기반 크로스 모듈 연동
 
 ### 기능적 요구사항
 
@@ -50,6 +50,14 @@
   - 취소/노쇼 처리 + 재고 자동 복원
 - **정산**
   - 채널별 수수료/실 정산액 집계 (MongoDB aggregation)
+- **고객 직접 예매 (Finestay)**
+  - 고객 회원가입/로그인 (JWT)
+  - 숙소 검색, 예약 생성, 결제 승인
+  - 마이페이지 — 예약 조회, 취소(환불)
+- **Toss Payments 결제 연동**
+  - 결제 승인(confirmPayment), 환불(cancelPayment)
+  - orderId/금액 위변조 방지 서버 검증
+  - PG 에러 유형별 핸들링 (AlreadyProcessed, PaymentDeclined, ProviderError)
 - **인증/인가**
   - JWT 기반 인증, 멀티 숙소 접근 권한 제어
 
@@ -61,6 +69,8 @@
   - 도메인 이벤트: 모듈 간 결합도를 낮추면서 크로스 모듈 연동
 - **권장**
   - 가상 채널 어댑터로 실제 OTA API 없이 동기화 플로우 검증
+  - PG 에러 핸들링: AlreadyProcessed → inquire fallback, PaymentDeclined → 즉시 실패, ProviderError → 재시도
+  - 환불 실패 시 CANCEL_FAILED 상태로 운영자 수동 처리 대비
   - TDD 전 계층 적용 (Red-Green-Refactor)
   - Testcontainers로 실제 MongoDB/Redis 기반 e2e 테스트
 
@@ -82,6 +92,9 @@
 | rate | 요금제, 날짜별 요금 산출 | RatePlan, RateResolver |
 | channel | 판매 채널, OTA 동기화 | Channel, SyncTask |
 | reservation | 예약 라이프사이클 (핵심) | Reservation |
+| settlement | 채널별 수수료/정산 집계 | Settlement |
+| booking | 고객 직접 예매 (Finestay) | - (cross-module orchestration) |
+| payment | Toss Payments 결제 연동 | Payment, PaymentGateway |
 | shared/auth | JWT 인증, 멀티 숙소 접근 권한 | - |
 
 ### Reservation Flow
@@ -127,12 +140,14 @@ src/main/kotlin/com/stayops/
 ├── rate/            # 요금제 + RateResolver
 ├── reservation/     # 예약 + 도메인 이벤트
 ├── settlement/      # MongoDB aggregation 정산
+├── booking/         # 고객 직접 예매 (Finestay)
+├── payment/         # Toss Payments 결제 연동
 └── auth/            # JWT + Redis Refresh Token
 ```
 
 ---
 
-## 구현 단계 (10 Phases)
+## 구현 단계 (11 Phases)
 
 각 Phase의 도메인 모델, TDD 순서, 생성 파일 목록 등 상세 계획은 [`docs/phases/`](docs/phases/) 참조.
 
@@ -148,6 +163,7 @@ src/main/kotlin/com/stayops/
 | [Phase 8](docs/phases/phase-08-reservation.md) | Reservation 도메인 |
 | [Phase 9](docs/phases/phase-09-settlement.md) | Settlement |
 | [Phase 10](docs/phases/phase-10-auth.md) | Auth |
+| Phase 11 | Customer Booking + Toss Payments — 고객 직접 예매, 결제 승인/환불 |
 
 ---
 
