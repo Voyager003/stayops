@@ -25,4 +25,13 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - run: ./gradlew clean test --no-build-cache
+      - name: Start MongoDB and Redis
+        run: docker compose up -d && sleep 5
+
+      - run: ./gradlew test --build-cache
+        env:
+          SPRING_DATA_MONGODB_URI: mongodb://localhost:27017/stayops-test?replicaSet=rs0
+          SPRING_DATA_REDIS_HOST: localhost
+          SPRING_DATA_REDIS_PORT: 6379
+          TOSS_PAYMENTS_SECRET_KEY: test_sk_test_key
+          TOSS_PAYMENTS_BASE_URL: https://api.tosspayments.com/v1/payments
