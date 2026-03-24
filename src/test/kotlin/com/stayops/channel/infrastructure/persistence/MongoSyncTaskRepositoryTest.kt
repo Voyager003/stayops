@@ -10,12 +10,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.context.annotation.Import
 import java.time.Instant
 
-@SpringBootTest
-@Import(IntegrationTestSupport.LettuceConfig::class)
 class MongoSyncTaskRepositoryTest @Autowired constructor(
     private val syncTaskRepository: SyncTaskRepository,
     private val mongoDataRepository: SyncTaskMongoDataRepository

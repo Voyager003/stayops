@@ -20,15 +20,11 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.context.annotation.Import
 import java.time.LocalDate
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 
-@SpringBootTest
-@Import(IntegrationTestSupport.LettuceConfig::class)
 class ConcurrentReservationTest @Autowired constructor(
     private val reservationApplication: ReservationApplication,
     private val reservationMongoDataRepository: ReservationMongoDataRepository,

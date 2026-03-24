@@ -11,13 +11,9 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.context.annotation.Import
 import org.springframework.dao.DuplicateKeyException
 import java.math.BigDecimal
 
-@SpringBootTest
-@Import(IntegrationTestSupport.LettuceConfig::class)
 class MongoChannelRepositoryTest @Autowired constructor(
     private val channelRepository: ChannelRepository,
     private val mongoDataRepository: ChannelMongoDataRepository

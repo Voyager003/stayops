@@ -27,15 +27,11 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.context.annotation.Import
 import org.springframework.data.mongodb.core.MongoTemplate
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-@SpringBootTest
-@Import(IntegrationTestSupport.LettuceConfig::class)
 class BookingE2ETest @Autowired constructor(
     private val bookingApplication: BookingApplication,
     private val propertyRepository: PropertyRepository,

@@ -3,17 +3,21 @@ package com.stayops
 import io.lettuce.core.resource.ClientResources
 import io.lettuce.core.resource.DefaultClientResources
 import io.lettuce.core.resource.DnsResolvers
+import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.boot.test.util.TestPropertyValues
 import org.springframework.context.ApplicationContextInitializer
 import org.springframework.context.ConfigurableApplicationContext
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Import
 import org.springframework.test.context.ContextConfiguration
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.mongodb.MongoDBContainer
 import org.testcontainers.utility.DockerImageName
 
+@SpringBootTest
 @ContextConfiguration(initializers = [IntegrationTestSupport.Initializer::class])
+@Import(IntegrationTestSupport.LettuceConfig::class)
 abstract class IntegrationTestSupport {
 
     @TestConfiguration

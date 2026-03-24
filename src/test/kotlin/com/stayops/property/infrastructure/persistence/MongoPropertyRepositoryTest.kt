@@ -12,11 +12,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.context.annotation.Import
 
-@SpringBootTest
-@Import(IntegrationTestSupport.LettuceConfig::class)
 class MongoPropertyRepositoryTest @Autowired constructor(
     private val propertyRepository: PropertyRepository,
     private val mongoDataRepository: PropertyMongoDataRepository

@@ -10,12 +10,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.context.annotation.Import
 import org.springframework.dao.DuplicateKeyException
 
-@SpringBootTest
-@Import(IntegrationTestSupport.LettuceConfig::class)
 class MongoRoomTypeRepositoryTest @Autowired constructor(
     private val roomTypeRepository: RoomTypeRepository,
     private val mongoDataRepository: RoomTypeMongoDataRepository

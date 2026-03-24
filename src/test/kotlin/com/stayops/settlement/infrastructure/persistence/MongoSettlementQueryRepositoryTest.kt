@@ -11,14 +11,10 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.context.annotation.Import
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-@SpringBootTest
-@Import(IntegrationTestSupport.LettuceConfig::class)
 class MongoSettlementQueryRepositoryTest @Autowired constructor(
     private val settlementQueryRepository: SettlementQueryRepository,
     private val reservationMongoDataRepository: ReservationMongoDataRepository
