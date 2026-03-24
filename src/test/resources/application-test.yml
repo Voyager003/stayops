@@ -1,0 +1,4 @@
+toss:
+  payments:
+    secret-key: test_sk_test_key
+    base-url: https://api.tosspayments.com/v1/payments

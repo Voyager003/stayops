@@ -25,6 +25,8 @@ data class ReservationDocument(
     val channel: BookingChannelData,
     val pricing: PricingData,
     val memo: String?,
+    val memberId: String?,
+    val expiresAt: Instant?,
     @Version val version: Long,
     val createdAt: Instant,
     val updatedAt: Instant
@@ -77,6 +79,8 @@ data class ReservationDocument(
             netAmount = Money.of(pricing.netAmount, pricing.roomRateCurrency)
         ),
         memo = memo,
+        memberId = memberId,
+        expiresAt = expiresAt,
         version = version,
         createdAt = createdAt,
         updatedAt = updatedAt
@@ -115,6 +119,8 @@ data class ReservationDocument(
                 netAmount = reservation.pricing.netAmount.amount
             ),
             memo = reservation.memo,
+            memberId = reservation.memberId,
+            expiresAt = reservation.expiresAt,
             version = reservation.version,
             createdAt = reservation.createdAt,
             updatedAt = reservation.updatedAt

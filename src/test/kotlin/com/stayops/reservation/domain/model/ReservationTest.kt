@@ -6,6 +6,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import java.math.BigDecimal
+import java.time.Instant
 import java.time.LocalDate
 
 class ReservationTest : BehaviorSpec({
@@ -100,6 +101,41 @@ class ReservationTest : BehaviorSpec({
             }
         }
 
+        `when`("memberId와 expiresAt을 지정하면") {
+            val expiresAt = Instant.parse("2026-04-01T12:15:00Z")
+            val reservation = Reservation.create(
+                id = "rsv-3",
+                propertyId = "prop-1",
+                roomTypeId = "rt-1",
+                guestId = "guest-1",
+                guestInfo = guestInfo(),
+                dateRange = dateRange,
+                numberOfGuests = 2,
+                channel = directChannel(),
+                pricing = directPricing(),
+                memberId = "member-1",
+                expiresAt = expiresAt
+            )
+
+            then("memberId가 설정된다") {
+                reservation.memberId shouldBe "member-1"
+            }
+            then("expiresAt이 설정된다") {
+                reservation.expiresAt shouldBe expiresAt
+            }
+        }
+
+        `when`("memberId와 expiresAt을 생략하면") {
+            val reservation = pendingReservation()
+
+            then("memberId가 null이다") {
+                reservation.memberId shouldBe null
+            }
+            then("expiresAt이 null이다") {
+                reservation.expiresAt shouldBe null
+            }
+        }
+
         `when`("인원이 0이면") {
             then("예외가 발생한다") {
                 shouldThrow<IllegalArgumentException> {
@@ -115,6 +151,20 @@ class ReservationTest : BehaviorSpec({
                         pricing = directPricing()
                     )
                 }
+            }
+        }
+    }
+
+    // -- PENDING 예약 취소 (고객 예매용) --
+
+    given("PENDING 상태의 예약을 취소할 때") {
+        val reservation = pendingReservation()
+
+        `when`("cancelPending() 호출 시") {
+            val cancelled = reservation.cancelPending()
+
+            then("상태가 CANCELLED로 변경된다") {
+                cancelled.status shouldBe ReservationStatus.CANCELLED
             }
         }
     }

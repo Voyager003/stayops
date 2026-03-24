@@ -1,5 +1,6 @@
 package com.stayops.shared.exception
 
+import com.stayops.payment.domain.service.PaymentGatewayException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ExceptionHandler
@@ -41,6 +42,25 @@ class GlobalExceptionHandler {
     fun handleForbiddenException(ex: ForbiddenException): ResponseEntity<ErrorResponse> {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(
             ErrorResponse(code = ex.code, message = ex.message, timestamp = Instant.now())
+        )
+    }
+
+    @ExceptionHandler(PaymentGatewayException::class)
+    fun handlePaymentGatewayException(ex: PaymentGatewayException): ResponseEntity<ErrorResponse> {
+        val (status, code) = when (ex) {
+            is PaymentGatewayException.AlreadyProcessed ->
+                HttpStatus.OK to "ALREADY_PROCESSED"
+            is PaymentGatewayException.PaymentDeclined ->
+                HttpStatus.BAD_REQUEST to "PAYMENT_DECLINED"
+            is PaymentGatewayException.ProviderError ->
+                HttpStatus.BAD_GATEWAY to "PROVIDER_ERROR"
+            is PaymentGatewayException.InvalidRequest ->
+                HttpStatus.INTERNAL_SERVER_ERROR to "PAYMENT_INVALID_REQUEST"
+            is PaymentGatewayException.UnknownError ->
+                HttpStatus.INTERNAL_SERVER_ERROR to "PAYMENT_UNKNOWN_ERROR"
+        }
+        return ResponseEntity.status(status).body(
+            ErrorResponse(code = code, message = ex.message ?: "결제 오류", timestamp = Instant.now())
         )
     }
 }
