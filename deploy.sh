@@ -15,8 +15,8 @@ docker image prune -f
 echo "==> Current service status:"
 docker compose -f "$COMPOSE_FILE" ps
 
-echo "==> Health check (max 30s)..."
-for i in $(seq 1 10); do
+echo "==> Health check (max 90s)..."
+for i in $(seq 1 30); do
     if curl -sf http://localhost/ > /dev/null 2>&1; then
         echo "==> Health check passed"
         exit 0
