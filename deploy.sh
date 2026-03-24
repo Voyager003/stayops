@@ -14,3 +14,14 @@ docker image prune -f
 
 echo "==> Current service status:"
 docker compose -f "$COMPOSE_FILE" ps
+
+echo "==> Health check (max 30s)..."
+for i in $(seq 1 10); do
+    if curl -sf http://localhost/ > /dev/null 2>&1; then
+        echo "==> Health check passed"
+        exit 0
+    fi
+    sleep 3
+done
+echo "==> Health check FAILED"
+exit 1
