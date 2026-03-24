@@ -25,12 +25,4 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Verify Docker
-        run: docker info | head -20
-
-      - name: Run tests
-        run: ./gradlew test --build-cache --info 2>&1 | tee /tmp/test-output.txt
-
-      - name: Show Testcontainers logs on failure
-        if: failure()
-        run: grep -iE "(testcontainers|tc\.|Container|DockerClient|docker|Cannot connect|IllegalState|start\(\)|image)" /tmp/test-output.txt | tail -50
+      - run: ./gradlew test --build-cache
