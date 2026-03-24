@@ -11,6 +11,8 @@ import com.stayops.payment.domain.repository.PaymentRepository
 import com.stayops.payment.domain.service.PaymentCancelResult
 import com.stayops.payment.domain.service.PaymentConfirmResult
 import com.stayops.payment.domain.service.PaymentGateway
+import com.stayops.payment.domain.service.PaymentGatewayException
+import com.stayops.payment.domain.service.PaymentInquiryResult
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.rate.domain.model.RatePlanStatus
@@ -289,6 +291,108 @@ class BookingApplicationTest : BehaviorSpec({
                         paymentKey = "pk", orderId = "oid", amount = BigDecimal(200_000)
                     )
                 }
+            }
+        }
+    }
+
+    // -- 결제 확인: PG 에러 핸들링 --
+
+    given("결제 확인 시 Toss 에러가 발생하면") {
+
+        `when`("AlreadyProcessed이고 inquire 결과 DONE이면") {
+            clearAllMocks()
+            val reservation = pendingReservation()
+            val payment = pendingPayment()
+            every { reservationRepository.findById("rsv-1") } returns reservation
+            every { paymentRepository.findByReservationId("rsv-1") } returns payment
+            every { paymentGateway.confirm(any(), any(), any()) } throws
+                PaymentGatewayException.AlreadyProcessed("toss_pk_123")
+            every { paymentGateway.inquire("toss_pk_123") } returns PaymentInquiryResult(
+                paymentKey = "toss_pk_123", orderId = payment.orderId,
+                status = "DONE", totalAmount = BigDecimal(200_000)
+            )
+            every { paymentRepository.save(any()) } answers { firstArg() }
+            every { reservationRepository.save(any()) } answers { firstArg() }
+
+            val result = service.confirmPayment(
+                memberId = "member-1", reservationId = "rsv-1",
+                paymentKey = "toss_pk_123", orderId = payment.orderId,
+                amount = BigDecimal(200_000)
+            )
+
+            then("정상 처리된다 (APPROVED + CONFIRMED)") {
+                result.payment.status shouldBe PaymentStatus.APPROVED
+                result.reservation.status shouldBe ReservationStatus.CONFIRMED
+            }
+        }
+
+        `when`("AlreadyProcessed이고 inquire 결과 DONE이 아니면") {
+            clearAllMocks()
+            val reservation = pendingReservation()
+            val payment = pendingPayment()
+            every { reservationRepository.findById("rsv-1") } returns reservation
+            every { paymentRepository.findByReservationId("rsv-1") } returns payment
+            every { paymentGateway.confirm(any(), any(), any()) } throws
+                PaymentGatewayException.AlreadyProcessed("toss_pk_123")
+            every { paymentGateway.inquire("toss_pk_123") } returns PaymentInquiryResult(
+                paymentKey = "toss_pk_123", orderId = payment.orderId,
+                status = "EXPIRED", totalAmount = BigDecimal(200_000)
+            )
+            every { paymentRepository.save(any()) } answers { firstArg() }
+
+            then("Payment가 FAILED 처리되고 BusinessException이 발생한다") {
+                shouldThrow<BusinessException> {
+                    service.confirmPayment(
+                        memberId = "member-1", reservationId = "rsv-1",
+                        paymentKey = "toss_pk_123", orderId = payment.orderId,
+                        amount = BigDecimal(200_000)
+                    )
+                }
+                verify { paymentRepository.save(match { it.status == PaymentStatus.FAILED }) }
+            }
+        }
+
+        `when`("PaymentDeclined 에러가 발생하면") {
+            clearAllMocks()
+            val reservation = pendingReservation()
+            val payment = pendingPayment()
+            every { reservationRepository.findById("rsv-1") } returns reservation
+            every { paymentRepository.findByReservationId("rsv-1") } returns payment
+            every { paymentGateway.confirm(any(), any(), any()) } throws
+                PaymentGatewayException.PaymentDeclined("REJECT_CARD_PAYMENT", "카드 거절")
+            every { paymentRepository.save(any()) } answers { firstArg() }
+
+            then("Payment가 FAILED 처리되고 BusinessException이 발생한다") {
+                val ex = shouldThrow<BusinessException> {
+                    service.confirmPayment(
+                        memberId = "member-1", reservationId = "rsv-1",
+                        paymentKey = "toss_pk_123", orderId = payment.orderId,
+                        amount = BigDecimal(200_000)
+                    )
+                }
+                ex.code shouldBe "PAYMENT_DECLINED"
+                verify { paymentRepository.save(match { it.status == PaymentStatus.FAILED }) }
+            }
+        }
+
+        `when`("ProviderError 에러가 발생하면") {
+            clearAllMocks()
+            val reservation = pendingReservation()
+            val payment = pendingPayment()
+            every { reservationRepository.findById("rsv-1") } returns reservation
+            every { paymentRepository.findByReservationId("rsv-1") } returns payment
+            every { paymentGateway.confirm(any(), any(), any()) } throws
+                PaymentGatewayException.ProviderError("PROVIDER_ERROR", "PG사 장애")
+
+            then("Payment 상태 유지, ProviderError가 전파된다") {
+                shouldThrow<PaymentGatewayException.ProviderError> {
+                    service.confirmPayment(
+                        memberId = "member-1", reservationId = "rsv-1",
+                        paymentKey = "toss_pk_123", orderId = payment.orderId,
+                        amount = BigDecimal(200_000)
+                    )
+                }
+                verify(exactly = 0) { paymentRepository.save(any()) }
             }
         }
     }

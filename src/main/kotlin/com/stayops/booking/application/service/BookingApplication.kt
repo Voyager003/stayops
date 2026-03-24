@@ -6,7 +6,9 @@ import com.stayops.guest.domain.repository.GuestRepository
 import com.stayops.inventory.application.service.RoomInventoryApplication
 import com.stayops.payment.domain.model.Payment
 import com.stayops.payment.domain.repository.PaymentRepository
+import com.stayops.payment.domain.service.PaymentConfirmResult
 import com.stayops.payment.domain.service.PaymentGateway
+import com.stayops.payment.domain.service.PaymentGatewayException
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
@@ -188,7 +190,29 @@ class BookingApplication(
         }
 
         // 6. Toss Payments 승인
-        val confirmResult = paymentGateway.confirm(paymentKey, orderId, amount)
+        val confirmResult: PaymentConfirmResult
+        try {
+            confirmResult = paymentGateway.confirm(paymentKey, orderId, amount)
+        } catch (e: PaymentGatewayException.AlreadyProcessed) {
+            log.warn("이미 처리된 결제, inquire로 상태 확인: paymentKey={}", paymentKey)
+            val inquiry = paymentGateway.inquire(paymentKey)
+            if (inquiry.status == "DONE") {
+                val approvedPayment = paymentRepository.save(
+                    payment.approve(paymentKey = paymentKey, method = "unknown", approvedAt = Instant.now())
+                )
+                val confirmedReservation = reservationRepository.save(reservation.confirm())
+                return BookingResult(confirmedReservation, approvedPayment)
+            }
+            paymentRepository.save(payment.fail("이미 처리된 결제이나 상태가 DONE이 아님: ${inquiry.status}"))
+            throw BusinessException("PAYMENT_ALREADY_PROCESSED", "결제가 이미 처리되었으나 정상 완료되지 않았습니다: ${inquiry.status}")
+        } catch (e: PaymentGatewayException.PaymentDeclined) {
+            log.warn("결제 거절: paymentKey={}, code={}", paymentKey, e.code)
+            paymentRepository.save(payment.fail(e.reason))
+            throw BusinessException("PAYMENT_DECLINED", "결제가 거절되었습니다: ${e.reason}")
+        } catch (e: PaymentGatewayException.ProviderError) {
+            log.error("PG사 시스템 오류: paymentKey={}, code={}", paymentKey, e.code)
+            throw e // Payment 상태 유지 (PENDING), 재시도 가능
+        }
 
         // 7. Payment 승인
         val approvedPayment = paymentRepository.save(
