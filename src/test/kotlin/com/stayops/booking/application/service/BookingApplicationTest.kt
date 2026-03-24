@@ -444,5 +444,29 @@ class BookingApplicationTest : BehaviorSpec({
                 verify { paymentGateway.cancel("toss_pk_456", any()) }
             }
         }
+
+        `when`("CONFIRMED 예약 취소 시 Toss 환불이 실패하면") {
+            clearAllMocks()
+            val reservation = pendingReservation().confirm()
+            val payment = pendingPayment().approve(
+                paymentKey = "toss_pk_789", method = "카드", approvedAt = Instant.now()
+            )
+            every { reservationRepository.findById("rsv-1") } returns reservation
+            every { paymentRepository.findByReservationId("rsv-1") } returns payment
+            every { paymentGateway.cancel("toss_pk_789", any()) } throws
+                PaymentGatewayException.ProviderError("PROVIDER_ERROR", "PG사 장애")
+            every { paymentRepository.save(any()) } answers { firstArg() }
+            every { reservationRepository.save(any()) } answers { firstArg() }
+            every { inventoryApplication.release(any(), any(), any()) } returns mockk()
+
+            val result = service.cancelBooking(memberId = "member-1", reservationId = "rsv-1")
+
+            then("예약은 취소되고 Payment는 CANCEL_FAILED") {
+                result.reservation.status shouldBe ReservationStatus.CANCELLED
+                result.payment.status shouldBe PaymentStatus.CANCEL_FAILED
+                result.payment.failReason shouldBe "환불 실패: PG사 시스템 오류 [PROVIDER_ERROR]: PG사 장애"
+                verify(exactly = 2) { inventoryApplication.release("prop-1", "rt-1", any()) }
+            }
+        }
     }
 })

@@ -54,6 +54,17 @@ data class Payment private constructor(
         )
     }
 
+    fun failCancel(reason: String): Payment {
+        check(status == PaymentStatus.APPROVED) {
+            "APPROVED 상태에서만 환불 실패 처리할 수 있습니다: $status"
+        }
+        return copy(
+            status = PaymentStatus.CANCEL_FAILED,
+            failReason = reason,
+            updatedAt = Instant.now()
+        )
+    }
+
     companion object {
         fun create(
             id: String,

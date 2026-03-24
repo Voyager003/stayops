@@ -253,9 +253,14 @@ class BookingApplication(
             cancelledPayment = paymentRepository.save(payment.fail("고객 요청에 의한 취소"))
         } else {
             // CONFIRMED: Toss 환불 필요
-            paymentGateway.cancel(payment.paymentKey!!, "고객 요청에 의한 취소")
-            cancelledPayment = paymentRepository.save(payment.cancel())
             cancelledReservation = reservationRepository.save(reservation.cancel())
+            cancelledPayment = try {
+                paymentGateway.cancel(payment.paymentKey!!, "고객 요청에 의한 취소")
+                paymentRepository.save(payment.cancel())
+            } catch (e: PaymentGatewayException) {
+                log.error("Toss 환불 실패: reservationId={}, paymentKey={}", reservationId, payment.paymentKey, e)
+                paymentRepository.save(payment.failCancel("환불 실패: ${e.message}"))
+            }
         }
 
         // 4. 재고 복원

@@ -121,6 +121,14 @@ class PaymentTest : BehaviorSpec({
                 }
             }
         }
+
+        `when`("failCancel() 호출 시") {
+            then("예외가 발생한다") {
+                shouldThrow<IllegalStateException> {
+                    payment.failCancel("실패")
+                }
+            }
+        }
     }
 
     // -- 상태 전이: APPROVED → CANCELLED --
@@ -158,6 +166,17 @@ class PaymentTest : BehaviorSpec({
                 shouldThrow<IllegalStateException> {
                     payment.fail("오류")
                 }
+            }
+        }
+
+        `when`("failCancel() 호출 시") {
+            val cancelFailed = payment.failCancel("Toss 환불 API 실패")
+
+            then("상태가 CANCEL_FAILED로 변경된다") {
+                cancelFailed.status shouldBe PaymentStatus.CANCEL_FAILED
+            }
+            then("failReason이 설정된다") {
+                cancelFailed.failReason shouldBe "Toss 환불 API 실패"
             }
         }
     }
