@@ -25,4 +25,4 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - run: ./gradlew test --build-cache
+      - run: ./gradlew clean test --no-build-cache
