@@ -1,0 +1,13 @@
+.git
+.github
+.gradle
+.idea
+.kotlin
+.claude
+build/
+stayops-mock-ota/build/
+stayops-mock-ota/src/
+docs/
+*.md
+*.iml
+out/

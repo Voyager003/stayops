@@ -1,0 +1,16 @@
+#!/bin/bash
+set -euo pipefail
+
+COMPOSE_FILE="docker-compose.prod.yml"
+
+echo "==> Pulling latest app image..."
+docker compose -f "$COMPOSE_FILE" pull app
+
+echo "==> Restarting app service..."
+docker compose -f "$COMPOSE_FILE" up -d --no-deps app
+
+echo "==> Cleaning up old images..."
+docker image prune -f
+
+echo "==> Current service status:"
+docker compose -f "$COMPOSE_FILE" ps
