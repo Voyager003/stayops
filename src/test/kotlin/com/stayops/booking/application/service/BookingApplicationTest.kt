@@ -201,7 +201,9 @@ class BookingApplicationTest : BehaviorSpec({
             every { paymentRepository.findByReservationId("rsv-1") } returns payment
             every { paymentGateway.confirm(any(), any(), any()) } returns PaymentConfirmResult(
                 paymentKey = "toss_pk_123", orderId = payment.orderId,
-                method = "카드", approvedAt = Instant.parse("2026-04-01T12:00:00Z")
+                method = "카드", approvedAt = Instant.parse("2026-04-01T12:00:00Z"),
+                totalAmount = BigDecimal(200_000),
+                receiptUrl = null, cardNumber = null, cardCompany = null
             )
             every { paymentRepository.save(any()) } answers { firstArg() }
             every { reservationRepository.save(any()) } answers { firstArg() }

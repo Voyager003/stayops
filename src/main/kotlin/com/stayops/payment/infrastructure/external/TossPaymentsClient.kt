@@ -25,7 +25,11 @@ class TossPaymentsClient(
             paymentKey = response.paymentKey,
             orderId = response.orderId,
             method = response.method,
-            approvedAt = response.approvedAt?.let { OffsetDateTime.parse(it).toInstant() }
+            approvedAt = response.approvedAt?.let { OffsetDateTime.parse(it).toInstant() },
+            totalAmount = response.totalAmount,
+            receiptUrl = response.receipt?.url,
+            cardNumber = response.card?.number,
+            cardCompany = response.card?.company
         )
     }
 
@@ -53,7 +57,18 @@ data class TossConfirmResponse(
     val status: String,
     val method: String?,
     val totalAmount: BigDecimal,
-    val approvedAt: String?
+    val approvedAt: String?,
+    val receipt: TossReceipt? = null,
+    val card: TossCard? = null
+)
+
+data class TossReceipt(
+    val url: String?
+)
+
+data class TossCard(
+    val number: String?,
+    val company: String?
 )
 
 data class TossCancelRequest(

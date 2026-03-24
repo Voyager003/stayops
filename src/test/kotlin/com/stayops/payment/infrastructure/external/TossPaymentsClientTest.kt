@@ -36,7 +36,7 @@ class TossPaymentsClientTest : BehaviorSpec({
 
     given("결제 승인 시") {
 
-        `when`("Toss가 성공 응답을 반환하면") {
+        `when`("Toss가 카드 결제 성공 응답을 반환하면") {
             server.enqueue(
                 MockResponse()
                     .addHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
@@ -47,7 +47,12 @@ class TossPaymentsClientTest : BehaviorSpec({
                             "status": "DONE",
                             "method": "카드",
                             "totalAmount": 200000,
-                            "approvedAt": "2026-04-01T12:00:00+09:00"
+                            "approvedAt": "2026-04-01T12:00:00+09:00",
+                            "receipt": {"url": "https://receipt.toss.im/abc"},
+                            "card": {
+                                "number": "4330****1234",
+                                "company": "현대"
+                            }
                         }
                     """.trimIndent())
             )
@@ -55,11 +60,47 @@ class TossPaymentsClientTest : BehaviorSpec({
             val client = createClient()
             val result = client.confirm("toss_pk_123", "STAYOPS-rsv-1-123", BigDecimal(200_000))
 
-            then("PaymentConfirmResult로 변환하여 반환한다") {
+            then("기본 필드가 매핑된다") {
                 result.paymentKey shouldBe "toss_pk_123"
                 result.orderId shouldBe "STAYOPS-rsv-1-123"
                 result.method shouldBe "카드"
                 result.approvedAt shouldNotBe null
+            }
+            then("totalAmount가 매핑된다") {
+                result.totalAmount shouldBe BigDecimal(200_000)
+            }
+            then("카드 정보가 매핑된다") {
+                result.cardNumber shouldBe "4330****1234"
+                result.cardCompany shouldBe "현대"
+            }
+            then("영수증 URL이 매핑된다") {
+                result.receiptUrl shouldBe "https://receipt.toss.im/abc"
+            }
+        }
+
+        `when`("Toss가 카드 정보 없이 성공 응답을 반환하면") {
+            server.enqueue(
+                MockResponse()
+                    .addHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .setBody("""
+                        {
+                            "paymentKey": "toss_pk_simple",
+                            "orderId": "STAYOPS-rsv-5-555",
+                            "status": "DONE",
+                            "method": "계좌이체",
+                            "totalAmount": 100000,
+                            "approvedAt": "2026-04-01T13:00:00+09:00"
+                        }
+                    """.trimIndent())
+            )
+
+            val client = createClient()
+            val result = client.confirm("toss_pk_simple", "STAYOPS-rsv-5-555", BigDecimal(100_000))
+
+            then("카드/영수증 필드는 null이다") {
+                result.cardNumber shouldBe null
+                result.cardCompany shouldBe null
+                result.receiptUrl shouldBe null
             }
         }
 

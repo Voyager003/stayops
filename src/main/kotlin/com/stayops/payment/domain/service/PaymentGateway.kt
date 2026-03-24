@@ -12,7 +12,11 @@ data class PaymentConfirmResult(
     val paymentKey: String,
     val orderId: String,
     val method: String?,
-    val approvedAt: Instant?
+    val approvedAt: Instant?,
+    val totalAmount: BigDecimal,
+    val receiptUrl: String?,
+    val cardNumber: String?,
+    val cardCompany: String?
 )
 
 data class PaymentCancelResult(

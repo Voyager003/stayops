@@ -121,7 +121,9 @@ class BookingE2ETest @Autowired constructor(
                 paymentKey = "toss_pk_e2e",
                 orderId = booking.payment.orderId,
                 method = "카드",
-                approvedAt = Instant.now()
+                approvedAt = Instant.now(),
+                totalAmount = BigDecimal(200_000),
+                receiptUrl = null, cardNumber = null, cardCompany = null
             )
 
             val confirmed = bookingApplication.confirmPayment(
@@ -186,7 +188,9 @@ class BookingE2ETest @Autowired constructor(
             // 결제 확인
             every { paymentGateway.confirm(any(), any(), any()) } returns PaymentConfirmResult(
                 paymentKey = "toss_pk_inv", orderId = booking.payment.orderId,
-                method = "카드", approvedAt = Instant.now()
+                method = "카드", approvedAt = Instant.now(),
+                totalAmount = BigDecimal(200_000),
+                receiptUrl = null, cardNumber = null, cardCompany = null
             )
             bookingApplication.confirmPayment(
                 memberId = "customer-e2e",
