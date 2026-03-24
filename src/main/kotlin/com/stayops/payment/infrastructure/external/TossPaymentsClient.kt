@@ -3,6 +3,7 @@ package com.stayops.payment.infrastructure.external
 import com.stayops.payment.domain.service.PaymentCancelResult
 import com.stayops.payment.domain.service.PaymentConfirmResult
 import com.stayops.payment.domain.service.PaymentGateway
+import com.stayops.payment.domain.service.PaymentInquiryResult
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
 import java.math.BigDecimal
@@ -43,6 +44,21 @@ class TossPaymentsClient(
 
         return PaymentCancelResult(paymentKey = response.paymentKey)
     }
+
+    override fun inquire(paymentKey: String): PaymentInquiryResult {
+        val response = restClient.get()
+            .uri("/$paymentKey")
+            .retrieve()
+            .body(TossInquiryResponse::class.java)
+            ?: throw IllegalStateException("Toss inquire 응답이 null입니다")
+
+        return PaymentInquiryResult(
+            paymentKey = response.paymentKey,
+            orderId = response.orderId,
+            status = response.status,
+            totalAmount = response.totalAmount
+        )
+    }
 }
 
 data class TossConfirmRequest(
@@ -78,4 +94,11 @@ data class TossCancelRequest(
 data class TossCancelResponse(
     val paymentKey: String,
     val status: String
+)
+
+data class TossInquiryResponse(
+    val paymentKey: String,
+    val orderId: String,
+    val status: String,
+    val totalAmount: BigDecimal
 )

@@ -6,6 +6,7 @@ import java.time.Instant
 interface PaymentGateway {
     fun confirm(paymentKey: String, orderId: String, amount: BigDecimal): PaymentConfirmResult
     fun cancel(paymentKey: String, cancelReason: String): PaymentCancelResult
+    fun inquire(paymentKey: String): PaymentInquiryResult
 }
 
 data class PaymentConfirmResult(
@@ -21,4 +22,11 @@ data class PaymentConfirmResult(
 
 data class PaymentCancelResult(
     val paymentKey: String
+)
+
+data class PaymentInquiryResult(
+    val paymentKey: String,
+    val orderId: String,
+    val status: String,
+    val totalAmount: BigDecimal
 )

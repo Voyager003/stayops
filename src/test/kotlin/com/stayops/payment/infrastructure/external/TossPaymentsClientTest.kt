@@ -193,4 +193,53 @@ class TossPaymentsClientTest : BehaviorSpec({
             }
         }
     }
+
+    // -- 결제 조회 --
+
+    given("결제 조회 시") {
+
+        `when`("Toss가 DONE 상태 응답을 반환하면") {
+            server.enqueue(
+                MockResponse()
+                    .addHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .setBody("""
+                        {
+                            "paymentKey": "toss_pk_123",
+                            "orderId": "STAYOPS-rsv-1-123",
+                            "status": "DONE",
+                            "method": "카드",
+                            "totalAmount": 200000,
+                            "approvedAt": "2026-04-01T12:00:00+09:00"
+                        }
+                    """.trimIndent())
+            )
+
+            val client = createClient()
+            val result = client.inquire("toss_pk_123")
+
+            then("PaymentInquiryResult로 변환하여 반환한다") {
+                result.paymentKey shouldBe "toss_pk_123"
+                result.orderId shouldBe "STAYOPS-rsv-1-123"
+                result.status shouldBe "DONE"
+                result.totalAmount shouldBe BigDecimal(200_000)
+            }
+        }
+
+        `when`("Toss가 에러를 반환하면") {
+            server.enqueue(
+                MockResponse()
+                    .setResponseCode(404)
+                    .addHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .setBody("""{"code": "INVALID_PAYMENT_KEY", "message": "유효하지 않은 paymentKey"}""")
+            )
+
+            val client = createClient()
+
+            then("InvalidRequest 예외가 발생한다") {
+                shouldThrow<PaymentGatewayException.InvalidRequest> {
+                    client.inquire("invalid_pk")
+                }
+            }
+        }
+    }
 })
