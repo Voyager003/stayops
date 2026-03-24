@@ -171,7 +171,15 @@ class BookingApplication(
             throw BusinessException("RESERVATION_EXPIRED", "결제 가능 시간이 만료되었습니다")
         }
 
-        // 4. 금액 검증 — 클라이언트가 보낸 금액과 DB 금액 비교
+        // 4. orderId 검증 — 클라이언트가 보낸 orderId와 DB orderId 비교
+        if (payment.orderId != orderId) {
+            throw BusinessException(
+                "ORDER_ID_MISMATCH",
+                "주문 ID가 일치하지 않습니다. 예상: ${payment.orderId}, 요청: $orderId"
+            )
+        }
+
+        // 5. 금액 검증 — 클라이언트가 보낸 금액과 DB 금액 비교
         if (payment.amount.amount.compareTo(amount) != 0) {
             throw BusinessException(
                 "AMOUNT_MISMATCH",
@@ -179,10 +187,10 @@ class BookingApplication(
             )
         }
 
-        // 4. Toss Payments 승인
+        // 6. Toss Payments 승인
         val confirmResult = paymentGateway.confirm(paymentKey, orderId, amount)
 
-        // 4. Payment 승인
+        // 7. Payment 승인
         val approvedPayment = paymentRepository.save(
             payment.approve(
                 paymentKey = confirmResult.paymentKey,
@@ -191,7 +199,7 @@ class BookingApplication(
             )
         )
 
-        // 5. Reservation 확정
+        // 8. Reservation 확정
         val confirmedReservation = reservationRepository.save(reservation.confirm())
 
         log.info("결제 승인: reservationId={}, paymentKey={}", reservationId, paymentKey)
