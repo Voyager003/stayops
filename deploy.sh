@@ -3,9 +3,6 @@ set -euo pipefail
 
 COMPOSE_FILE="docker-compose.prod.yml"
 
-echo "==> Pulling latest source..."
-git pull origin main
-
 echo "==> Pulling latest app image..."
 docker compose -f "$COMPOSE_FILE" pull app
 
