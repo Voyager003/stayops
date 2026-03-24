@@ -6,7 +6,6 @@ import com.stayops.payment.domain.service.PaymentGateway
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
 import java.math.BigDecimal
-import java.time.Instant
 import java.time.OffsetDateTime
 
 @Component
@@ -19,7 +18,8 @@ class TossPaymentsClient(
             .uri("/confirm")
             .body(TossConfirmRequest(paymentKey, orderId, amount))
             .retrieve()
-            .body(TossConfirmResponse::class.java)!!
+            .body(TossConfirmResponse::class.java)
+            ?: throw IllegalStateException("Toss confirm 응답이 null입니다")
 
         return PaymentConfirmResult(
             paymentKey = response.paymentKey,
@@ -34,7 +34,8 @@ class TossPaymentsClient(
             .uri("/$paymentKey/cancel")
             .body(TossCancelRequest(cancelReason))
             .retrieve()
-            .body(TossCancelResponse::class.java)!!
+            .body(TossCancelResponse::class.java)
+            ?: throw IllegalStateException("Toss cancel 응답이 null입니다")
 
         return PaymentCancelResult(paymentKey = response.paymentKey)
     }
