@@ -17,7 +17,7 @@ docker compose -f "$COMPOSE_FILE" ps
 
 echo "==> Health check (max 90s)..."
 for i in $(seq 1 30); do
-    if curl -so /dev/null -w "%{http_code}" http://localhost/ 2>&1 | grep -q "403\|200"; then
+    if curl -so /dev/null -w "%{http_code}" http://localhost/actuator/health 2>&1 | grep -q "200"; then
         echo "==> Health check passed"
         exit 0
     fi
