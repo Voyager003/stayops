@@ -64,9 +64,8 @@ class ChannelSyncApplication(
             try {
                 val channel = channelRepository.findByPropertyIdAndCode(processing.propertyId, processing.channelCode)
                 if (channel == null || channel.connectionInfo == null) {
-                    val completed = processing.complete()
-                    syncTaskRepository.save(completed)
-                    log.warn("채널 또는 connectionInfo 없음, 태스크 완료 처리: taskId={}", processing.id)
+                    syncTaskRepository.save(processing.skip("채널 또는 connectionInfo 없음"))
+                    log.warn("채널 또는 connectionInfo 없음, 태스크 건너뜀: taskId={}", processing.id)
                     return@forEach
                 }
 
@@ -77,9 +76,8 @@ class ChannelSyncApplication(
                 val externalCode = mapping?.findExternalCode(roomTypeId, com.stayops.channel.domain.model.MappingType.ROOM_TYPE)
 
                 if (externalCode == null) {
-                    val completed = processing.complete()
-                    syncTaskRepository.save(completed)
-                    log.warn("매핑 없음, 태스크 완료 처리: taskId={}, roomTypeId={}", processing.id, roomTypeId)
+                    syncTaskRepository.save(processing.skip("매핑 없음: roomTypeId=$roomTypeId"))
+                    log.warn("매핑 없음, 태스크 건너뜀: taskId={}, roomTypeId={}", processing.id, roomTypeId)
                     return@forEach
                 }
 

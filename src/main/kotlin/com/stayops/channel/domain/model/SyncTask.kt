@@ -40,6 +40,18 @@ data class SyncTask private constructor(
         )
     }
 
+    fun skip(reason: String): SyncTask {
+        check(status == SyncTaskStatus.IN_PROGRESS) {
+            "IN_PROGRESS 상태에서만 건너뛸 수 있습니다: $status"
+        }
+        return copy(
+            status = SyncTaskStatus.SKIPPED,
+            lastError = reason,
+            nextRetryAt = null,
+            updatedAt = Instant.now()
+        )
+    }
+
     fun fail(errorMessage: String): SyncTask {
         check(status == SyncTaskStatus.IN_PROGRESS) {
             "IN_PROGRESS 상태에서만 실패 처리할 수 있습니다: $status"

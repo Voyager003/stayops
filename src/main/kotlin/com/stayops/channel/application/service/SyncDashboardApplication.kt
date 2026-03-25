@@ -29,6 +29,7 @@ class SyncDashboardApplication(
                 status = channel.status,
                 pendingCount = counts[SyncTaskStatus.PENDING] ?: 0L,
                 completedCount = counts[SyncTaskStatus.COMPLETED] ?: 0L,
+                skippedCount = counts[SyncTaskStatus.SKIPPED] ?: 0L,
                 failedCount = counts[SyncTaskStatus.FAILED] ?: 0L
             )
         }
@@ -36,6 +37,7 @@ class SyncDashboardApplication(
         val summary = SyncSummary(
             totalPending = channelStatuses.sumOf { it.pendingCount },
             totalCompleted = channelStatuses.sumOf { it.completedCount },
+            totalSkipped = channelStatuses.sumOf { it.skippedCount },
             totalFailed = channelStatuses.sumOf { it.failedCount }
         )
 

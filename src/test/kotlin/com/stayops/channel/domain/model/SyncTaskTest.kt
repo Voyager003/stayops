@@ -78,6 +78,26 @@ class SyncTaskTest : BehaviorSpec({
         }
     }
 
+    // -- 상태 전이: IN_PROGRESS → SKIPPED --
+
+    given("IN_PROGRESS 상태의 SyncTask에서 채널/매핑이 없을 때") {
+        val task = pendingTask().startProcessing()
+
+        `when`("skip() 호출 시") {
+            val skipped = task.skip("채널 또는 connectionInfo 없음")
+
+            then("상태가 SKIPPED로 변경된다") {
+                skipped.status shouldBe SyncTaskStatus.SKIPPED
+            }
+            then("사유가 lastError에 기록된다") {
+                skipped.lastError shouldBe "채널 또는 connectionInfo 없음"
+            }
+            then("nextRetryAt이 null이다") {
+                skipped.nextRetryAt shouldBe null
+            }
+        }
+    }
+
     // -- 상태 전이: IN_PROGRESS → fail --
 
     given("IN_PROGRESS 상태에서 실패 시") {
