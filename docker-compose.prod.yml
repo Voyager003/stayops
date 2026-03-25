@@ -57,6 +57,16 @@ services:
     networks:
       - stayops-net
 
+  mock-ota:
+    image: ghcr.io/voyager003/stayops-mock-ota:latest
+    environment:
+      - MOCK_OTA_PMS_WEBHOOK_URL=http://app:8080/api/v1/properties/{propertyId}/channels/webhook/{channelCode}
+    depends_on:
+      - app
+    restart: unless-stopped
+    networks:
+      - stayops-net
+
   nginx:
     image: nginx:alpine
     ports:
