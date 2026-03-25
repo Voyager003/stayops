@@ -118,7 +118,7 @@ class ChannelApi(
 
     // -- Mapping API --
 
-    @GetMapping("/{channelCode}/mappings")
+    @GetMapping("/code/{channelCode}/mappings")
     fun getMappings(
         @PathVariable propertyId: String,
         @PathVariable channelCode: String
@@ -131,7 +131,7 @@ class ChannelApi(
         return ResponseEntity.ok(ChannelMappingResponse.from(mapping))
     }
 
-    @PostMapping("/{channelCode}/mappings")
+    @PostMapping("/code/{channelCode}/mappings")
     fun addMapping(
         @PathVariable propertyId: String,
         @PathVariable channelCode: String,
@@ -147,7 +147,7 @@ class ChannelApi(
         return ResponseEntity.status(HttpStatus.CREATED).body(ChannelMappingResponse.from(mapping))
     }
 
-    @DeleteMapping("/{channelCode}/mappings/{internalId}")
+    @DeleteMapping("/code/{channelCode}/mappings/{internalId}")
     fun removeMapping(
         @PathVariable propertyId: String,
         @PathVariable channelCode: String,
