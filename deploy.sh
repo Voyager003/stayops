@@ -9,6 +9,9 @@ docker compose -f "$COMPOSE_FILE" pull app mock-ota
 echo "==> Restarting app and mock-ota services..."
 docker compose -f "$COMPOSE_FILE" up -d --no-deps app mock-ota
 
+echo "==> Reloading nginx config..."
+docker compose -f "$COMPOSE_FILE" exec nginx nginx -s reload
+
 echo "==> Cleaning up old images..."
 docker image prune -f
 
