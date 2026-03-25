@@ -1,13 +1,14 @@
 package com.stayops.channel.infrastructure.webhook
 
+import com.stayops.channel.domain.service.SignatureVerifier
 import org.springframework.stereotype.Component
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
 @Component
-class HmacSignatureVerifier {
+class HmacSignatureVerifier : SignatureVerifier {
 
-    fun verify(secret: String, payload: String, signature: String): Boolean {
+    override fun verify(secret: String, payload: String, signature: String): Boolean {
         val prefix = "sha256="
         if (!signature.startsWith(prefix)) return false
 

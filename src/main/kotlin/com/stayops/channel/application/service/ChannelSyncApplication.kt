@@ -8,7 +8,7 @@ import com.stayops.channel.domain.model.SyncTaskType
 import com.stayops.channel.domain.repository.ChannelMappingRepository
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.repository.SyncTaskRepository
-import com.stayops.channel.infrastructure.external.ChannelAdapterRegistry
+import com.stayops.channel.domain.service.ChannelAdapterProvider
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -21,7 +21,7 @@ class ChannelSyncApplication(
     private val channelRepository: ChannelRepository,
     private val channelMappingRepository: ChannelMappingRepository,
     private val syncTaskRepository: SyncTaskRepository,
-    private val adapterRegistry: ChannelAdapterRegistry
+    private val adapterProvider: ChannelAdapterProvider
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -83,7 +83,7 @@ class ChannelSyncApplication(
                     return@forEach
                 }
 
-                val adapter = adapterRegistry.getAdapter(processing.channelCode)
+                val adapter = adapterProvider.getAdapter(processing.channelCode)
                 val result = adapter.pushAvailability(
                     endpoint = channel.connectionInfo!!.apiEndpoint,
                     apiKey = channel.connectionInfo!!.apiKey,

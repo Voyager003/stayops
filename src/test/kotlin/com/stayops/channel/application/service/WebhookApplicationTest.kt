@@ -4,7 +4,7 @@ import com.stayops.channel.domain.model.*
 import com.stayops.channel.domain.repository.ChannelMappingRepository
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.repository.ProcessedWebhookEventRepository
-import com.stayops.channel.infrastructure.webhook.HmacSignatureVerifier
+import com.stayops.channel.domain.service.SignatureVerifier
 import com.stayops.shared.exception.BusinessException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -17,14 +17,14 @@ class WebhookApplicationTest : BehaviorSpec({
     val channelRepository = mockk<ChannelRepository>()
     val mappingRepository = mockk<ChannelMappingRepository>()
     val processedEventRepository = mockk<ProcessedWebhookEventRepository>()
-    val hmacVerifier = mockk<HmacSignatureVerifier>()
+    val signatureVerifier = mockk<SignatureVerifier>()
     val channelSyncApplication = mockk<ChannelSyncApplication>()
 
     val sut = WebhookApplication(
         channelRepository = channelRepository,
         channelMappingRepository = mappingRepository,
         processedEventRepository = processedEventRepository,
-        hmacVerifier = hmacVerifier,
+        signatureVerifier = signatureVerifier,
         channelSyncApplication = channelSyncApplication
     )
 
@@ -47,7 +47,7 @@ class WebhookApplicationTest : BehaviorSpec({
             then("이벤트가 처리되고 ProcessedWebhookEvent가 저장된다") {
                 clearAllMocks()
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel
-                every { hmacVerifier.verify("webhook-secret", any(), "sha256=valid") } returns true
+                every { signatureVerifier.verify("webhook-secret", any(), "sha256=valid") } returns true
                 every { processedEventRepository.existsByEventId("evt-1") } returns false
                 every { mappingRepository.findByPropertyIdAndChannelCode("prop-1", "AGODA") } returns null
                 every { processedEventRepository.save(any()) } answers { firstArg() }
@@ -72,7 +72,7 @@ class WebhookApplicationTest : BehaviorSpec({
             then("이벤트를 무시한다") {
                 clearAllMocks()
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel
-                every { hmacVerifier.verify(any(), any(), any()) } returns true
+                every { signatureVerifier.verify(any(), any(), any()) } returns true
                 every { processedEventRepository.existsByEventId("evt-dup") } returns true
 
                 sut.handleWebhook(
@@ -95,7 +95,7 @@ class WebhookApplicationTest : BehaviorSpec({
             then("BusinessException이 발생한다") {
                 clearAllMocks()
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel
-                every { hmacVerifier.verify(any(), any(), any()) } returns false
+                every { signatureVerifier.verify(any(), any(), any()) } returns false
 
                 val exception = shouldThrow<BusinessException> {
                     sut.handleWebhook(

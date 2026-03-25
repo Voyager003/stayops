@@ -5,7 +5,7 @@ import com.stayops.channel.domain.model.ProcessedWebhookEvent
 import com.stayops.channel.domain.repository.ChannelMappingRepository
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.repository.ProcessedWebhookEventRepository
-import com.stayops.channel.infrastructure.webhook.HmacSignatureVerifier
+import com.stayops.channel.domain.service.SignatureVerifier
 import com.stayops.shared.exception.BusinessException
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -16,7 +16,7 @@ class WebhookApplication(
     private val channelRepository: ChannelRepository,
     private val channelMappingRepository: ChannelMappingRepository,
     private val processedEventRepository: ProcessedWebhookEventRepository,
-    private val hmacVerifier: HmacSignatureVerifier,
+    private val signatureVerifier: SignatureVerifier,
     private val channelSyncApplication: ChannelSyncApplication
 ) {
 
@@ -37,7 +37,7 @@ class WebhookApplication(
         val webhookSecret = channel.connectionInfo?.webhookSecret
             ?: throw BusinessException(code = "WEBHOOK_SECRET_MISSING", message = "webhookSecret이 설정되지 않았습니다: $channelCode")
 
-        if (!hmacVerifier.verify(webhookSecret, rawBody, signature)) {
+        if (!signatureVerifier.verify(webhookSecret, rawBody, signature)) {
             throw BusinessException(code = "INVALID_SIGNATURE", message = "Webhook 서명이 유효하지 않습니다")
         }
 
