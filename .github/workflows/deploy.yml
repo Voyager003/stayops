@@ -59,6 +59,20 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Set mock-ota image name
+        run: echo "MOCK_OTA_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}-mock-ota" >> "$GITHUB_ENV"
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: stayops-mock-ota/Dockerfile
+          push: true
+          tags: |
+            ${{ env.MOCK_OTA_IMAGE }}:latest
+            ${{ env.MOCK_OTA_IMAGE }}:sha-${{ github.sha }}
+          cache-from: type=gha,scope=mock-ota
+          cache-to: type=gha,mode=max,scope=mock-ota
+
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
@@ -68,4 +82,4 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          script: cd ~/stayops && ./deploy.sh
+          script: cd ~/stayops && git pull origin main && ./deploy.sh
