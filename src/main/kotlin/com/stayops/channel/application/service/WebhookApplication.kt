@@ -8,6 +8,7 @@ import com.stayops.channel.domain.repository.ProcessedWebhookEventRepository
 import com.stayops.channel.domain.service.SignatureVerifier
 import com.stayops.shared.exception.BusinessException
 import org.slf4j.LoggerFactory
+import org.springframework.dao.DuplicateKeyException
 import org.springframework.stereotype.Service
 import java.util.UUID
 
@@ -41,8 +42,17 @@ class WebhookApplication(
             throw BusinessException(code = "INVALID_SIGNATURE", message = "Webhook 서명이 유효하지 않습니다")
         }
 
-        if (processedEventRepository.existsByEventId(eventId)) {
-            log.info("중복 이벤트 무시: eventId={}", eventId)
+        try {
+            processedEventRepository.save(
+                ProcessedWebhookEvent(
+                    id = UUID.randomUUID().toString(),
+                    eventId = eventId,
+                    channelCode = channelCode,
+                    propertyId = propertyId
+                )
+            )
+        } catch (e: DuplicateKeyException) {
+            log.info("중복 이벤트 (동시 요청): eventId={}", eventId)
             return
         }
 
@@ -68,15 +78,6 @@ class WebhookApplication(
                 log.warn("알 수 없는 이벤트 타입: {}", eventType)
             }
         }
-
-        processedEventRepository.save(
-            ProcessedWebhookEvent(
-                id = UUID.randomUUID().toString(),
-                eventId = eventId,
-                channelCode = channelCode,
-                propertyId = propertyId
-            )
-        )
 
         log.info("Webhook 처리 완료: eventId={}", eventId)
     }
