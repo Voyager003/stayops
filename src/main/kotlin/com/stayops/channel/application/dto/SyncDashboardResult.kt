@@ -13,11 +13,13 @@ data class ChannelSyncStatus(
     val status: ChannelStatus,
     val pendingCount: Long,
     val completedCount: Long,
+    val skippedCount: Long,
     val failedCount: Long
 )
 
 data class SyncSummary(
     val totalPending: Long,
     val totalCompleted: Long,
+    val totalSkipped: Long,
     val totalFailed: Long
 )

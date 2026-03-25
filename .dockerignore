@@ -6,7 +6,6 @@
 .claude
 build/
 stayops-mock-ota/build/
-stayops-mock-ota/src/
 docs/
 *.md
 *.iml

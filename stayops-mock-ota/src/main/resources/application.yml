@@ -1,5 +1,10 @@
 server:
   port: 8081
 
+spring:
+  threads:
+    virtual:
+      enabled: true
+
 mock-ota:
-  pms-webhook-url: http://localhost:8080/api/v1/properties/{propertyId}/channels/webhook/{channelCode}
+  pms-webhook-url: ${MOCK_OTA_PMS_WEBHOOK_URL:http://localhost:8080/api/v1/properties/{propertyId}/channels/webhook/{channelCode}}

@@ -16,12 +16,14 @@ data class SyncDashboardResponse(
                     status = it.status,
                     pendingCount = it.pendingCount,
                     completedCount = it.completedCount,
+                    skippedCount = it.skippedCount,
                     failedCount = it.failedCount
                 )
             },
             summary = SyncSummaryResponse(
                 totalPending = result.summary.totalPending,
                 totalCompleted = result.summary.totalCompleted,
+                totalSkipped = result.summary.totalSkipped,
                 totalFailed = result.summary.totalFailed
             )
         )
@@ -34,11 +36,13 @@ data class ChannelSyncStatusResponse(
     val status: ChannelStatus,
     val pendingCount: Long,
     val completedCount: Long,
+    val skippedCount: Long,
     val failedCount: Long
 )
 
 data class SyncSummaryResponse(
     val totalPending: Long,
     val totalCompleted: Long,
+    val totalSkipped: Long,
     val totalFailed: Long
 )

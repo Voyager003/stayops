@@ -4,5 +4,6 @@ enum class SyncTaskStatus {
     PENDING,
     IN_PROGRESS,
     COMPLETED,
+    SKIPPED,
     FAILED
 }

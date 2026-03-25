@@ -8,7 +8,7 @@ import com.stayops.channel.domain.model.SyncTaskType
 import com.stayops.channel.domain.repository.ChannelMappingRepository
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.repository.SyncTaskRepository
-import com.stayops.channel.infrastructure.external.ChannelAdapterRegistry
+import com.stayops.channel.domain.service.ChannelAdapterProvider
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -21,7 +21,7 @@ class ChannelSyncApplication(
     private val channelRepository: ChannelRepository,
     private val channelMappingRepository: ChannelMappingRepository,
     private val syncTaskRepository: SyncTaskRepository,
-    private val adapterRegistry: ChannelAdapterRegistry
+    private val adapterProvider: ChannelAdapterProvider
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -64,9 +64,8 @@ class ChannelSyncApplication(
             try {
                 val channel = channelRepository.findByPropertyIdAndCode(processing.propertyId, processing.channelCode)
                 if (channel == null || channel.connectionInfo == null) {
-                    val completed = processing.complete()
-                    syncTaskRepository.save(completed)
-                    log.warn("채널 또는 connectionInfo 없음, 태스크 완료 처리: taskId={}", processing.id)
+                    syncTaskRepository.save(processing.skip("채널 또는 connectionInfo 없음"))
+                    log.warn("채널 또는 connectionInfo 없음, 태스크 건너뜀: taskId={}", processing.id)
                     return@forEach
                 }
 
@@ -77,13 +76,12 @@ class ChannelSyncApplication(
                 val externalCode = mapping?.findExternalCode(roomTypeId, com.stayops.channel.domain.model.MappingType.ROOM_TYPE)
 
                 if (externalCode == null) {
-                    val completed = processing.complete()
-                    syncTaskRepository.save(completed)
-                    log.warn("매핑 없음, 태스크 완료 처리: taskId={}, roomTypeId={}", processing.id, roomTypeId)
+                    syncTaskRepository.save(processing.skip("매핑 없음: roomTypeId=$roomTypeId"))
+                    log.warn("매핑 없음, 태스크 건너뜀: taskId={}, roomTypeId={}", processing.id, roomTypeId)
                     return@forEach
                 }
 
-                val adapter = adapterRegistry.getAdapter(processing.channelCode)
+                val adapter = adapterProvider.getAdapter(processing.channelCode)
                 val result = adapter.pushAvailability(
                     endpoint = channel.connectionInfo!!.apiEndpoint,
                     apiKey = channel.connectionInfo!!.apiKey,
@@ -106,9 +104,12 @@ class ChannelSyncApplication(
         }
     }
 
-    fun retryTask(taskId: String) {
+    fun retryTask(propertyId: String, taskId: String) {
         val task = syncTaskRepository.findById(taskId)
             ?: throw NotFoundException(code = "SYNC_TASK_NOT_FOUND", message = "SyncTask를 찾을 수 없습니다: $taskId")
+        if (task.propertyId != propertyId) {
+            throw NotFoundException(code = "SYNC_TASK_NOT_FOUND", message = "SyncTask를 찾을 수 없습니다: $taskId")
+        }
         syncTaskRepository.save(task.retry())
     }
 }

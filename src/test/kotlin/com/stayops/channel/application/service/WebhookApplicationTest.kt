@@ -4,12 +4,13 @@ import com.stayops.channel.domain.model.*
 import com.stayops.channel.domain.repository.ChannelMappingRepository
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.repository.ProcessedWebhookEventRepository
-import com.stayops.channel.infrastructure.webhook.HmacSignatureVerifier
+import com.stayops.channel.domain.service.SignatureVerifier
 import com.stayops.shared.exception.BusinessException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.*
+import org.springframework.dao.DuplicateKeyException
 import java.math.BigDecimal
 
 class WebhookApplicationTest : BehaviorSpec({
@@ -17,14 +18,14 @@ class WebhookApplicationTest : BehaviorSpec({
     val channelRepository = mockk<ChannelRepository>()
     val mappingRepository = mockk<ChannelMappingRepository>()
     val processedEventRepository = mockk<ProcessedWebhookEventRepository>()
-    val hmacVerifier = mockk<HmacSignatureVerifier>()
+    val signatureVerifier = mockk<SignatureVerifier>()
     val channelSyncApplication = mockk<ChannelSyncApplication>()
 
     val sut = WebhookApplication(
         channelRepository = channelRepository,
         channelMappingRepository = mappingRepository,
         processedEventRepository = processedEventRepository,
-        hmacVerifier = hmacVerifier,
+        signatureVerifier = signatureVerifier,
         channelSyncApplication = channelSyncApplication
     )
 
@@ -44,13 +45,12 @@ class WebhookApplicationTest : BehaviorSpec({
 
     given("유효한 Webhook 수신 시") {
         `when`("서명 검증 통과하고 신규 이벤트이면") {
-            then("이벤트가 처리되고 ProcessedWebhookEvent가 저장된다") {
+            then("ProcessedWebhookEvent 저장 후 이벤트가 처리된다") {
                 clearAllMocks()
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel
-                every { hmacVerifier.verify("webhook-secret", any(), "sha256=valid") } returns true
-                every { processedEventRepository.existsByEventId("evt-1") } returns false
-                every { mappingRepository.findByPropertyIdAndChannelCode("prop-1", "AGODA") } returns null
+                every { signatureVerifier.verify("webhook-secret", any(), "sha256=valid") } returns true
                 every { processedEventRepository.save(any()) } answers { firstArg() }
+                every { mappingRepository.findByPropertyIdAndChannelCode("prop-1", "AGODA") } returns null
 
                 sut.handleWebhook(
                     propertyId = "prop-1",
@@ -63,17 +63,18 @@ class WebhookApplicationTest : BehaviorSpec({
                 )
 
                 verify { processedEventRepository.save(match { it.eventId == "evt-1" }) }
+                verify { mappingRepository.findByPropertyIdAndChannelCode("prop-1", "AGODA") }
             }
         }
     }
 
     given("중복 이벤트 수신 시") {
-        `when`("이미 처리된 eventId이면") {
-            then("이벤트를 무시한다") {
+        `when`("save에서 DuplicateKeyException이 발생하면") {
+            then("이벤트 처리를 건너뛴다") {
                 clearAllMocks()
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel
-                every { hmacVerifier.verify(any(), any(), any()) } returns true
-                every { processedEventRepository.existsByEventId("evt-dup") } returns true
+                every { signatureVerifier.verify(any(), any(), any()) } returns true
+                every { processedEventRepository.save(any()) } throws DuplicateKeyException("duplicate eventId")
 
                 sut.handleWebhook(
                     propertyId = "prop-1",
@@ -85,7 +86,7 @@ class WebhookApplicationTest : BehaviorSpec({
                     payload = emptyMap()
                 )
 
-                verify(exactly = 0) { processedEventRepository.save(any()) }
+                verify(exactly = 0) { mappingRepository.findByPropertyIdAndChannelCode(any(), any()) }
             }
         }
     }
@@ -95,7 +96,7 @@ class WebhookApplicationTest : BehaviorSpec({
             then("BusinessException이 발생한다") {
                 clearAllMocks()
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel
-                every { hmacVerifier.verify(any(), any(), any()) } returns false
+                every { signatureVerifier.verify(any(), any(), any()) } returns false
 
                 val exception = shouldThrow<BusinessException> {
                     sut.handleWebhook(

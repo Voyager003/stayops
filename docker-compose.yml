@@ -25,6 +25,15 @@ services:
     volumes:
       - redis_data:/data
 
+  mock-ota:
+    build:
+      context: .
+      dockerfile: stayops-mock-ota/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      MOCK_OTA_PMS_WEBHOOK_URL: http://app:8080/api/v1/properties/{propertyId}/channels/webhook/{channelCode}
+
 volumes:
   mongodb_data:
   redis_data:

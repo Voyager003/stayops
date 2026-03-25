@@ -1,6 +1,7 @@
 package com.stayops.channel.api
 
 import com.stayops.channel.application.service.WebhookApplication
+import com.stayops.shared.exception.BusinessException
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
@@ -18,8 +19,12 @@ class ChannelWebhookApi(
         @RequestBody rawBody: String
     ): ResponseEntity<Map<String, String>> {
         val payload = parsePayload(rawBody)
-        val eventId = payload["eventId"]?.toString() ?: ""
-        val eventType = payload["eventType"]?.toString() ?: ""
+        val eventId = payload["eventId"]?.toString()
+            ?.takeIf { it.isNotBlank() }
+            ?: throw BusinessException(code = "INVALID_WEBHOOK", message = "eventId는 필수입니다")
+        val eventType = payload["eventType"]?.toString()
+            ?.takeIf { it.isNotBlank() }
+            ?: throw BusinessException(code = "INVALID_WEBHOOK", message = "eventType은 필수입니다")
 
         webhookApplication.handleWebhook(
             propertyId = propertyId,

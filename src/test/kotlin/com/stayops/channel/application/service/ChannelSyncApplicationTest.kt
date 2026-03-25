@@ -4,9 +4,9 @@ import com.stayops.channel.domain.model.*
 import com.stayops.channel.domain.repository.ChannelMappingRepository
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.repository.SyncTaskRepository
+import com.stayops.channel.domain.service.ChannelAdapterProvider
+import com.stayops.channel.domain.service.ChannelSyncAdapter
 import com.stayops.channel.domain.service.SyncResult
-import com.stayops.channel.infrastructure.external.ChannelAdapterRegistry
-import com.stayops.channel.infrastructure.external.HttpChannelSyncAdapter
 import io.kotest.core.spec.style.BehaviorSpec
 import io.mockk.*
 import java.math.BigDecimal
@@ -17,14 +17,14 @@ class ChannelSyncApplicationTest : BehaviorSpec({
     val channelRepository = mockk<ChannelRepository>()
     val mappingRepository = mockk<ChannelMappingRepository>()
     val syncTaskRepository = mockk<SyncTaskRepository>()
-    val httpAdapter = mockk<HttpChannelSyncAdapter>()
-    val adapterRegistry = ChannelAdapterRegistry(httpAdapter)
+    val adapterProvider = mockk<ChannelAdapterProvider>()
+    val syncAdapter = mockk<ChannelSyncAdapter>()
 
     val sut = ChannelSyncApplication(
         channelRepository = channelRepository,
         channelMappingRepository = mappingRepository,
         syncTaskRepository = syncTaskRepository,
-        adapterRegistry = adapterRegistry
+        adapterProvider = adapterProvider
     )
 
     fun otaChannel(code: String = "AGODA") = Channel.createOta(
@@ -81,7 +81,8 @@ class ChannelSyncApplicationTest : BehaviorSpec({
                 every { syncTaskRepository.save(any()) } answers { firstArg() }
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel()
                 every { mappingRepository.findByPropertyIdAndChannelCode("prop-1", "AGODA") } returns sampleMapping()
-                every { httpAdapter.pushAvailability(any(), any(), any(), any(), any()) } returns SyncResult(success = true)
+                every { adapterProvider.getAdapter("AGODA") } returns syncAdapter
+                every { syncAdapter.pushAvailability(any(), any(), any(), any(), any()) } returns SyncResult(success = true)
 
                 sut.processPendingTasks()
 
@@ -90,7 +91,7 @@ class ChannelSyncApplicationTest : BehaviorSpec({
                     syncTaskRepository.save(match { it.status == SyncTaskStatus.COMPLETED })
                 }
                 verify {
-                    httpAdapter.pushAvailability(
+                    syncAdapter.pushAvailability(
                         endpoint = "https://mock-ota:8081/api/v1/ari/availability",
                         apiKey = "test-key",
                         externalRoomTypeCode = "AGD-DELUXE",
@@ -112,7 +113,8 @@ class ChannelSyncApplicationTest : BehaviorSpec({
                 every { syncTaskRepository.save(any()) } answers { firstArg() }
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel()
                 every { mappingRepository.findByPropertyIdAndChannelCode("prop-1", "AGODA") } returns sampleMapping()
-                every { httpAdapter.pushAvailability(any(), any(), any(), any(), any()) } returns
+                every { adapterProvider.getAdapter("AGODA") } returns syncAdapter
+                every { syncAdapter.pushAvailability(any(), any(), any(), any(), any()) } returns
                         SyncResult(success = false, errorMessage = "Connection timeout")
 
                 sut.processPendingTasks()
@@ -120,6 +122,22 @@ class ChannelSyncApplicationTest : BehaviorSpec({
                 verify {
                     syncTaskRepository.save(match { it.status == SyncTaskStatus.IN_PROGRESS })
                     syncTaskRepository.save(match { it.lastError == "Connection timeout" })
+                }
+            }
+        }
+    }
+
+    // -- retryTask: 테넌트 격리 --
+
+    given("다른 숙소의 taskId로 재시도 요청 시") {
+        `when`("propertyId가 일치하지 않으면") {
+            then("NotFoundException이 발생한다") {
+                clearAllMocks()
+                val task = sampleTask() // propertyId = "prop-1"
+                every { syncTaskRepository.findById("task-1") } returns task.startProcessing().fail("error")
+
+                io.kotest.assertions.throwables.shouldThrow<com.stayops.shared.exception.NotFoundException> {
+                    sut.retryTask("other-property", "task-1")
                 }
             }
         }

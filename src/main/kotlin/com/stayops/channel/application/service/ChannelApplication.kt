@@ -36,9 +36,14 @@ class ChannelApplication(
     fun findChannels(propertyId: String): List<Channel> =
         channelRepository.findByPropertyId(propertyId)
 
-    fun findChannel(propertyId: String, channelId: String): Channel =
-        channelRepository.findById(channelId)
+    fun findChannel(propertyId: String, channelId: String): Channel {
+        val channel = channelRepository.findById(channelId)
             ?: throw NotFoundException(code = "CHANNEL_NOT_FOUND", message = "채널을 찾을 수 없습니다: $channelId")
+        if (channel.propertyId != propertyId) {
+            throw NotFoundException(code = "CHANNEL_NOT_FOUND", message = "채널을 찾을 수 없습니다: $channelId")
+        }
+        return channel
+    }
 
     fun updateChannel(
         propertyId: String,
