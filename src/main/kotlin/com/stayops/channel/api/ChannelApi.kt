@@ -6,6 +6,7 @@ import com.stayops.shared.security.PropertyAccessChecker
 import com.stayops.channel.domain.model.ChannelConnectionInfo
 import com.stayops.channel.domain.model.MappingEntry
 import com.stayops.channel.domain.model.MappingType
+import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -20,7 +21,7 @@ class ChannelApi(
     @PostMapping
     fun createChannel(
         @PathVariable propertyId: String,
-        @RequestBody request: CreateChannelRequest
+        @Valid @RequestBody request: CreateChannelRequest
     ): ResponseEntity<ChannelResponse> {
         propertyAccessChecker.requireAccess(propertyId)
         val channel = channelApplication.createOtaChannel(
@@ -59,7 +60,7 @@ class ChannelApi(
     fun updateChannel(
         @PathVariable propertyId: String,
         @PathVariable channelId: String,
-        @RequestBody request: UpdateChannelRequest
+        @Valid @RequestBody request: UpdateChannelRequest
     ): ResponseEntity<ChannelResponse> {
         propertyAccessChecker.requireAccess(propertyId)
         val channel = channelApplication.updateChannel(
@@ -134,7 +135,7 @@ class ChannelApi(
     fun addMapping(
         @PathVariable propertyId: String,
         @PathVariable channelCode: String,
-        @RequestBody request: CreateMappingRequest
+        @Valid @RequestBody request: CreateMappingRequest
     ): ResponseEntity<ChannelMappingResponse> {
         propertyAccessChecker.requireAccess(propertyId)
         val entry = MappingEntry(
