@@ -126,4 +126,20 @@ class ChannelSyncApplicationTest : BehaviorSpec({
             }
         }
     }
+
+    // -- retryTask: 테넌트 격리 --
+
+    given("다른 숙소의 taskId로 재시도 요청 시") {
+        `when`("propertyId가 일치하지 않으면") {
+            then("NotFoundException이 발생한다") {
+                clearAllMocks()
+                val task = sampleTask() // propertyId = "prop-1"
+                every { syncTaskRepository.findById("task-1") } returns task.startProcessing().fail("error")
+
+                io.kotest.assertions.throwables.shouldThrow<com.stayops.shared.exception.NotFoundException> {
+                    sut.retryTask("other-property", "task-1")
+                }
+            }
+        }
+    }
 })

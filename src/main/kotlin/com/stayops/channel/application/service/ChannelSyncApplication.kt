@@ -106,9 +106,12 @@ class ChannelSyncApplication(
         }
     }
 
-    fun retryTask(taskId: String) {
+    fun retryTask(propertyId: String, taskId: String) {
         val task = syncTaskRepository.findById(taskId)
             ?: throw NotFoundException(code = "SYNC_TASK_NOT_FOUND", message = "SyncTask를 찾을 수 없습니다: $taskId")
+        if (task.propertyId != propertyId) {
+            throw NotFoundException(code = "SYNC_TASK_NOT_FOUND", message = "SyncTask를 찾을 수 없습니다: $taskId")
+        }
         syncTaskRepository.save(task.retry())
     }
 }

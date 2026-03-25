@@ -77,6 +77,19 @@ class ChannelApplicationTest : BehaviorSpec({
         }
     }
 
+    given("채널 조회 시") {
+        `when`("다른 숙소의 channelId로 조회하면") {
+            then("NotFoundException이 발생한다 (테넌트 격리)") {
+                clearAllMocks()
+                every { channelRepository.findById("ch-1") } returns otaChannel()
+
+                shouldThrow<NotFoundException> {
+                    sut.findChannel("other-property", "ch-1")
+                }
+            }
+        }
+    }
+
     // -- activateChannel --
 
     given("비활성 채널 활성화 시") {

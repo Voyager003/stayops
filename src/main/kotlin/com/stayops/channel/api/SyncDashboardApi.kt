@@ -41,7 +41,7 @@ class SyncDashboardApi(
         @PathVariable taskId: String
     ): ResponseEntity<Map<String, String>> {
         propertyAccessChecker.requireAccess(propertyId)
-        channelSyncApplication.retryTask(taskId)
+        channelSyncApplication.retryTask(propertyId, taskId)
         return ResponseEntity.ok(mapOf("status" to "retried", "taskId" to taskId))
     }
 
@@ -49,7 +49,7 @@ class SyncDashboardApi(
     fun retryAllFailed(@PathVariable propertyId: String): ResponseEntity<Map<String, Any>> {
         propertyAccessChecker.requireAccess(propertyId)
         val failedTasks = syncDashboardApplication.getSyncTasks(propertyId, SyncTaskStatus.FAILED, null)
-        failedTasks.forEach { channelSyncApplication.retryTask(it.id) }
+        failedTasks.forEach { channelSyncApplication.retryTask(propertyId, it.id) }
         return ResponseEntity.ok(mapOf("status" to "retried", "count" to failedTasks.size))
     }
 }
