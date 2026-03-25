@@ -6,8 +6,11 @@ COMPOSE_FILE="docker-compose.prod.yml"
 echo "==> Pulling latest images..."
 docker compose -f "$COMPOSE_FILE" pull app mock-ota
 
-echo "==> Restarting app and mock-ota services..."
-docker compose -f "$COMPOSE_FILE" up -d --no-deps app mock-ota
+echo "==> Restarting services..."
+docker compose -f "$COMPOSE_FILE" up -d
+
+echo "==> Validating nginx config..."
+docker compose -f "$COMPOSE_FILE" exec nginx nginx -t
 
 echo "==> Reloading nginx config..."
 docker compose -f "$COMPOSE_FILE" exec nginx nginx -s reload
