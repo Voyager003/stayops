@@ -10,6 +10,7 @@ import com.stayops.reservation.domain.event.ReservationCancelled
 import com.stayops.reservation.domain.event.ReservationCheckedOut
 import com.stayops.reservation.domain.event.ReservationCreated
 import com.stayops.reservation.domain.model.*
+import com.stayops.shared.domain.PagedResult
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.model.RoomStatus
 import com.stayops.room.domain.repository.RoomRepository
@@ -128,6 +129,13 @@ class ReservationApplication(
 
     fun getReservationsByStatus(propertyId: String, status: ReservationStatus): List<Reservation> =
         reservationRepository.findByPropertyIdAndStatus(propertyId, status)
+
+    fun searchReservations(
+        propertyId: String,
+        criteria: ReservationSearchCriteria,
+        page: Int,
+        size: Int
+    ): PagedResult<Reservation> = reservationRepository.search(propertyId, criteria, page, size)
 
     fun confirmReservation(propertyId: String, reservationId: String): Reservation {
         val reservation = getReservation(propertyId, reservationId)

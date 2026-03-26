@@ -1,8 +1,13 @@
 package com.stayops.reservation.infrastructure.persistence
 
+import com.stayops.reservation.domain.model.DateType
 import com.stayops.reservation.domain.model.Reservation
+import com.stayops.reservation.domain.model.ReservationSearchCriteria
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
+import com.stayops.shared.domain.PagedResult
+import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Sort
 import jakarta.annotation.PostConstruct
 import org.bson.Document
 import org.springframework.data.mongodb.core.MongoTemplate
@@ -84,6 +89,64 @@ class MongoReservationRepository(
             )
         )
         return mongoTemplate.find(query, ReservationDocument::class.java).map { it.toDomain() }
+    }
+
+    override fun search(
+        propertyId: String,
+        criteria: ReservationSearchCriteria,
+        page: Int,
+        size: Int
+    ): PagedResult<Reservation> {
+        val criteriaList = mutableListOf(Criteria.where("propertyId").`is`(propertyId))
+
+        criteria.statuses?.takeIf { it.isNotEmpty() }?.let {
+            criteriaList.add(Criteria.where("status").`in`(it.map { s -> s.name }))
+        }
+
+        criteria.roomTypeId?.let {
+            criteriaList.add(Criteria.where("roomTypeId").`is`(it))
+        }
+
+        criteria.channelCodes?.takeIf { it.isNotEmpty() }?.let {
+            criteriaList.add(Criteria.where("channel.channelCode").`in`(it))
+        }
+
+        if (criteria.startDate != null && criteria.endDate != null) {
+            val dateField = when (criteria.dateType ?: DateType.CHECK_IN) {
+                DateType.CHECK_IN -> "dateRange.checkIn"
+                DateType.CHECK_OUT -> "dateRange.checkOut"
+                DateType.CREATED -> "createdAt"
+            }
+            if (dateField == "createdAt") {
+                val startInstant = criteria.startDate.atStartOfDay(java.time.ZoneId.of("Asia/Seoul")).toInstant()
+                val endInstant = criteria.endDate.plusDays(1).atStartOfDay(java.time.ZoneId.of("Asia/Seoul")).toInstant()
+                criteriaList.add(Criteria.where(dateField).gte(startInstant).lt(endInstant))
+            } else {
+                criteriaList.add(Criteria.where(dateField).gte(criteria.startDate.toString()).lte(criteria.endDate.toString()))
+            }
+        }
+
+        criteria.guestName?.takeIf { it.isNotBlank() }?.let {
+            val escaped = java.util.regex.Pattern.quote(it)
+            criteriaList.add(Criteria.where("guestInfo.name").regex("^$escaped", "i"))
+        }
+
+        val query = Query(Criteria().andOperator(*criteriaList.toTypedArray()))
+        val totalElements = mongoTemplate.count(query, ReservationDocument::class.java)
+
+        val pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
+        query.with(pageable)
+
+        val content = mongoTemplate.find(query, ReservationDocument::class.java).map { it.toDomain() }
+        val totalPages = if (totalElements == 0L) 0 else ((totalElements - 1) / size + 1).toInt()
+
+        return PagedResult(
+            content = content,
+            totalElements = totalElements,
+            page = page,
+            size = size,
+            totalPages = totalPages
+        )
     }
 }
 

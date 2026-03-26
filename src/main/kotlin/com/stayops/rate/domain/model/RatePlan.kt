@@ -26,6 +26,27 @@ data class RatePlan private constructor(
 
     fun deactivate(): RatePlan = copy(status = RatePlanStatus.INACTIVE, updatedAt = Instant.now())
 
+    fun updateInfo(
+        name: String,
+        dateRange: DateRange?,
+        dayOfWeekRules: List<DayOfWeekRate>?,
+        channelCode: String?,
+        price: Money,
+        priority: Int
+    ): RatePlan {
+        require(name.isNotBlank()) { "요금제 이름은 공백일 수 없습니다." }
+        require(priority > 0) { "우선순위는 0보다 커야 합니다: $priority" }
+        return copy(
+            name = name,
+            dateRange = dateRange,
+            dayOfWeekRules = dayOfWeekRules,
+            channelCode = channelCode,
+            price = price,
+            priority = priority,
+            updatedAt = Instant.now()
+        )
+    }
+
     fun priceForDate(date: LocalDate): Money {
         val dayOfWeekPrice = dayOfWeekRules
             ?.firstOrNull { date.dayOfWeek in it.daysOfWeek }

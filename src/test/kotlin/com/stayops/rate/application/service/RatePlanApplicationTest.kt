@@ -111,6 +111,63 @@ class RatePlanApplicationTest : BehaviorSpec({
     }
 
     // ─────────────────────────────────────────
+    // 요금제 수정
+    // ─────────────────────────────────────────
+
+    given("요금제 수정 시") {
+        `when`("유효한 정보로 수정하면") {
+            every { ratePlanRepository.findById("rp-1") } returns testRatePlan()
+            every { ratePlanRepository.save(any()) } answers { firstArg() }
+
+            val result = ratePlanApplication.updateRatePlan(
+                propertyId = "prop-1",
+                id = "rp-1",
+                name = "수정된 요금제",
+                dateRange = DateRange.of(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 10, 1)),
+                dayOfWeekRules = null,
+                channelCode = null,
+                price = Money.of(180_000),
+                priority = 40
+            )
+
+            then("수정된 내용이 반영된다") {
+                result.name shouldBe "수정된 요금제"
+                result.price shouldBe Money.of(180_000)
+                result.priority shouldBe 40
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────
+    // 요금제 활성화/비활성화
+    // ─────────────────────────────────────────
+
+    given("요금제 상태 변경 시") {
+        `when`("활성 요금제를 비활성화하면") {
+            every { ratePlanRepository.findById("rp-1") } returns testRatePlan()
+            every { ratePlanRepository.save(any()) } answers { firstArg() }
+
+            val result = ratePlanApplication.deactivateRatePlan("prop-1", "rp-1")
+
+            then("상태가 INACTIVE로 변경된다") {
+                result.status shouldBe RatePlanStatus.INACTIVE
+            }
+        }
+
+        `when`("비활성 요금제를 활성화하면") {
+            val inactive = testRatePlan().deactivate()
+            every { ratePlanRepository.findById("rp-1") } returns inactive
+            every { ratePlanRepository.save(any()) } answers { firstArg() }
+
+            val result = ratePlanApplication.activateRatePlan("prop-1", "rp-1")
+
+            then("상태가 ACTIVE로 변경된다") {
+                result.status shouldBe RatePlanStatus.ACTIVE
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────
     // 요금 미리보기
     // ─────────────────────────────────────────
 
