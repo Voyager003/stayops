@@ -1,5 +1,7 @@
 package com.stayops.property.api
 
+import com.stayops.auth.domain.model.Member
+import com.stayops.auth.domain.repository.MemberRepository
 import com.stayops.property.api.dto.CreatePropertyRequest
 import com.stayops.property.api.dto.PropertyResponse
 import com.stayops.property.api.dto.UpdatePropertyRequest
@@ -9,26 +11,23 @@ import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
-import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.PutMapping
-import org.springframework.web.bind.annotation.RequestBody
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.ResponseStatus
-import org.springframework.web.bind.annotation.RestController
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.web.bind.annotation.*
 
 @RestController
 @RequestMapping("/api/v1/properties")
 class PropertyApi(
     private val propertyApplication: PropertyApplication,
-    private val propertyAccessChecker: PropertyAccessChecker
+    private val propertyAccessChecker: PropertyAccessChecker,
+    private val memberRepository: MemberRepository
 ) {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     fun create(@RequestBody @Valid request: CreatePropertyRequest): PropertyResponse {
+        val currentMember = SecurityContextHolder.getContext().authentication?.principal as Member
         val property = propertyApplication.createProperty(
-            ownerId = request.ownerId,
+            ownerId = currentMember.id,
             name = request.name,
             type = request.type,
             address = Address.of(request.address.street, request.address.city, request.address.state, request.address.zipCode, request.address.country),
@@ -37,6 +36,14 @@ class PropertyApi(
             timezone = request.timezone,
             currency = request.currency
         )
+
+        // SecurityContext의 Member를 갱신하여 세션에 즉시 반영
+        val updatedMember = memberRepository.findById(currentMember.id)
+        if (updatedMember != null) {
+            val newAuth = UsernamePasswordAuthenticationToken(updatedMember, null, emptyList())
+            SecurityContextHolder.getContext().authentication = newAuth
+        }
+
         return PropertyResponse.from(property)
     }
 

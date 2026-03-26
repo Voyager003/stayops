@@ -6,7 +6,6 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 
 data class CreatePropertyRequest(
-    @field:NotBlank val ownerId: String,
     @field:NotBlank val name: String,
     @field:NotNull val type: PropertyType,
     @field:Valid val address: AddressRequest,
