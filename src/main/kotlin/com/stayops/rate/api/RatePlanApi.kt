@@ -68,6 +68,7 @@ class RatePlanApi(
         } else null
         val dayOfWeekRules = request.dayOfWeekRules?.map { it.toDomain() }
         val ratePlan = ratePlanApplication.updateRatePlan(
+            propertyId = pid,
             id = id,
             name = request.name,
             dateRange = dateRange,
@@ -85,7 +86,7 @@ class RatePlanApi(
         @PathVariable id: String
     ): RatePlanResponse {
         propertyAccessChecker.requireAccess(pid)
-        return RatePlanResponse.from(ratePlanApplication.activateRatePlan(id))
+        return RatePlanResponse.from(ratePlanApplication.activateRatePlan(pid, id))
     }
 
     @PatchMapping("/rate-plans/{id}/deactivate")
@@ -94,7 +95,7 @@ class RatePlanApi(
         @PathVariable id: String
     ): RatePlanResponse {
         propertyAccessChecker.requireAccess(pid)
-        return RatePlanResponse.from(ratePlanApplication.deactivateRatePlan(id))
+        return RatePlanResponse.from(ratePlanApplication.deactivateRatePlan(pid, id))
     }
 
     @DeleteMapping("/rate-plans/{id}")

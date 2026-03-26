@@ -120,6 +120,7 @@ class RatePlanApplicationTest : BehaviorSpec({
             every { ratePlanRepository.save(any()) } answers { firstArg() }
 
             val result = ratePlanApplication.updateRatePlan(
+                propertyId = "prop-1",
                 id = "rp-1",
                 name = "수정된 요금제",
                 dateRange = DateRange.of(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 10, 1)),
@@ -146,7 +147,7 @@ class RatePlanApplicationTest : BehaviorSpec({
             every { ratePlanRepository.findById("rp-1") } returns testRatePlan()
             every { ratePlanRepository.save(any()) } answers { firstArg() }
 
-            val result = ratePlanApplication.deactivateRatePlan("rp-1")
+            val result = ratePlanApplication.deactivateRatePlan("prop-1", "rp-1")
 
             then("상태가 INACTIVE로 변경된다") {
                 result.status shouldBe RatePlanStatus.INACTIVE
@@ -158,7 +159,7 @@ class RatePlanApplicationTest : BehaviorSpec({
             every { ratePlanRepository.findById("rp-1") } returns inactive
             every { ratePlanRepository.save(any()) } answers { firstArg() }
 
-            val result = ratePlanApplication.activateRatePlan("rp-1")
+            val result = ratePlanApplication.activateRatePlan("prop-1", "rp-1")
 
             then("상태가 ACTIVE로 변경된다") {
                 result.status shouldBe RatePlanStatus.ACTIVE
