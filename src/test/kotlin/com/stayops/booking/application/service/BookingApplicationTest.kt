@@ -77,7 +77,7 @@ class BookingApplicationTest : BehaviorSpec({
         id = "rt-1", propertyId = "prop-1", name = "디럭스룸",
         description = "넓은 객실", maxOccupancy = 2,
         basePrice = Money.won(100_000)
-    ).activate()
+    )
 
     fun directChannel() = Channel.createDirect(id = "ch-1", propertyId = "prop-1")
 

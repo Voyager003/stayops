@@ -1,7 +1,6 @@
 package com.stayops.room.infrastructure.persistence
 
 import com.stayops.room.domain.model.RoomType
-import com.stayops.room.domain.model.RoomTypeStatus
 import com.stayops.shared.domain.Money
 import org.springframework.data.annotation.Id
 import org.springframework.data.mongodb.core.index.CompoundIndex
@@ -19,7 +18,6 @@ data class RoomTypeDocument(
     val maxOccupancy: Int,
     val basePrice: MoneyData,
     val amenities: List<String>,
-    val status: RoomTypeStatus,
     val version: Long,
     val createdAt: Instant,
     val updatedAt: Instant
@@ -37,7 +35,6 @@ data class RoomTypeDocument(
         maxOccupancy = maxOccupancy,
         basePrice = Money.of(basePrice.amount, basePrice.currency),
         amenities = amenities,
-        status = status,
         version = version,
         createdAt = createdAt,
         updatedAt = updatedAt
@@ -52,7 +49,6 @@ data class RoomTypeDocument(
             maxOccupancy = roomType.maxOccupancy,
             basePrice = MoneyData(roomType.basePrice.amount, roomType.basePrice.currency),
             amenities = roomType.amenities,
-            status = roomType.status,
             version = roomType.version,
             createdAt = roomType.createdAt,
             updatedAt = roomType.updatedAt

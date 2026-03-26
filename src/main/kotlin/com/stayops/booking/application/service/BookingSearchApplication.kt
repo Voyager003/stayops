@@ -8,7 +8,6 @@ import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolver
 import com.stayops.room.domain.model.RoomType
-import com.stayops.room.domain.model.RoomTypeStatus
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
@@ -41,7 +40,6 @@ class BookingSearchApplication(
     fun searchRoomTypes(propertyId: String): List<RoomType> {
         getProperty(propertyId)
         return roomTypeRepository.findByPropertyId(propertyId)
-            .filter { it.status == RoomTypeStatus.ACTIVE }
     }
 
     fun getAvailability(

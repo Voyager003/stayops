@@ -54,7 +54,7 @@ class ConcurrentReservationTest @Autowired constructor(
             id = "rt-1", propertyId = "prop-1",
             name = "디럭스", description = "테스트", maxOccupancy = 2,
             basePrice = Money.won(100_000)
-        ).activate()
+        )
         roomTypeMongoDataRepository.save(RoomTypeDocument.from(roomType))
 
         val channel = Channel.createDirect(id = "ch-1", propertyId = "prop-1")

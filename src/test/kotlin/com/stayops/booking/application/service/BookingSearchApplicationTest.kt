@@ -8,7 +8,6 @@ import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolver
 import com.stayops.room.domain.model.RoomType
-import com.stayops.room.domain.model.RoomTypeStatus
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
@@ -68,7 +67,7 @@ class BookingSearchApplicationTest : BehaviorSpec({
         maxOccupancy = 2,
         basePrice = Money.won(100_000),
         amenities = listOf("WiFi", "TV")
-    ).activate()
+    )
 
     fun inactiveRoomType(id: String = "rt-2", propertyId: String = "prop-1") = RoomType.create(
         id = id,
@@ -147,7 +146,7 @@ class BookingSearchApplicationTest : BehaviorSpec({
 
     given("객실타입 목록 조회 시") {
 
-        `when`("ACTIVE 객실타입과 INACTIVE 객실타입이 있으면") {
+        `when`("여러 객실타입이 있으면") {
             every { propertyRepository.findById("prop-1") } returns activeProperty()
             every { roomTypeRepository.findByPropertyId("prop-1") } returns listOf(
                 activeRoomType("rt-1"),
@@ -156,9 +155,10 @@ class BookingSearchApplicationTest : BehaviorSpec({
 
             val result = service.searchRoomTypes("prop-1")
 
-            then("ACTIVE 객실타입만 반환된다") {
-                result shouldHaveSize 1
+            then("모든 객실타입을 반환한다") {
+                result shouldHaveSize 2
                 result[0].name shouldBe "디럭스룸"
+                result[1].name shouldBe "이코노미룸"
             }
         }
     }

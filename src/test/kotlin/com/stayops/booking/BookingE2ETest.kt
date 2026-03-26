@@ -75,7 +75,7 @@ class BookingE2ETest @Autowired constructor(
                 id = "rt-e2e", propertyId = "prop-e2e", name = "스탠다드룸",
                 description = "기본 객실", maxOccupancy = 2,
                 basePrice = Money.won(100_000)
-            ).activate()
+            )
         )
 
         channelRepository.save(Channel.createDirect(id = "ch-e2e", propertyId = "prop-e2e"))

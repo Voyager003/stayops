@@ -17,7 +17,6 @@ import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.shared.domain.PagedResult
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomType
-import com.stayops.room.domain.model.RoomTypeStatus
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
@@ -66,7 +65,7 @@ class ReservationApplicationTest : BehaviorSpec({
         description = "넓은 객실",
         maxOccupancy = 3,
         basePrice = Money.won(100_000)
-    ).activate()
+    )
 
     fun directChannel() = Channel.createDirect(id = "ch-0", propertyId = "prop-1")
 

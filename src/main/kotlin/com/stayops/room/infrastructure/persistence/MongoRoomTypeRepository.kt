@@ -21,6 +21,10 @@ class MongoRoomTypeRepository(
 
     override fun findByPropertyIdAndName(propertyId: String, name: String): RoomType? =
         mongo.findByPropertyIdAndName(propertyId, name)?.toDomain()
+
+    override fun deleteById(id: String) {
+        mongo.deleteById(id)
+    }
 }
 
 interface RoomTypeMongoDataRepository : MongoRepository<RoomTypeDocument, String> {

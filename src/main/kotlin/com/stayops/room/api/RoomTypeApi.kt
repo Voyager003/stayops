@@ -78,11 +78,11 @@ class RoomTypeApi(
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    fun deactivate(
+    fun delete(
         @PathVariable pid: String,
         @PathVariable id: String
     ) {
         propertyAccessChecker.requireAccess(pid)
-        roomTypeApplication.deactivateRoomType(id)
+        roomTypeApplication.deleteRoomType(id)
     }
 }
