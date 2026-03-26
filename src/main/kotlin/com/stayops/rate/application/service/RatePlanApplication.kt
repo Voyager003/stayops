@@ -48,6 +48,33 @@ class RatePlanApplication(
     fun getRatePlans(propertyId: String): List<RatePlan> =
         ratePlanRepository.findByPropertyId(propertyId)
 
+    fun updateRatePlan(
+        id: String,
+        name: String,
+        dateRange: DateRange?,
+        dayOfWeekRules: List<DayOfWeekRate>?,
+        channelCode: String?,
+        price: Money,
+        priority: Int
+    ): RatePlan {
+        val ratePlan = ratePlanRepository.findById(id)
+            ?: throw NotFoundException("RATE_PLAN_NOT_FOUND", "요금제를 찾을 수 없습니다: $id")
+        val updated = ratePlan.updateInfo(name, dateRange, dayOfWeekRules, channelCode, price, priority)
+        return ratePlanRepository.save(updated)
+    }
+
+    fun activateRatePlan(id: String): RatePlan {
+        val ratePlan = ratePlanRepository.findById(id)
+            ?: throw NotFoundException("RATE_PLAN_NOT_FOUND", "요금제를 찾을 수 없습니다: $id")
+        return ratePlanRepository.save(ratePlan.activate())
+    }
+
+    fun deactivateRatePlan(id: String): RatePlan {
+        val ratePlan = ratePlanRepository.findById(id)
+            ?: throw NotFoundException("RATE_PLAN_NOT_FOUND", "요금제를 찾을 수 없습니다: $id")
+        return ratePlanRepository.save(ratePlan.deactivate())
+    }
+
     fun deleteRatePlan(id: String) {
         ratePlanRepository.findById(id)
             ?: throw NotFoundException("RATE_PLAN_NOT_FOUND", "요금제를 찾을 수 없습니다: $id")
