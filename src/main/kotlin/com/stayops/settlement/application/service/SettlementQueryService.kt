@@ -1,5 +1,7 @@
 package com.stayops.settlement.application.service
 
+import com.stayops.settlement.application.dto.DailySettlement
+import com.stayops.settlement.application.dto.MonthlySettlement
 import com.stayops.settlement.application.dto.SettlementSummary
 import com.stayops.shared.domain.Money
 import org.springframework.stereotype.Service
@@ -34,4 +36,15 @@ class SettlementQueryService(
             byChannel = channelSettlements
         )
     }
+
+    fun getDailyTrend(
+        propertyId: String,
+        startDate: LocalDate,
+        endDate: LocalDate
+    ): List<DailySettlement> = settlementQueryRepository.findDailyTrend(propertyId, startDate, endDate)
+
+    fun getMonthlyTrend(
+        propertyId: String,
+        year: Int
+    ): List<MonthlySettlement> = settlementQueryRepository.findMonthlyTrend(propertyId, year)
 }
