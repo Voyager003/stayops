@@ -52,7 +52,6 @@ class PropertyApiTest @Autowired constructor(
     }
 
     private fun createRequest(name: String = "해운대 펜션") = CreatePropertyRequest(
-        ownerId = "owner-1",
         name = name,
         type = PropertyType.PENSION,
         address = CreatePropertyRequest.AddressRequest("해운대로 123", "부산", "부산광역시", "48099", "KR"),

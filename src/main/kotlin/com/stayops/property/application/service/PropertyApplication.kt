@@ -1,5 +1,7 @@
 package com.stayops.property.application.service
 
+import com.stayops.auth.domain.model.PropertyRole
+import com.stayops.auth.domain.repository.MemberRepository
 import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo
 import com.stayops.property.domain.model.Property
@@ -11,7 +13,8 @@ import java.util.UUID
 
 @Service
 class PropertyApplication(
-    private val propertyRepository: PropertyRepository
+    private val propertyRepository: PropertyRepository,
+    private val memberRepository: MemberRepository
 ) {
     fun createProperty(
         ownerId: String,
@@ -34,7 +37,15 @@ class PropertyApplication(
             timezone = timezone,
             currency = currency
         )
-        return propertyRepository.save(property)
+        val saved = propertyRepository.save(property)
+
+        val member = memberRepository.findById(ownerId)
+        if (member != null) {
+            val granted = member.grantAccess(saved.id, PropertyRole.OWNER)
+            memberRepository.save(granted)
+        }
+
+        return saved
     }
 
     fun getProperty(id: String): Property =

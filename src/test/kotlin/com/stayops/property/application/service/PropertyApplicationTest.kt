@@ -1,5 +1,10 @@
 package com.stayops.property.application.service
 
+import com.stayops.auth.domain.model.Member
+import com.stayops.auth.domain.model.MemberRole
+import com.stayops.auth.domain.model.PropertyAccess
+import com.stayops.auth.domain.model.PropertyRole
+import com.stayops.auth.domain.repository.MemberRepository
 import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo
 import com.stayops.property.domain.model.Property
@@ -9,21 +14,30 @@ import com.stayops.shared.exception.NotFoundException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
+import io.mockk.*
 
 class PropertyApplicationTest : BehaviorSpec({
 
     val propertyRepository = mockk<PropertyRepository>()
-    val propertyApplication = PropertyApplication(propertyRepository)
+    val memberRepository = mockk<MemberRepository>()
+    val propertyApplication = PropertyApplication(propertyRepository, memberRepository)
 
     fun sampleAddress() = Address.of("해운대로 123", "부산", "부산광역시", "48099", "KR")
     fun sampleContactInfo() = ContactInfo.of("051-123-4567", "test@pension.com")
 
     given("숙소 생성 시") {
         `when`("유효한 요청이면") {
+            val owner = Member.create(
+                id = "owner-1",
+                email = "owner@test.com",
+                passwordHash = "hashed",
+                name = "홍길동",
+                role = MemberRole.OWNER
+            )
+
             every { propertyRepository.save(any()) } answers { firstArg() }
+            every { memberRepository.findById("owner-1") } returns owner
+            every { memberRepository.save(any()) } answers { firstArg() }
 
             val result = propertyApplication.createProperty(
                 ownerId = "owner-1",
@@ -38,8 +52,14 @@ class PropertyApplicationTest : BehaviorSpec({
                 result.name shouldBe "해운대 펜션"
                 result.ownerId shouldBe "owner-1"
             }
-            then("Repository.save()가 한 번 호출된다") {
-                verify(exactly = 1) { propertyRepository.save(any()) }
+            then("OWNER에게 숙소 접근 권한이 부여된다") {
+                verify {
+                    memberRepository.save(match<Member> {
+                        it.propertyAccess.any { access ->
+                            access.propertyId == result.id && access.role == PropertyRole.OWNER
+                        }
+                    })
+                }
             }
         }
     }
