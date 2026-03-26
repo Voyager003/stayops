@@ -127,7 +127,8 @@ class MongoReservationRepository(
         }
 
         criteria.guestName?.takeIf { it.isNotBlank() }?.let {
-            criteriaList.add(Criteria.where("guestInfo.name").regex(it, "i"))
+            val escaped = java.util.regex.Pattern.quote(it)
+            criteriaList.add(Criteria.where("guestInfo.name").regex("^$escaped", "i"))
         }
 
         val query = Query(Criteria().andOperator(*criteriaList.toTypedArray()))
