@@ -1,7 +1,9 @@
 package com.stayops.reservation.domain.repository
 
 import com.stayops.reservation.domain.model.Reservation
+import com.stayops.reservation.domain.model.ReservationSearchCriteria
 import com.stayops.reservation.domain.model.ReservationStatus
+import com.stayops.shared.domain.PagedResult
 import java.time.Instant
 import java.time.LocalDate
 
@@ -15,4 +17,5 @@ interface ReservationRepository {
     fun findByPropertyIdAndChannelCode(propertyId: String, channelCode: String): List<Reservation>
     fun findByMemberId(memberId: String): List<Reservation>
     fun findExpiredPending(now: Instant): List<Reservation>
+    fun search(propertyId: String, criteria: ReservationSearchCriteria, page: Int, size: Int): PagedResult<Reservation>
 }
