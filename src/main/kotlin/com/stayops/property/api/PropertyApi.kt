@@ -13,7 +13,10 @@ import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository
 import org.springframework.web.bind.annotation.*
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 
 @RestController
 @RequestMapping("/api/v1/properties")
@@ -22,9 +25,15 @@ class PropertyApi(
     private val propertyAccessChecker: PropertyAccessChecker,
     private val memberRepository: MemberRepository
 ) {
+    private val securityContextRepository = HttpSessionSecurityContextRepository()
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    fun create(@RequestBody @Valid request: CreatePropertyRequest): PropertyResponse {
+    fun create(
+        @RequestBody @Valid request: CreatePropertyRequest,
+        httpRequest: HttpServletRequest,
+        httpResponse: HttpServletResponse
+    ): PropertyResponse {
         val currentMember = SecurityContextHolder.getContext().authentication?.principal as Member
         val property = propertyApplication.createProperty(
             ownerId = currentMember.id,
@@ -41,7 +50,9 @@ class PropertyApi(
         val updatedMember = memberRepository.findById(currentMember.id)
         if (updatedMember != null) {
             val newAuth = UsernamePasswordAuthenticationToken(updatedMember, null, emptyList())
-            SecurityContextHolder.getContext().authentication = newAuth
+            val context = SecurityContextHolder.getContext()
+            context.authentication = newAuth
+            securityContextRepository.saveContext(context, httpRequest, httpResponse)
         }
 
         return PropertyResponse.from(property)
