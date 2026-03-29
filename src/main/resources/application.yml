@@ -1,6 +1,8 @@
 spring:
   application:
     name: stayops
+  profiles:
+    active: local
   mongodb:
     uri: mongodb://localhost:27017/stayops?replicaSet=rs0
     redis:
