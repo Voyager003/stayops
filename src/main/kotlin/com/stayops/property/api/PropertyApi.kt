@@ -62,6 +62,18 @@ class PropertyApi(
     fun getAll(): List<PropertyResponse> =
         propertyApplication.getAllProperties().map { PropertyResponse.from(it) }
 
+    @PatchMapping("/{pid}/activate")
+    fun activate(@PathVariable pid: String): PropertyResponse {
+        propertyAccessChecker.requireAccess(pid)
+        return PropertyResponse.from(propertyApplication.activateProperty(pid))
+    }
+
+    @PatchMapping("/{pid}/deactivate")
+    fun deactivate(@PathVariable pid: String): PropertyResponse {
+        propertyAccessChecker.requireAccess(pid)
+        return PropertyResponse.from(propertyApplication.deactivateProperty(pid))
+    }
+
     @GetMapping("/{pid}")
     fun getOne(@PathVariable pid: String): PropertyResponse {
         propertyAccessChecker.requireAccess(pid)

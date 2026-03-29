@@ -55,6 +55,18 @@ class PropertyApplication(
     fun getAllProperties(): List<Property> =
         propertyRepository.findAll()
 
+    fun activateProperty(id: String): Property {
+        val property = getProperty(id)
+        val activated = property.activate()
+        return propertyRepository.save(activated)
+    }
+
+    fun deactivateProperty(id: String): Property {
+        val property = getProperty(id)
+        val deactivated = property.deactivate()
+        return propertyRepository.save(deactivated)
+    }
+
     fun updateProperty(
         id: String,
         name: String,
