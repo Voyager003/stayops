@@ -1,6 +1,7 @@
 package com.stayops.property.api
 
 import com.stayops.auth.domain.model.Member
+import com.stayops.auth.domain.model.MemberRole
 import com.stayops.auth.domain.repository.MemberRepository
 import com.stayops.property.api.dto.CreatePropertyRequest
 import com.stayops.property.api.dto.PropertyResponse
@@ -59,8 +60,15 @@ class PropertyApi(
     }
 
     @GetMapping
-    fun getAll(): List<PropertyResponse> =
-        propertyApplication.getAllProperties().map { PropertyResponse.from(it) }
+    fun getAll(): List<PropertyResponse> {
+        val member = SecurityContextHolder.getContext().authentication?.principal as Member
+        if (member.role == MemberRole.ADMIN) {
+            return propertyApplication.getAllProperties().map { PropertyResponse.from(it) }
+        }
+        val accessibleIds = member.propertyAccess.map { it.propertyId }
+        return propertyApplication.getAccessibleProperties(accessibleIds)
+            .map { PropertyResponse.from(it) }
+    }
 
     @PatchMapping("/{pid}/activate")
     fun activate(@PathVariable pid: String): PropertyResponse {

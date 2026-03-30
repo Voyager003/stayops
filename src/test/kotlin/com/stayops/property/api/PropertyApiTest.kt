@@ -90,7 +90,7 @@ class PropertyApiTest @Autowired constructor(
     @Nested
     inner class `GET 전체 숙소 조회` {
         @Test
-        fun `저장된 숙소 목록을 반환한다`() {
+        fun `ADMIN은 모든 숙소를 조회할 수 있다`() {
             mockMvc.post("/api/v1/properties") {
                 contentType = MediaType.APPLICATION_JSON
                 content = objectMapper.writeValueAsString(createRequest("펜션A"))
@@ -103,6 +103,35 @@ class PropertyApiTest @Autowired constructor(
             mockMvc.get("/api/v1/properties").andExpect {
                 status { isOk() }
                 jsonPath("$.length()") { value(2) }
+            }
+        }
+
+        @Test
+        fun `OWNER는 자신의 propertyAccess에 포함된 숙소만 조회할 수 있다`() {
+            // 숙소 2개 생성 (ADMIN으로)
+            val createdA = mockMvc.post("/api/v1/properties") {
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(createRequest("펜션A"))
+            }.andReturn().response.contentAsString
+            val idA = objectMapper.readTree(createdA).get("id").asText()
+
+            mockMvc.post("/api/v1/properties") {
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(createRequest("펜션B"))
+            }
+
+            // OWNER로 전환 — 펜션A에만 접근 권한
+            val owner = Member.create(
+                id = "test-owner", email = "owner@test.com",
+                passwordHash = "hashed", name = "테스트운영자", role = MemberRole.OWNER
+            ).grantAccess(idA, com.stayops.auth.domain.model.PropertyRole.OWNER)
+            SecurityContextHolder.getContext().authentication =
+                UsernamePasswordAuthenticationToken(owner, null, emptyList())
+
+            mockMvc.get("/api/v1/properties").andExpect {
+                status { isOk() }
+                jsonPath("$.length()") { value(1) }
+                jsonPath("$[0].name") { value("펜션A") }
             }
         }
     }

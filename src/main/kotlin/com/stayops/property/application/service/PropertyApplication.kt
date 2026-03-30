@@ -52,6 +52,9 @@ class PropertyApplication(
         propertyRepository.findById(id)
             ?: throw NotFoundException("PROPERTY_NOT_FOUND", "숙소를 찾을 수 없습니다: $id")
 
+    fun getAccessibleProperties(propertyIds: List<String>): List<Property> =
+        propertyRepository.findByIds(propertyIds)
+
     fun getAllProperties(): List<Property> =
         propertyRepository.findAll()
 
