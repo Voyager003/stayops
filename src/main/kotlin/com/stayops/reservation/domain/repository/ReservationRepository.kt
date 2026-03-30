@@ -18,4 +18,5 @@ interface ReservationRepository {
     fun findByMemberId(memberId: String): List<Reservation>
     fun findExpiredPending(now: Instant): List<Reservation>
     fun search(propertyId: String, criteria: ReservationSearchCriteria, page: Int, size: Int): PagedResult<Reservation>
+    fun countByPropertyIdAndCreatedDate(propertyId: String, date: LocalDate): Int
 }

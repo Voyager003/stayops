@@ -14,11 +14,28 @@ class DashboardApplication(
     private val roomRepository: RoomRepository
 ) {
 
-    fun getDashboard(propertyId: String, today: LocalDate): DashboardResponse {
-        val todayReservations = reservationRepository.findByPropertyIdAndDateRange(propertyId, today, today)
+    private val revenueExcludedStatuses = setOf(ReservationStatus.CANCELLED, ReservationStatus.NO_SHOW)
 
-        val checkInCount = todayReservations.count { it.dateRange.checkIn == today }
-        val checkOutCount = todayReservations.count { it.dateRange.checkOut == today }
+    fun getDashboard(propertyId: String, today: LocalDate): DashboardResponse {
+        val yesterday = today.minusDays(1)
+
+        val todayReservations = reservationRepository.findByPropertyIdAndDateRange(propertyId, today, today)
+        val yesterdayReservations = reservationRepository.findByPropertyIdAndDateRange(propertyId, yesterday, yesterday)
+
+        val todayCheckInCount = todayReservations.count { it.dateRange.checkIn == today }
+        val todayCheckOutCount = todayReservations.count { it.dateRange.checkOut == today }
+        val todayRevenue = todayReservations
+            .filter { it.dateRange.checkIn == today && it.status !in revenueExcludedStatuses }
+            .sumOf { it.pricing.totalAmount.amount.toLong() }
+
+        val yesterdayCheckInCount = yesterdayReservations.count { it.dateRange.checkIn == yesterday }
+        val yesterdayCheckOutCount = yesterdayReservations.count { it.dateRange.checkOut == yesterday }
+        val yesterdayRevenue = yesterdayReservations
+            .filter { it.dateRange.checkIn == yesterday && it.status !in revenueExcludedStatuses }
+            .sumOf { it.pricing.totalAmount.amount.toLong() }
+
+        val todayNewReservations = reservationRepository.countByPropertyIdAndCreatedDate(propertyId, today)
+        val yesterdayNewReservations = reservationRepository.countByPropertyIdAndCreatedDate(propertyId, yesterday)
 
         val pendingCount = reservationRepository
             .findByPropertyIdAndStatus(propertyId, ReservationStatus.PENDING).size
@@ -30,8 +47,14 @@ class DashboardApplication(
         val rate = if (total > 0) occupied.toDouble() / total * 100 else 0.0
 
         return DashboardResponse(
-            todayCheckInCount = checkInCount,
-            todayCheckOutCount = checkOutCount,
+            todayCheckInCount = todayCheckInCount,
+            todayCheckOutCount = todayCheckOutCount,
+            todayRevenue = todayRevenue,
+            todayNewReservations = todayNewReservations,
+            yesterdayCheckInCount = yesterdayCheckInCount,
+            yesterdayCheckOutCount = yesterdayCheckOutCount,
+            yesterdayRevenue = yesterdayRevenue,
+            yesterdayNewReservations = yesterdayNewReservations,
             pendingReservations = pendingCount,
             occupancy = DashboardResponse.OccupancyResponse(
                 total = total,

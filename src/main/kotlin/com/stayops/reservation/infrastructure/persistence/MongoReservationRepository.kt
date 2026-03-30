@@ -18,6 +18,7 @@ import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.stereotype.Repository
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 @Repository
 class MongoReservationRepository(
@@ -89,6 +90,17 @@ class MongoReservationRepository(
             )
         )
         return mongoTemplate.find(query, ReservationDocument::class.java).map { it.toDomain() }
+    }
+
+    override fun countByPropertyIdAndCreatedDate(propertyId: String, date: LocalDate): Int {
+        val zone = ZoneId.of("Asia/Seoul")
+        val startOfDay = date.atStartOfDay(zone).toInstant()
+        val startOfNextDay = date.plusDays(1).atStartOfDay(zone).toInstant()
+        val query = Query(
+            Criteria.where("propertyId").`is`(propertyId)
+                .and("createdAt").gte(startOfDay).lt(startOfNextDay)
+        )
+        return mongoTemplate.count(query, ReservationDocument::class.java).toInt()
     }
 
     override fun search(

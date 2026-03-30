@@ -22,19 +22,21 @@ class DashboardApplicationTest : BehaviorSpec({
     val sut = DashboardApplication(reservationRepository, roomRepository)
 
     val today = LocalDate.of(2026, 4, 1)
+    val yesterday = today.minusDays(1)
 
     fun sampleReservation(
         id: String,
         status: ReservationStatus,
         checkIn: LocalDate = today,
-        checkOut: LocalDate = today.plusDays(2)
+        checkOut: LocalDate = today.plusDays(2),
+        totalAmount: Long = 200_000
     ) = Reservation.create(
         id = id, propertyId = "prop-1", roomTypeId = "rt-1",
         guestId = "guest-1",
         guestInfo = GuestInfo("홍길동", "010-1234-5678", null),
         dateRange = DateRange.of(checkIn, checkOut), numberOfGuests = 2,
         channel = BookingChannel("DIRECT", null, BigDecimal.ZERO),
-        pricing = ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO)
+        pricing = ReservationPricing.calculate(Money.won(totalAmount), Money.ZERO, BigDecimal.ZERO)
     ).let {
         when (status) {
             ReservationStatus.CONFIRMED -> it.confirm()
@@ -44,20 +46,35 @@ class DashboardApplicationTest : BehaviorSpec({
     }
 
     given("대시보드 조회 시") {
-        `when`("오늘의 체크인/아웃 예약과 객실 현황이 있으면") {
-            then("운영 현황을 반환한다") {
+        `when`("오늘과 전일의 체크인/아웃 예약, 매출, 신규 예약이 있으면") {
+            then("오늘과 전일 운영 현황을 모두 반환한다") {
                 clearAllMocks()
 
-                val checkInReservation = sampleReservation("rsv-1", ReservationStatus.CONFIRMED, checkIn = today)
-                val checkOutReservation = sampleReservation("rsv-2", ReservationStatus.CONFIRMED, checkIn = today.minusDays(2), checkOut = today)
+                val todayCheckIn = sampleReservation("rsv-1", ReservationStatus.CONFIRMED, checkIn = today, totalAmount = 135_000)
+                val todayCheckOut = sampleReservation("rsv-2", ReservationStatus.CONFIRMED, checkIn = today.minusDays(2), checkOut = today, totalAmount = 100_000)
+                val todayCheckIn2 = sampleReservation("rsv-3", ReservationStatus.CONFIRMED, checkIn = today, totalAmount = 215_000)
 
                 every {
                     reservationRepository.findByPropertyIdAndDateRange("prop-1", today, today)
-                } returns listOf(checkInReservation, checkOutReservation)
+                } returns listOf(todayCheckIn, todayCheckOut, todayCheckIn2)
+
+                val yesterdayCheckIn = sampleReservation("rsv-4", ReservationStatus.CONFIRMED, checkIn = yesterday, totalAmount = 300_000)
+
+                every {
+                    reservationRepository.findByPropertyIdAndDateRange("prop-1", yesterday, yesterday)
+                } returns listOf(yesterdayCheckIn)
 
                 every {
                     reservationRepository.findByPropertyIdAndStatus("prop-1", ReservationStatus.PENDING)
-                } returns listOf(sampleReservation("rsv-3", ReservationStatus.PENDING))
+                } returns listOf(sampleReservation("rsv-5", ReservationStatus.PENDING))
+
+                every {
+                    reservationRepository.countByPropertyIdAndCreatedDate("prop-1", today)
+                } returns 3
+
+                every {
+                    reservationRepository.countByPropertyIdAndCreatedDate("prop-1", yesterday)
+                } returns 1
 
                 val rooms = listOf(
                     Room.create("r-1", "prop-1", "rt-1", "101", 1),
@@ -68,12 +85,96 @@ class DashboardApplicationTest : BehaviorSpec({
 
                 val result = sut.getDashboard("prop-1", today)
 
-                result.todayCheckInCount shouldBe 1
+                result.todayCheckInCount shouldBe 2
                 result.todayCheckOutCount shouldBe 1
+                result.todayRevenue shouldBe 350_000
+                result.todayNewReservations shouldBe 3
+                result.yesterdayCheckInCount shouldBe 1
+                result.yesterdayCheckOutCount shouldBe 0
+                result.yesterdayRevenue shouldBe 300_000
+                result.yesterdayNewReservations shouldBe 1
                 result.pendingReservations shouldBe 1
                 result.occupancy.total shouldBe 3
                 result.occupancy.occupied shouldBe 2
                 result.occupancy.available shouldBe 1
+            }
+        }
+
+        `when`("취소/노쇼 예약은 매출에서 제외한다") {
+            then("취소된 예약의 금액은 매출에 포함되지 않는다") {
+                clearAllMocks()
+
+                val confirmedReservation = sampleReservation("rsv-1", ReservationStatus.CONFIRMED, checkIn = today, totalAmount = 200_000)
+                val cancelledReservation = sampleReservation("rsv-2", ReservationStatus.PENDING, checkIn = today, totalAmount = 150_000)
+                    // PENDING->CANCELLED via cancelPending
+                val cancelledRes = cancelledReservation.cancelPending()
+
+                every {
+                    reservationRepository.findByPropertyIdAndDateRange("prop-1", today, today)
+                } returns listOf(confirmedReservation, cancelledRes)
+
+                every {
+                    reservationRepository.findByPropertyIdAndDateRange("prop-1", yesterday, yesterday)
+                } returns emptyList()
+
+                every {
+                    reservationRepository.findByPropertyIdAndStatus("prop-1", ReservationStatus.PENDING)
+                } returns emptyList()
+
+                every {
+                    reservationRepository.countByPropertyIdAndCreatedDate("prop-1", today)
+                } returns 0
+
+                every {
+                    reservationRepository.countByPropertyIdAndCreatedDate("prop-1", yesterday)
+                } returns 0
+
+                every { roomRepository.findByPropertyId("prop-1") } returns emptyList()
+
+                val result = sut.getDashboard("prop-1", today)
+
+                result.todayRevenue shouldBe 200_000
+            }
+        }
+
+        `when`("예약이 없으면") {
+            then("모든 값이 0으로 반환된다") {
+                clearAllMocks()
+
+                every {
+                    reservationRepository.findByPropertyIdAndDateRange("prop-1", today, today)
+                } returns emptyList()
+
+                every {
+                    reservationRepository.findByPropertyIdAndDateRange("prop-1", yesterday, yesterday)
+                } returns emptyList()
+
+                every {
+                    reservationRepository.findByPropertyIdAndStatus("prop-1", ReservationStatus.PENDING)
+                } returns emptyList()
+
+                every {
+                    reservationRepository.countByPropertyIdAndCreatedDate("prop-1", today)
+                } returns 0
+
+                every {
+                    reservationRepository.countByPropertyIdAndCreatedDate("prop-1", yesterday)
+                } returns 0
+
+                every { roomRepository.findByPropertyId("prop-1") } returns emptyList()
+
+                val result = sut.getDashboard("prop-1", today)
+
+                result.todayCheckInCount shouldBe 0
+                result.todayCheckOutCount shouldBe 0
+                result.todayRevenue shouldBe 0
+                result.todayNewReservations shouldBe 0
+                result.yesterdayCheckInCount shouldBe 0
+                result.yesterdayCheckOutCount shouldBe 0
+                result.yesterdayRevenue shouldBe 0
+                result.yesterdayNewReservations shouldBe 0
+                result.occupancy.total shouldBe 0
+                result.occupancy.rate shouldBe 0.0
             }
         }
     }
