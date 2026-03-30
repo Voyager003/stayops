@@ -16,6 +16,42 @@ class DashboardApplication(
 
     private val revenueExcludedStatuses = setOf(ReservationStatus.CANCELLED, ReservationStatus.NO_SHOW)
 
+    fun getAggregatedDashboard(propertyIds: List<String>, today: LocalDate): DashboardResponse {
+        if (propertyIds.isEmpty()) {
+            return DashboardResponse(
+                todayCheckInCount = 0, todayCheckOutCount = 0,
+                todayRevenue = 0, todayNewReservations = 0,
+                yesterdayCheckInCount = 0, yesterdayCheckOutCount = 0,
+                yesterdayRevenue = 0, yesterdayNewReservations = 0,
+                pendingReservations = 0,
+                occupancy = DashboardResponse.OccupancyResponse(0, 0, 0, 0.0)
+            )
+        }
+
+        val dashboards = propertyIds.map { getDashboard(it, today) }
+
+        val total = dashboards.sumOf { it.occupancy.total }
+        val occupied = dashboards.sumOf { it.occupancy.occupied }
+        val available = dashboards.sumOf { it.occupancy.available }
+        val rate = if (total > 0) occupied.toDouble() / total * 100 else 0.0
+
+        return DashboardResponse(
+            todayCheckInCount = dashboards.sumOf { it.todayCheckInCount },
+            todayCheckOutCount = dashboards.sumOf { it.todayCheckOutCount },
+            todayRevenue = dashboards.sumOf { it.todayRevenue },
+            todayNewReservations = dashboards.sumOf { it.todayNewReservations },
+            yesterdayCheckInCount = dashboards.sumOf { it.yesterdayCheckInCount },
+            yesterdayCheckOutCount = dashboards.sumOf { it.yesterdayCheckOutCount },
+            yesterdayRevenue = dashboards.sumOf { it.yesterdayRevenue },
+            yesterdayNewReservations = dashboards.sumOf { it.yesterdayNewReservations },
+            pendingReservations = dashboards.sumOf { it.pendingReservations },
+            occupancy = DashboardResponse.OccupancyResponse(
+                total = total, occupied = occupied, available = available,
+                rate = Math.round(rate * 10) / 10.0
+            )
+        )
+    }
+
     fun getDashboard(propertyId: String, today: LocalDate): DashboardResponse {
         val yesterday = today.minusDays(1)
 

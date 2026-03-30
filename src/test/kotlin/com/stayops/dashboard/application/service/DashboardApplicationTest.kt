@@ -178,4 +178,62 @@ class DashboardApplicationTest : BehaviorSpec({
             }
         }
     }
+
+    given("모든 숙소 대시보드 조회 시") {
+        `when`("여러 숙소의 데이터를 합산하면") {
+            then("각 숙소의 수치를 합산한 결과를 반환한다") {
+                clearAllMocks()
+
+                // prop-1: 체크인 1건, 매출 135,000
+                every {
+                    reservationRepository.findByPropertyIdAndDateRange("prop-1", today, today)
+                } returns listOf(sampleReservation("rsv-1", ReservationStatus.CONFIRMED, checkIn = today, totalAmount = 135_000))
+                every {
+                    reservationRepository.findByPropertyIdAndDateRange("prop-1", yesterday, yesterday)
+                } returns emptyList()
+                every { reservationRepository.findByPropertyIdAndStatus("prop-1", ReservationStatus.PENDING) } returns emptyList()
+                every { reservationRepository.countByPropertyIdAndCreatedDate("prop-1", today) } returns 1
+                every { reservationRepository.countByPropertyIdAndCreatedDate("prop-1", yesterday) } returns 0
+                every { roomRepository.findByPropertyId("prop-1") } returns listOf(
+                    Room.create("r-1", "prop-1", "rt-1", "101", 1)
+                )
+
+                // prop-2: 체크인 2건, 매출 400,000
+                every {
+                    reservationRepository.findByPropertyIdAndDateRange("prop-2", today, today)
+                } returns listOf(
+                    sampleReservation("rsv-2", ReservationStatus.CONFIRMED, checkIn = today, totalAmount = 200_000),
+                    sampleReservation("rsv-3", ReservationStatus.CONFIRMED, checkIn = today, totalAmount = 200_000)
+                )
+                every {
+                    reservationRepository.findByPropertyIdAndDateRange("prop-2", yesterday, yesterday)
+                } returns emptyList()
+                every { reservationRepository.findByPropertyIdAndStatus("prop-2", ReservationStatus.PENDING) } returns emptyList()
+                every { reservationRepository.countByPropertyIdAndCreatedDate("prop-2", today) } returns 2
+                every { reservationRepository.countByPropertyIdAndCreatedDate("prop-2", yesterday) } returns 0
+                every { roomRepository.findByPropertyId("prop-2") } returns listOf(
+                    Room.create("r-2", "prop-2", "rt-2", "201", 2).checkIn()
+                )
+
+                val result = sut.getAggregatedDashboard(listOf("prop-1", "prop-2"), today)
+
+                result.todayCheckInCount shouldBe 3
+                result.todayRevenue shouldBe 535_000
+                result.todayNewReservations shouldBe 3
+                result.occupancy.total shouldBe 2
+                result.occupancy.occupied shouldBe 1
+                result.occupancy.available shouldBe 1
+            }
+        }
+
+        `when`("숙소 목록이 비어있으면") {
+            then("모든 값이 0인 결과를 반환한다") {
+                val result = sut.getAggregatedDashboard(emptyList(), today)
+
+                result.todayCheckInCount shouldBe 0
+                result.todayRevenue shouldBe 0
+                result.occupancy.total shouldBe 0
+            }
+        }
+    }
 })
