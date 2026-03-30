@@ -5,9 +5,14 @@ spring:
     active: local
   mongodb:
     uri: mongodb://localhost:27017/stayops?replicaSet=rs0
+  data:
     redis:
       host: localhost
       port: 6379
+  session:
+    redis:
+      repository-type: default
+    timeout: 30m
 
 management:
   endpoints:
