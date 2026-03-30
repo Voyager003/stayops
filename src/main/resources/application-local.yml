@@ -1,0 +1,7 @@
+spring:
+  mongodb:
+    uri: mongodb://localhost:27017/stayops?replicaSet=rs0
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
