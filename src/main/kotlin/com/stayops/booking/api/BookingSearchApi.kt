@@ -31,6 +31,17 @@ class BookingSearchApi(
         return ResponseEntity.ok(roomTypes.map { RoomTypeSearchResponse.from(it) })
     }
 
+    @GetMapping("/{propertyId}/offers")
+    fun getPropertyOffers(
+        @PathVariable propertyId: String,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) checkIn: LocalDate,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) checkOut: LocalDate,
+        @RequestParam guests: Int
+    ): ResponseEntity<List<PropertyOfferResponse>> {
+        val offers = bookingSearchApplication.getPropertyOffers(propertyId, checkIn, checkOut, guests)
+        return ResponseEntity.ok(offers.map { PropertyOfferResponse.from(it) })
+    }
+
     @GetMapping("/{propertyId}/room-types/{roomTypeId}/availability")
     fun getAvailability(
         @PathVariable propertyId: String,

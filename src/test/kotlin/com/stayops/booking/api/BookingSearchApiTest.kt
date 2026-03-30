@@ -1,6 +1,7 @@
 package com.stayops.booking.api
 
 import com.stayops.booking.application.service.BookingSearchApplication
+import com.stayops.booking.application.service.PropertyOffer
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.property.domain.model.*
 import com.stayops.room.domain.model.RoomType
@@ -81,6 +82,8 @@ class BookingSearchApiTest {
                     status { isOk() }
                     jsonPath("$.name") { value("테스트 호텔") }
                     jsonPath("$.type") { value("HOTEL") }
+                    jsonPath("$.timezone") { value("Asia/Seoul") }
+                    jsonPath("$.currency") { value("KRW") }
                 }
         }
 
@@ -158,6 +161,41 @@ class BookingSearchApiTest {
                 status { isOk() }
                 jsonPath("$.totalAmount") { value(200000) }
                 jsonPath("$.nights") { value(2) }
+            }
+        }
+    }
+
+    @Nested
+    inner class `공개_예약_Offer_조회` {
+
+        @Test
+        fun `객실별 예약 제안을 반환한다`() {
+            val checkIn = LocalDate.of(2026, 4, 10)
+            val checkOut = LocalDate.of(2026, 4, 12)
+            every {
+                bookingSearchApplication.getPropertyOffers("prop-1", checkIn, checkOut, 3)
+            } returns listOf(
+                PropertyOffer(
+                    roomType = sampleRoomType(),
+                    availableCount = 1,
+                    fitsGuests = false,
+                    rateQuote = Money.won(200_000),
+                    checkIn = checkIn,
+                    checkOut = checkOut
+                )
+            )
+
+            mockMvc.get("/api/v1/booking/properties/prop-1/offers") {
+                param("checkIn", "2026-04-10")
+                param("checkOut", "2026-04-12")
+                param("guests", "3")
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$[0].roomTypeId") { value("rt-1") }
+                jsonPath("$[0].availableCount") { value(1) }
+                jsonPath("$[0].fitsGuests") { value(false) }
+                jsonPath("$[0].rateQuote.totalAmount") { value(200000) }
+                jsonPath("$[0].rateQuote.nights") { value(2) }
             }
         }
     }
