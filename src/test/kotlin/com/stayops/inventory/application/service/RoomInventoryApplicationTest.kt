@@ -3,6 +3,8 @@ package com.stayops.inventory.application.service
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.inventory.infrastructure.cache.RedisRoomInventoryCache
+import com.stayops.room.domain.model.Room
+import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
 import io.kotest.assertions.throwables.shouldThrow
@@ -13,6 +15,7 @@ import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import org.springframework.dao.OptimisticLockingFailureException
 import java.time.Instant
 import java.time.LocalDate
@@ -21,7 +24,8 @@ class RoomInventoryApplicationTest : BehaviorSpec({
 
     val inventoryRepository = mockk<RoomInventoryRepository>()
     val cache = mockk<RedisRoomInventoryCache>()
-    val inventoryApplication = RoomInventoryApplication(inventoryRepository, cache)
+    val roomRepository = mockk<RoomRepository>()
+    val inventoryApplication = RoomInventoryApplication(inventoryRepository, cache, roomRepository)
 
     val today = LocalDate.of(2026, 3, 12)
 
@@ -46,31 +50,48 @@ class RoomInventoryApplicationTest : BehaviorSpec({
         updatedAt = Instant.now()
     )
 
-    given("재고 초기화 시") {
-        `when`("해당 날짜에 재고가 없으면") {
-            every { inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate("prop-1", "rt-1", today) } returns null
+    given("판매 오픈 시") {
+        `when`("날짜 범위에 재고가 없으면") {
+            val rooms = listOf(
+                Room.create("r-1", "prop-1", "rt-1", "101", 1),
+                Room.create("r-2", "prop-1", "rt-1", "102", 1),
+                Room.create("r-3", "prop-1", "rt-1", "103", 1)
+            )
+            every { roomRepository.findByRoomTypeId("rt-1") } returns rooms
+            every {
+                inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween("prop-1", "rt-1", today, today.plusDays(2))
+            } returns emptyList()
             every { inventoryRepository.save(any()) } answers { firstArg() }
-            val cachedSlot = slot<RoomInventory>()
-            justRun { cache.put(capture(cachedSlot)) }
 
-            val result = inventoryApplication.initializeInventory("prop-1", "rt-1", today, 5)
+            val created = inventoryApplication.openInventory("prop-1", "rt-1", today, today.plusDays(2))
 
-            then("재고를 생성하고 캐시에 저장한다") {
-                result.propertyId shouldBe "prop-1"
-                result.roomTypeId shouldBe "rt-1"
-                result.date shouldBe today
-                result.totalCount shouldBe 5
-                result.availableCount shouldBe 5
-                cachedSlot.captured.totalCount shouldBe 5
+            then("3일치 재고가 생성되고 totalCount는 Room 수와 같다") {
+                created shouldBe 3
+                verify(exactly = 3) { inventoryRepository.save(match { it.totalCount == 3 }) }
             }
         }
 
-        `when`("해당 날짜에 이미 재고가 있으면") {
-            every { inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate("prop-1", "rt-1", today) } returns newInventory()
+        `when`("날짜 범위에 이미 재고가 있는 날짜는 건너뛴다") {
+            val rooms = listOf(Room.create("r-1", "prop-1", "rt-1", "101", 1))
+            every { roomRepository.findByRoomTypeId("rt-1") } returns rooms
+            every {
+                inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween("prop-1", "rt-1", today, today.plusDays(2))
+            } returns listOf(newInventory(date = today, totalCount = 1))
+            every { inventoryRepository.save(any()) } answers { firstArg() }
 
-            then("ConflictException이 발생한다") {
-                shouldThrow<ConflictException> {
-                    inventoryApplication.initializeInventory("prop-1", "rt-1", today, 5)
+            val created = inventoryApplication.openInventory("prop-1", "rt-1", today, today.plusDays(2))
+
+            then("기존 재고가 있는 날짜를 제외하고 생성한다") {
+                created shouldBe 2
+            }
+        }
+
+        `when`("등록된 객실이 없으면") {
+            every { roomRepository.findByRoomTypeId("rt-1") } returns emptyList()
+
+            then("IllegalArgumentException이 발생한다") {
+                shouldThrow<IllegalArgumentException> {
+                    inventoryApplication.openInventory("prop-1", "rt-1", today, today.plusDays(2))
                 }
             }
         }

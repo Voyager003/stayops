@@ -3,6 +3,7 @@ package com.stayops.inventory.application.service
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.inventory.infrastructure.cache.RedisRoomInventoryCache
+import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
 import org.springframework.dao.OptimisticLockingFailureException
@@ -13,25 +14,45 @@ import java.util.UUID
 @Service
 class RoomInventoryApplication(
     private val inventoryRepository: RoomInventoryRepository,
-    private val cache: RedisRoomInventoryCache
+    private val cache: RedisRoomInventoryCache,
+    private val roomRepository: RoomRepository
 ) {
-    fun initializeInventory(
+
+    fun openInventory(
         propertyId: String,
         roomTypeId: String,
-        date: LocalDate,
-        totalCount: Int
-    ): RoomInventory {
-        inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate(propertyId, roomTypeId, date)?.let {
-            throw ConflictException("INVENTORY_ALREADY_EXISTS", "해당 날짜의 재고가 이미 존재합니다: $date")
+        startDate: LocalDate,
+        endDate: LocalDate
+    ): Int {
+        require(!startDate.isAfter(endDate)) { "시작일이 종료일보다 클 수 없습니다." }
+
+        val totalCount = roomRepository.findByRoomTypeId(roomTypeId)
+            .count { it.propertyId == propertyId }
+        require(totalCount >= 1) { "해당 객실 타입에 등록된 객실이 없습니다." }
+
+        val existing = inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(
+            propertyId, roomTypeId, startDate, endDate
+        ).associateBy { it.date }
+
+        var created = 0
+        var date = startDate
+        while (!date.isAfter(endDate)) {
+            if (existing[date] == null) {
+                inventoryRepository.save(
+                    RoomInventory.create(
+                        id = UUID.randomUUID().toString(),
+                        propertyId = propertyId,
+                        roomTypeId = roomTypeId,
+                        date = date,
+                        totalCount = totalCount
+                    )
+                )
+                created++
+            }
+            date = date.plusDays(1)
         }
-        val inventory = RoomInventory.create(
-            id = UUID.randomUUID().toString(),
-            propertyId = propertyId,
-            roomTypeId = roomTypeId,
-            date = date,
-            totalCount = totalCount
-        )
-        return inventoryRepository.save(inventory).also { cache.put(it) }
+
+        return created
     }
 
     fun getAvailability(
@@ -70,7 +91,6 @@ class RoomInventoryApplication(
         }
     }
 
-    // Used internally by Reservation domain
     fun reserve(propertyId: String, roomTypeId: String, date: LocalDate): RoomInventory {
         val inventory = getOrThrow(propertyId, roomTypeId, date)
         return try {
@@ -80,7 +100,6 @@ class RoomInventoryApplication(
         }
     }
 
-    // Used internally by Reservation domain
     fun release(propertyId: String, roomTypeId: String, date: LocalDate): RoomInventory {
         val inventory = getOrThrow(propertyId, roomTypeId, date)
         return try {

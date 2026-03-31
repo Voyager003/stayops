@@ -17,7 +17,9 @@ import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
+import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomType
+import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.Money
 import com.ninjasquad.springmockk.MockkBean
@@ -40,6 +42,7 @@ class BookingE2ETest @Autowired constructor(
     private val bookingApplication: BookingApplication,
     private val propertyRepository: PropertyRepository,
     private val roomTypeRepository: RoomTypeRepository,
+    private val roomRepository: RoomRepository,
     private val channelRepository: ChannelRepository,
     private val inventoryApplication: RoomInventoryApplication,
     private val memberRepository: MemberRepository,
@@ -80,10 +83,11 @@ class BookingE2ETest @Autowired constructor(
 
         channelRepository.save(Channel.createDirect(id = "ch-e2e", propertyId = "prop-e2e"))
 
-        // Initialize inventory for check-in dates
-        listOf(checkIn, checkIn.plusDays(1)).forEach { date ->
-            inventoryApplication.initializeInventory("prop-e2e", "rt-e2e", date, 3)
-        }
+        // Room 추가 후 판매 오픈
+        roomRepository.save(Room.create("room-e2e-1", "prop-e2e", "rt-e2e", "101", 1))
+        roomRepository.save(Room.create("room-e2e-2", "prop-e2e", "rt-e2e", "102", 1))
+        roomRepository.save(Room.create("room-e2e-3", "prop-e2e", "rt-e2e", "103", 1))
+        inventoryApplication.openInventory("prop-e2e", "rt-e2e", checkIn, checkIn.plusDays(1))
 
         memberRepository.save(
             Member.create(

@@ -1,12 +1,11 @@
 package com.stayops.inventory.api.dto
 
-import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import java.time.LocalDate
 
-data class InitializeInventoryRequest(
+data class OpenInventoryRequest(
     @field:NotBlank val roomTypeId: String,
-    @field:NotNull val date: LocalDate,
-    @field:Min(1) val totalCount: Int
+    @field:NotNull val startDate: LocalDate,
+    @field:NotNull val endDate: LocalDate
 )

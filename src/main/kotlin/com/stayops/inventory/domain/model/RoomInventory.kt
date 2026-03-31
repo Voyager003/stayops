@@ -50,6 +50,14 @@ data class RoomInventory private constructor(
         return copy(blockedCount = blockedCount + count, updatedAt = Instant.now())
     }
 
+    fun updateTotalCount(newTotalCount: Int): RoomInventory {
+        require(newTotalCount >= 1) { "총 객실 수는 1 이상이어야 합니다: $newTotalCount" }
+        require(reservedCount + blockedCount <= newTotalCount) {
+            "총 객실 수가 현재 예약+차단 수보다 작을 수 없습니다: reserved=$reservedCount, blocked=$blockedCount, newTotal=$newTotalCount"
+        }
+        return copy(totalCount = newTotalCount, updatedAt = Instant.now())
+    }
+
     fun unblock(count: Int): RoomInventory {
         require(count >= 1) { "해제 수는 1 이상이어야 합니다: $count" }
         require(blockedCount >= count) {

@@ -1,8 +1,8 @@
 package com.stayops.inventory.api
 
 import com.stayops.inventory.api.dto.AvailabilityResponse
-import com.stayops.inventory.api.dto.InitializeInventoryRequest
 import com.stayops.inventory.api.dto.InventoryUpdateAction
+import com.stayops.inventory.api.dto.OpenInventoryRequest
 import com.stayops.inventory.api.dto.UpdateInventoryRequest
 import com.stayops.inventory.application.service.RoomInventoryApplication
 import com.stayops.shared.security.PropertyAccessChecker
@@ -26,20 +26,20 @@ class RoomInventoryApi(
     private val inventoryApplication: RoomInventoryApplication,
     private val propertyAccessChecker: PropertyAccessChecker
 ) {
-    @PostMapping("/inventory/initialize")
+    @PostMapping("/inventory/open")
     @ResponseStatus(HttpStatus.CREATED)
-    fun initialize(
+    fun openInventory(
         @PathVariable pid: String,
-        @RequestBody @Valid request: InitializeInventoryRequest
-    ): AvailabilityResponse {
+        @RequestBody @Valid request: OpenInventoryRequest
+    ): Map<String, Int> {
         propertyAccessChecker.requireAccess(pid)
-        val inventory = inventoryApplication.initializeInventory(
+        val created = inventoryApplication.openInventory(
             propertyId = pid,
             roomTypeId = request.roomTypeId,
-            date = request.date,
-            totalCount = request.totalCount
+            startDate = request.startDate,
+            endDate = request.endDate
         )
-        return AvailabilityResponse.from(inventory)
+        return mapOf("createdDays" to created)
     }
 
     @GetMapping("/availability")
