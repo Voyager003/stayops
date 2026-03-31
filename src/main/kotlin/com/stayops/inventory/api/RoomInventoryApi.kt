@@ -2,21 +2,17 @@ package com.stayops.inventory.api
 
 import com.stayops.inventory.api.dto.AvailabilityResponse
 import com.stayops.inventory.api.dto.InventoryUpdateAction
-import com.stayops.inventory.api.dto.OpenInventoryRequest
 import com.stayops.inventory.api.dto.UpdateInventoryRequest
 import com.stayops.inventory.application.service.RoomInventoryApplication
 import com.stayops.shared.security.PropertyAccessChecker
 import jakarta.validation.Valid
 import org.springframework.format.annotation.DateTimeFormat
-import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
-import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
-import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDate
 
@@ -26,22 +22,6 @@ class RoomInventoryApi(
     private val inventoryApplication: RoomInventoryApplication,
     private val propertyAccessChecker: PropertyAccessChecker
 ) {
-    @PostMapping("/inventory/open")
-    @ResponseStatus(HttpStatus.CREATED)
-    fun openInventory(
-        @PathVariable pid: String,
-        @RequestBody @Valid request: OpenInventoryRequest
-    ): Map<String, Int> {
-        propertyAccessChecker.requireAccess(pid)
-        val created = inventoryApplication.openInventory(
-            propertyId = pid,
-            roomTypeId = request.roomTypeId,
-            startDate = request.startDate,
-            endDate = request.endDate
-        )
-        return mapOf("createdDays" to created)
-    }
-
     @GetMapping("/availability")
     fun getAvailability(
         @PathVariable pid: String,

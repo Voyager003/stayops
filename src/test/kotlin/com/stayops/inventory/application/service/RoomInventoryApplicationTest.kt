@@ -11,6 +11,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
@@ -50,8 +51,8 @@ class RoomInventoryApplicationTest : BehaviorSpec({
         updatedAt = Instant.now()
     )
 
-    given("판매 오픈 시") {
-        `when`("날짜 범위에 재고가 없으면") {
+    given("재고 자동 동기화 시") {
+        `when`("Room이 등록되어 있으면") {
             val rooms = listOf(
                 Room.create("r-1", "prop-1", "rt-1", "101", 1),
                 Room.create("r-2", "prop-1", "rt-1", "102", 1),
@@ -59,40 +60,25 @@ class RoomInventoryApplicationTest : BehaviorSpec({
             )
             every { roomRepository.findByRoomTypeId("rt-1") } returns rooms
             every {
-                inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween("prop-1", "rt-1", today, today.plusDays(2))
+                inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween("prop-1", "rt-1", any(), any())
             } returns emptyList()
             every { inventoryRepository.save(any()) } answers { firstArg() }
 
-            val created = inventoryApplication.openInventory("prop-1", "rt-1", today, today.plusDays(2))
+            inventoryApplication.syncInventoryForRoomType("prop-1", "rt-1")
 
-            then("3일치 재고가 생성되고 totalCount는 Room 수와 같다") {
-                created shouldBe 3
-                verify(exactly = 3) { inventoryRepository.save(match { it.totalCount == 3 }) }
-            }
-        }
-
-        `when`("날짜 범위에 이미 재고가 있는 날짜는 건너뛴다") {
-            val rooms = listOf(Room.create("r-1", "prop-1", "rt-1", "101", 1))
-            every { roomRepository.findByRoomTypeId("rt-1") } returns rooms
-            every {
-                inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween("prop-1", "rt-1", today, today.plusDays(2))
-            } returns listOf(newInventory(date = today, totalCount = 1))
-            every { inventoryRepository.save(any()) } answers { firstArg() }
-
-            val created = inventoryApplication.openInventory("prop-1", "rt-1", today, today.plusDays(2))
-
-            then("기존 재고가 있는 날짜를 제외하고 생성한다") {
-                created shouldBe 2
+            then("향후 91일치 재고가 생성되고 totalCount는 Room 수와 같다") {
+                verify(exactly = 91) { inventoryRepository.save(match { it.totalCount == 3 }) }
             }
         }
 
         `when`("등록된 객실이 없으면") {
+            clearAllMocks()
             every { roomRepository.findByRoomTypeId("rt-1") } returns emptyList()
 
-            then("IllegalArgumentException이 발생한다") {
-                shouldThrow<IllegalArgumentException> {
-                    inventoryApplication.openInventory("prop-1", "rt-1", today, today.plusDays(2))
-                }
+            inventoryApplication.syncInventoryForRoomType("prop-1", "rt-1")
+
+            then("아무것도 생성하지 않는다") {
+                verify(exactly = 0) { inventoryRepository.save(any()) }
             }
         }
     }

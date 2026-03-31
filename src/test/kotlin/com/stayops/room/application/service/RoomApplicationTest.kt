@@ -1,5 +1,6 @@
 package com.stayops.room.application.service
 
+import com.stayops.inventory.application.service.RoomInventoryApplication
 import com.stayops.room.api.dto.RoomStatusAction
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomStatus
@@ -10,13 +11,15 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.every
+import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.verify
 
 class RoomApplicationTest : BehaviorSpec({
 
     val roomRepository = mockk<RoomRepository>()
-    val roomApplication = RoomApplication(roomRepository)
+    val inventoryApplication = mockk<RoomInventoryApplication>()
+    val roomApplication = RoomApplication(roomRepository, inventoryApplication)
 
     fun newRoom(id: String = "room-1", propertyId: String = "prop-1", roomNumber: String = "101") =
         Room.create(
@@ -31,6 +34,7 @@ class RoomApplicationTest : BehaviorSpec({
         `when`("중복 호수가 없으면") {
             every { roomRepository.findByPropertyIdAndRoomNumber("prop-1", "101") } returns null
             every { roomRepository.save(any()) } answers { firstArg() }
+            justRun { inventoryApplication.syncInventoryForRoomType("prop-1", "rt-1") }
 
             val result = roomApplication.createRoom(
                 propertyId = "prop-1",

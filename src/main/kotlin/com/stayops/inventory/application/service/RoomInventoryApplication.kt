@@ -18,41 +18,39 @@ class RoomInventoryApplication(
     private val roomRepository: RoomRepository
 ) {
 
-    fun openInventory(
-        propertyId: String,
-        roomTypeId: String,
-        startDate: LocalDate,
-        endDate: LocalDate
-    ): Int {
-        require(!startDate.isAfter(endDate)) { "시작일이 종료일보다 클 수 없습니다." }
+    companion object {
+        const val INVENTORY_HORIZON_DAYS = 90L
+    }
 
-        val totalCount = roomRepository.findByRoomTypeId(roomTypeId)
+    fun syncInventoryForRoomType(propertyId: String, roomTypeId: String) {
+        val roomCount = roomRepository.findByRoomTypeId(roomTypeId)
             .count { it.propertyId == propertyId }
-        require(totalCount >= 1) { "해당 객실 타입에 등록된 객실이 없습니다." }
+        if (roomCount < 1) return
 
+        val today = LocalDate.now()
+        val endDate = today.plusDays(INVENTORY_HORIZON_DAYS)
         val existing = inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(
-            propertyId, roomTypeId, startDate, endDate
+            propertyId, roomTypeId, today, endDate
         ).associateBy { it.date }
 
-        var created = 0
-        var date = startDate
+        var date = today
         while (!date.isAfter(endDate)) {
-            if (existing[date] == null) {
+            val inv = existing[date]
+            if (inv == null) {
                 inventoryRepository.save(
                     RoomInventory.create(
                         id = UUID.randomUUID().toString(),
                         propertyId = propertyId,
                         roomTypeId = roomTypeId,
                         date = date,
-                        totalCount = totalCount
+                        totalCount = roomCount
                     )
                 )
-                created++
+            } else if (inv.totalCount != roomCount) {
+                inventoryRepository.save(inv.updateTotalCount(roomCount))
             }
             date = date.plusDays(1)
         }
-
-        return created
     }
 
     fun getAvailability(

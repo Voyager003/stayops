@@ -1,5 +1,6 @@
 package com.stayops.room.application.service
 
+import com.stayops.inventory.application.service.RoomInventoryApplication
 import com.stayops.room.api.dto.RoomStatusAction
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.repository.RoomRepository
@@ -10,7 +11,8 @@ import java.util.UUID
 
 @Service
 class RoomApplication(
-    private val roomRepository: RoomRepository
+    private val roomRepository: RoomRepository,
+    private val inventoryApplication: RoomInventoryApplication
 ) {
     fun createRoom(
         propertyId: String,
@@ -28,7 +30,9 @@ class RoomApplication(
             roomNumber = roomNumber,
             floor = floor
         )
-        return roomRepository.save(room)
+        val saved = roomRepository.save(room)
+        inventoryApplication.syncInventoryForRoomType(propertyId, roomTypeId)
+        return saved
     }
 
     fun getRoom(id: String): Room =

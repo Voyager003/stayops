@@ -6,8 +6,7 @@ import com.stayops.auth.domain.model.PropertyRole
 import com.stayops.auth.domain.repository.MemberRepository
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
-import com.stayops.inventory.domain.model.RoomInventory
-import com.stayops.inventory.domain.repository.RoomInventoryRepository
+import com.stayops.inventory.application.service.RoomInventoryApplication
 import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo
 import com.stayops.property.domain.model.Property
@@ -33,7 +32,7 @@ class LocalDummyDataInitializer(
     private val propertyRepository: PropertyRepository,
     private val roomTypeRepository: RoomTypeRepository,
     private val roomRepository: RoomRepository,
-    private val roomInventoryRepository: RoomInventoryRepository,
+    private val inventoryApplication: RoomInventoryApplication,
     private val channelRepository: ChannelRepository,
     private val passwordEncoder: PasswordEncoder
 ) : ApplicationRunner {
@@ -150,27 +149,8 @@ class LocalDummyDataInitializer(
     }
 
     private fun initInventory() {
-        val today = LocalDate.now()
-        for (d in 0L until 30L) {
-            val date = today.plusDays(d)
-            val stdInv = RoomInventory.create(
-                id = "inv-dummy-std-$date",
-                propertyId = PROPERTY_ID,
-                roomTypeId = RT_STANDARD,
-                date = date,
-                totalCount = 5
-            )
-            roomInventoryRepository.save(stdInv)
-
-            val dlxInv = RoomInventory.create(
-                id = "inv-dummy-dlx-$date",
-                propertyId = PROPERTY_ID,
-                roomTypeId = RT_DELUXE,
-                date = date,
-                totalCount = 3
-            )
-            roomInventoryRepository.save(dlxInv)
-        }
+        inventoryApplication.syncInventoryForRoomType(PROPERTY_ID, RT_STANDARD)
+        inventoryApplication.syncInventoryForRoomType(PROPERTY_ID, RT_DELUXE)
     }
 
     private fun initChannel() {

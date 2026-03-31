@@ -83,11 +83,11 @@ class BookingE2ETest @Autowired constructor(
 
         channelRepository.save(Channel.createDirect(id = "ch-e2e", propertyId = "prop-e2e"))
 
-        // Room 추가 후 판매 오픈
+        // Room 추가 → 재고 자동 생성
         roomRepository.save(Room.create("room-e2e-1", "prop-e2e", "rt-e2e", "101", 1))
         roomRepository.save(Room.create("room-e2e-2", "prop-e2e", "rt-e2e", "102", 1))
         roomRepository.save(Room.create("room-e2e-3", "prop-e2e", "rt-e2e", "103", 1))
-        inventoryApplication.openInventory("prop-e2e", "rt-e2e", checkIn, checkIn.plusDays(1))
+        inventoryApplication.syncInventoryForRoomType("prop-e2e", "rt-e2e")
 
         memberRepository.save(
             Member.create(
