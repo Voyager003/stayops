@@ -178,4 +178,57 @@ class RoomInventoryApplicationTest : BehaviorSpec({
             }
         }
     }
+
+    given("일괄 차단 시") {
+        `when`("요일을 지정하면 해당 요일만 차단한다") {
+            clearAllMocks()
+
+            // today(2026-03-12)부터 7일간 — 요일에 따라 필터
+            val inventories = (0L..6L).map { d ->
+                newInventory(id = "inv-$d", date = today.plusDays(d), totalCount = 5)
+            }
+            inventories.forEach { inv ->
+                every {
+                    inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate("prop-1", "rt-1", inv.date)
+                } returns inv
+            }
+            every { inventoryRepository.save(any()) } answers { firstArg() }
+            justRun { cache.evict(any(), any(), any()) }
+
+            val mondayCount = (0L..6L).count { today.plusDays(it).dayOfWeek == java.time.DayOfWeek.MONDAY }
+
+            val processed = inventoryApplication.bulkBlock(
+                "prop-1", "rt-1", today, today.plusDays(6),
+                listOf(java.time.DayOfWeek.MONDAY), "BLOCK", 1
+            )
+
+            then("월요일에 해당하는 날짜만 차단된다") {
+                processed shouldBe mondayCount
+            }
+        }
+
+        `when`("요일을 지정하지 않으면 전체 날짜를 차단한다") {
+            clearAllMocks()
+
+            val inventories = (0L..2L).map { d ->
+                newInventory(id = "inv-$d", date = today.plusDays(d), totalCount = 5)
+            }
+            inventories.forEach { inv ->
+                every {
+                    inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate("prop-1", "rt-1", inv.date)
+                } returns inv
+            }
+            every { inventoryRepository.save(any()) } answers { firstArg() }
+            justRun { cache.evict(any(), any(), any()) }
+
+            val processed = inventoryApplication.bulkBlock(
+                "prop-1", "rt-1", today, today.plusDays(2),
+                null, "BLOCK", 1
+            )
+
+            then("3일 모두 차단된다") {
+                processed shouldBe 3
+            }
+        }
+    }
 })

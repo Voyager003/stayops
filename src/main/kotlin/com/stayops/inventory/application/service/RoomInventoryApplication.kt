@@ -8,6 +8,7 @@ import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
 import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.stereotype.Service
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.util.UUID
 
@@ -60,6 +61,39 @@ class RoomInventoryApplication(
         endDate: LocalDate
     ): List<RoomInventory> =
         inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(propertyId, roomTypeId, startDate, endDate)
+
+    fun bulkBlock(
+        propertyId: String,
+        roomTypeId: String,
+        startDate: LocalDate,
+        endDate: LocalDate,
+        daysOfWeek: List<DayOfWeek>?,
+        action: String,
+        count: Int
+    ): Int {
+        require(!startDate.isAfter(endDate)) { "시작일이 종료일보다 클 수 없습니다." }
+
+        var processed = 0
+        var date = startDate
+        while (!date.isAfter(endDate)) {
+            if (daysOfWeek == null || date.dayOfWeek in daysOfWeek) {
+                val inv = inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate(propertyId, roomTypeId, date)
+                if (inv != null) {
+                    try {
+                        val updated = if (action == "BLOCK") inv.block(count) else inv.unblock(count)
+                        saveAndEvict(updated)
+                        processed++
+                    } catch (_: IllegalArgumentException) {
+                        // 가용 재고 부족 등 — 해당 날짜 건너뜀
+                    } catch (_: OptimisticLockingFailureException) {
+                        // 충돌 — 해당 날짜 건너뜀
+                    }
+                }
+            }
+            date = date.plusDays(1)
+        }
+        return processed
+    }
 
     fun blockInventory(
         propertyId: String,
