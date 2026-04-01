@@ -2,6 +2,8 @@ package com.stayops.property.application.service
 
 import com.stayops.auth.domain.model.PropertyRole
 import com.stayops.auth.domain.repository.MemberRepository
+import com.stayops.channel.domain.model.Channel
+import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo
 import com.stayops.property.domain.model.Property
@@ -14,7 +16,8 @@ import java.util.UUID
 @Service
 class PropertyApplication(
     private val propertyRepository: PropertyRepository,
-    private val memberRepository: MemberRepository
+    private val memberRepository: MemberRepository,
+    private val channelRepository: ChannelRepository
 ) {
     fun createProperty(
         ownerId: String,
@@ -38,6 +41,8 @@ class PropertyApplication(
             currency = currency
         )
         val saved = propertyRepository.save(property)
+
+        channelRepository.save(Channel.createDirect(UUID.randomUUID().toString(), saved.id))
 
         val member = memberRepository.findById(ownerId)
         if (member != null) {

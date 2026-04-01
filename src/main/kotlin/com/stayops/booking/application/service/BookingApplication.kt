@@ -72,9 +72,11 @@ class BookingApplication(
         val roomType = roomTypeRepository.findById(roomTypeId)
             ?: throw NotFoundException("ROOM_TYPE_NOT_FOUND", "객실타입을 찾을 수 없습니다: $roomTypeId")
 
-        // 3. Channel (DIRECT) 조회
+        // 3. Channel (DIRECT) 조회 — 없으면 자동 생성 (기존 Property 호환)
         val channel = channelRepository.findByPropertyIdAndCode(propertyId, "DIRECT")
-            ?: throw NotFoundException("CHANNEL_NOT_FOUND", "DIRECT 채널을 찾을 수 없습니다")
+            ?: channelRepository.save(
+                com.stayops.channel.domain.model.Channel.createDirect(UUID.randomUUID().toString(), propertyId)
+            )
 
         // 4. 요금 계산
         val dateRange = DateRange.of(checkIn, checkOut)
