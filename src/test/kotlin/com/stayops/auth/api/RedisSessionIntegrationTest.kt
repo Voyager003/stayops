@@ -118,7 +118,76 @@ class RedisSessionIntegrationTest @Autowired constructor(
             assertThat(logoutStatus).isEqualTo(204)
 
             val afterStatus = get("/api/v1/properties", cookie)
-            assertThat(afterStatus).isIn(401, 403)
+            assertThat(afterStatus).isEqualTo(401)
+        }
+
+        @Test
+        fun `세션이 Redis에서 만료되면 인증할 수 없다`() {
+            val cookie = loginAndGetSessionCookie()
+            val sessionId = extractSessionId(cookie)
+
+            // 세션 강제 삭제 (만료 시뮬레이션)
+            redisTemplate.delete("spring:session:sessions:$sessionId")
+
+            val afterStatus = get("/api/v1/properties", cookie)
+            assertThat(afterStatus).isEqualTo(401)
+        }
+    }
+
+    @Nested
+    inner class `CUSTOMER 세션 만료` {
+
+        @BeforeEach
+        fun setUpCustomer() {
+            val customer = Member.create(
+                id = "session-test-customer",
+                email = "customer@test.com",
+                passwordHash = passwordEncoder.encode("password123")!!,
+                name = "세션테스트고객",
+                role = MemberRole.CUSTOMER
+            )
+            memberMongoDataRepository.save(MemberDocument.from(customer))
+        }
+
+        private fun customerLoginAndGetCookie(): String {
+            val (status, setCookie) = post(
+                "/api/v1/booking/auth/login",
+                """{"email":"customer@test.com","password":"password123"}"""
+            )
+            assertThat(status).isEqualTo(200)
+            assertThat(setCookie).isNotNull().contains("SESSION=")
+            return setCookie!!
+        }
+
+        @Test
+        fun `CUSTOMER 로그인 후 세션 쿠키로 마이페이지를 호출할 수 있다`() {
+            val cookie = customerLoginAndGetCookie()
+
+            val status = get("/api/v1/booking/my/reservations", cookie)
+            assertThat(status).isEqualTo(200)
+        }
+
+        @Test
+        fun `CUSTOMER 세션이 Redis에서 만료되면 401을 반환한다`() {
+            val cookie = customerLoginAndGetCookie()
+            val sessionId = extractSessionId(cookie)
+
+            // 세션 강제 삭제 (만료 시뮬레이션)
+            redisTemplate.delete("spring:session:sessions:$sessionId")
+
+            val status = get("/api/v1/booking/my/reservations", cookie)
+            assertThat(status).isEqualTo(401)
+        }
+
+        @Test
+        fun `CUSTOMER 로그아웃 후 마이페이지를 호출하면 401을 반환한다`() {
+            val cookie = customerLoginAndGetCookie()
+
+            val (logoutStatus, _) = post("/api/v1/booking/auth/logout", "", cookie)
+            assertThat(logoutStatus).isEqualTo(204)
+
+            val status = get("/api/v1/booking/my/reservations", cookie)
+            assertThat(status).isEqualTo(401)
         }
     }
 }

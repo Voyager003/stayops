@@ -92,6 +92,68 @@
 - **M8: HttpChannelSyncAdapter에 타임아웃 미설정** — OTA 장애 시 무한 대기 가능
 - **M10: WebhookEvent sealed interface 미사용** — dead code
 
+## 채널 관리 재설계 (2026-04-01 결정)
+
+### 매핑 기능 제거
+
+- **결정**: 객실타입 매핑(ChannelMapping) 제거, roomTypeId를 OTA에 직접 전송
+- **배경**: 프로덕션에서 매핑이 필요한 이유는 OTA가 자체 코드 체계를 가지고 있어 PMS 내부 ID를 OTA 코드로 변환해야 하기 때문. 예: `roomTypeId → YNJ_STD_001` (야놀자가 코드를 지정)
+- **제거 근거**:
+  - Mock OTA는 우리가 만든 서버 — 양쪽 코드를 모두 통제하므로 변환 불필요
+  - 실제 OTA 연동 계획 없음
+  - 채널 매니저가 PMS에 내장된 구조에서 매핑은 불필요한 복잡성
+  - 운영자가 채널 등록 후 매핑을 별도 설정하는 단계가 제거되어 UX 개선
+- **영향 범위**:
+  - `ChannelSyncApplication`: 매핑 조회 로직 제거, roomTypeId 직접 전송
+  - `ChannelMappingRepository`, `ChannelMapping`, `MappingEntry`: 사용 중단
+  - 클라이언트 매핑 관리 페이지(`ChannelMappingPage`) 제거
+  - Mock OTA: roomTypeCode 대신 roomTypeId를 키로 재고 저장
+
+### DIRECT 채널 자동 생성
+
+- **결정**: 숙소 생성 시 DIRECT 채널 자동 생성
+- **배경**: 자사 예약(`/booking`)은 항상 DIRECT 채널을 참조하여 BookingChannel을 생성. 수동 등록 시 누락되면 예약 404 발생
+- **구현 위치**: `PropertyApplication.createProperty()` — 숙소 저장 후 `Channel.createDirect(id, propertyId)` 호출
+
+### Mock OTA MongoDB 도입
+
+- **결정**: Mock OTA에 MongoDB 영속 계층 추가 (같은 인스턴스, `mock-ota` database)
+- **배경**: 현재 인메모리(`CopyOnWriteArrayList`) 저장으로 서버 재시작 시 데이터 소실, 날짜+객실별 최신 재고 조회 불가
+- **선택 근거**:
+  - 실제 OTA도 수신한 재고를 DB에 저장
+  - PMS에서 OTA 재고 확인 기능을 위해 조회 API 필요 → 영속 저장 필수
+  - 같은 MongoDB 인스턴스에 별도 database(`mock-ota`)로 분리 — 로컬 개발 편의성, 추가 리소스 최소
+
+### Mock OTA 재고 조회 API 추가
+
+- **결정**: roomTypeId + date 기반 최신 재고 조회 엔드포인트 추가
+- **배경**: 현재 `GET /ari/received`는 전체 수신 기록 리스트만 반환. 특정 날짜의 현재 재고를 확인할 수 없음
+- **용도**: PMS 채널 관리에서 "OTA에 반영된 재고" vs "PMS 재고" 비교 표시
+
+### 채널 관리 클라이언트 확정 기능
+
+1. **채널 목록**: DIRECT(자동, 상태 표시만) + OTA 채널 CRUD + 활성화/비활성화
+2. **채널별 재고 현황 (신규)**: OTA 선택 → 객실타입 → 날짜 범위 → PMS 재고 vs OTA 재고 비교
+3. **동기화 대시보드 (기존)**: 채널별 성공/실패/대기 + 실패 건 재시도
+4. **매핑 관리: 제거**
+
+### 재고 동기화 전체 흐름 (확정)
+
+```
+관리자: 재고 오픈/마감 (PMS)
+  → RoomInventory 변경
+  → ChannelEventHandler → SyncTask 생성 (Outbox)
+  → 30초 폴링 → roomTypeId 직접 전송 (매핑 없음)
+  → Mock OTA가 MongoDB에 저장
+
+고객: /booking에서 예약 (항상 DIRECT 채널)
+  → 재고 차감 → ReservationCreated 이벤트
+  → 동일하게 OTA에 변경된 재고 push
+
+관리자: PMS 채널 관리에서 OTA 재고 확인
+  → PMS → Mock OTA 재고 조회 API → 비교 표시
+```
+
 ## 기존 코드 처리
 
 - **결정**: Phase 7-1(Channel 도메인), 7-2(Repository), 7-3(SyncTask) 코드를 폐기하고 새로 작성
