@@ -1,7 +1,6 @@
 package com.stayops.channel.application.service
 
 import com.stayops.channel.domain.model.*
-import com.stayops.channel.domain.repository.ChannelMappingRepository
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.shared.exception.NotFoundException
 import io.kotest.assertions.throwables.shouldThrow
@@ -13,11 +12,9 @@ import java.math.BigDecimal
 class ChannelApplicationTest : BehaviorSpec({
 
     val channelRepository = mockk<ChannelRepository>()
-    val mappingRepository = mockk<ChannelMappingRepository>()
 
     val sut = ChannelApplication(
-        channelRepository = channelRepository,
-        channelMappingRepository = mappingRepository
+        channelRepository = channelRepository
     )
 
     fun otaChannel(id: String = "ch-1", code: String = "AGODA") = Channel.createOta(
@@ -107,22 +104,4 @@ class ChannelApplicationTest : BehaviorSpec({
         }
     }
 
-    // -- addMapping --
-
-    given("매핑 추가 시") {
-        `when`("기존 매핑이 없으면 새로 생성한다") {
-            then("매핑이 저장된다") {
-                clearAllMocks()
-                every { mappingRepository.findByPropertyIdAndChannelCode("prop-1", "AGODA") } returns null
-                every { mappingRepository.save(any()) } answers { firstArg() }
-
-                val entry = MappingEntry("rt-1", "AGD-DLX", MappingType.ROOM_TYPE)
-                val result = sut.addMapping("prop-1", "AGODA", entry)
-
-                result.mappings.size shouldBe 1
-                result.mappings[0].externalCode shouldBe "AGD-DLX"
-                verify { mappingRepository.save(any()) }
-            }
-        }
-    }
 })

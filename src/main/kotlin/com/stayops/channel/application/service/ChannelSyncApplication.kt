@@ -5,7 +5,6 @@ import com.stayops.channel.domain.model.ChannelStatus
 import com.stayops.channel.domain.model.ChannelType
 import com.stayops.channel.domain.model.SyncTask
 import com.stayops.channel.domain.model.SyncTaskType
-import com.stayops.channel.domain.repository.ChannelMappingRepository
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.repository.SyncTaskRepository
 import com.stayops.channel.domain.service.ChannelAdapterProvider
@@ -19,7 +18,6 @@ import java.util.UUID
 @Service
 class ChannelSyncApplication(
     private val channelRepository: ChannelRepository,
-    private val channelMappingRepository: ChannelMappingRepository,
     private val syncTaskRepository: SyncTaskRepository,
     private val adapterProvider: ChannelAdapterProvider
 ) {
@@ -69,23 +67,13 @@ class ChannelSyncApplication(
                     return@forEach
                 }
 
-                val mapping = channelMappingRepository.findByPropertyIdAndChannelCode(
-                    processing.propertyId, processing.channelCode
-                )
-                val roomTypeId = processing.payload["roomTypeId"]?.toString() ?: ""
-                val externalCode = mapping?.findExternalCode(roomTypeId, com.stayops.channel.domain.model.MappingType.ROOM_TYPE)
-
-                if (externalCode == null) {
-                    syncTaskRepository.save(processing.skip("매핑 없음: roomTypeId=$roomTypeId"))
-                    log.warn("매핑 없음, 태스크 건너뜀: taskId={}, roomTypeId={}", processing.id, roomTypeId)
-                    return@forEach
-                }
+                val roomTypeCode = processing.payload["roomTypeId"]?.toString() ?: ""
 
                 val adapter = adapterProvider.getAdapter(processing.channelCode)
                 val result = adapter.pushAvailability(
                     endpoint = channel.connectionInfo!!.apiEndpoint,
                     apiKey = channel.connectionInfo!!.apiKey,
-                    externalRoomTypeCode = externalCode,
+                    externalRoomTypeCode = roomTypeCode,
                     payload = processing.payload,
                     idempotencyKey = processing.idempotencyKey
                 )

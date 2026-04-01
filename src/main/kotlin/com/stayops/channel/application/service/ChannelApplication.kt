@@ -1,7 +1,6 @@
 package com.stayops.channel.application.service
 
 import com.stayops.channel.domain.model.*
-import com.stayops.channel.domain.repository.ChannelMappingRepository
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.shared.exception.NotFoundException
 import org.springframework.stereotype.Service
@@ -11,8 +10,7 @@ import java.util.UUID
 
 @Service
 class ChannelApplication(
-    private val channelRepository: ChannelRepository,
-    private val channelMappingRepository: ChannelMappingRepository
+    private val channelRepository: ChannelRepository
 ) {
 
     fun createOtaChannel(
@@ -99,26 +97,4 @@ class ChannelApplication(
         channelRepository.deleteById(channelId)
     }
 
-    // -- Mapping --
-
-    fun getMappings(propertyId: String, channelCode: String): ChannelMapping? =
-        channelMappingRepository.findByPropertyIdAndChannelCode(propertyId, channelCode)
-
-    fun addMapping(propertyId: String, channelCode: String, entry: MappingEntry): ChannelMapping {
-        val mapping = channelMappingRepository.findByPropertyIdAndChannelCode(propertyId, channelCode)
-            ?: ChannelMapping.create(
-                id = UUID.randomUUID().toString(),
-                propertyId = propertyId,
-                channelCode = channelCode
-            )
-        val updated = mapping.addMapping(entry)
-        return channelMappingRepository.save(updated)
-    }
-
-    fun removeMapping(propertyId: String, channelCode: String, internalId: String, type: MappingType): ChannelMapping {
-        val mapping = channelMappingRepository.findByPropertyIdAndChannelCode(propertyId, channelCode)
-            ?: throw NotFoundException(code = "MAPPING_NOT_FOUND", message = "매핑을 찾을 수 없습니다: $channelCode")
-        val updated = mapping.removeMapping(internalId, type)
-        return channelMappingRepository.save(updated)
-    }
 }
