@@ -72,7 +72,7 @@ class ChannelSyncApplication(
                 val adapter = adapterProvider.getAdapter(processing.channelCode)
                 val result = adapter.pushAvailability(
                     endpoint = channel.connectionInfo!!.apiEndpoint,
-                    apiKey = channel.connectionInfo!!.apiKey,
+                    apiKey = null,
                     externalRoomTypeCode = roomTypeCode,
                     payload = processing.payload,
                     idempotencyKey = processing.idempotencyKey

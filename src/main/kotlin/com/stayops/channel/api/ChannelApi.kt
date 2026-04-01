@@ -3,7 +3,6 @@ package com.stayops.channel.api
 import com.stayops.channel.api.dto.*
 import com.stayops.channel.application.service.ChannelApplication
 import com.stayops.shared.security.PropertyAccessChecker
-import com.stayops.channel.domain.model.ChannelConnectionInfo
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -26,13 +25,7 @@ class ChannelApi(
             propertyId = propertyId,
             code = request.code,
             name = request.name,
-            commissionRate = request.commissionRate,
-            connectionInfo = ChannelConnectionInfo(
-                apiEndpoint = request.apiEndpoint,
-                apiKey = request.apiKey,
-                apiSecret = request.apiSecret,
-                webhookSecret = request.webhookSecret
-            )
+            commissionRate = request.commissionRate
         )
         return ResponseEntity.status(HttpStatus.CREATED).body(ChannelResponse.from(channel))
     }
@@ -65,11 +58,7 @@ class ChannelApi(
             propertyId = propertyId,
             channelId = channelId,
             name = request.name,
-            commissionRate = request.commissionRate,
-            apiEndpoint = request.apiEndpoint,
-            apiKey = request.apiKey,
-            apiSecret = request.apiSecret,
-            webhookSecret = request.webhookSecret
+            commissionRate = request.commissionRate
         )
         return ResponseEntity.ok(ChannelResponse.from(channel))
     }

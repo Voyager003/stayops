@@ -24,12 +24,7 @@ class SyncDashboardApplicationTest : BehaviorSpec({
         code = code,
         name = name,
         commissionRate = BigDecimal("0.15"),
-        connectionInfo = ChannelConnectionInfo(
-            apiEndpoint = "https://mock-ota/ari",
-            apiKey = null,
-            apiSecret = null,
-            webhookSecret = "secret"
-        )
+        apiEndpoint = "https://mock-ota/ari"
     )
 
     given("OTA 채널 2개와 SyncTask가 있을 때") {

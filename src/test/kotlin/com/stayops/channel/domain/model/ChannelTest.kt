@@ -7,12 +7,7 @@ import java.math.BigDecimal
 
 class ChannelTest : BehaviorSpec({
 
-    fun otaConnectionInfo() = ChannelConnectionInfo(
-        apiEndpoint = "https://mock-ota.stayops.com/api/v1/ari",
-        apiKey = "test-api-key",
-        apiSecret = "test-api-secret",
-        webhookSecret = "webhook-secret-256bit"
-    )
+    val otaEndpoint = "https://mock-ota.stayops.com/api/v1/ari"
 
     // -- DIRECT 채널 생성 --
 
@@ -48,14 +43,13 @@ class ChannelTest : BehaviorSpec({
 
     given("OTA 채널 생성 시") {
         `when`("유효한 정보로 생성하면") {
-            val info = otaConnectionInfo()
             val channel = Channel.createOta(
                 id = "ch-2",
                 propertyId = "prop-1",
                 code = "AGODA",
                 name = "Agoda",
                 commissionRate = BigDecimal("0.15"),
-                connectionInfo = info
+                apiEndpoint = otaEndpoint
             )
 
             then("ACTIVE 상태로 생성된다") {
@@ -67,8 +61,8 @@ class ChannelTest : BehaviorSpec({
             then("commissionRate이 설정된 값이다") {
                 channel.commissionRate shouldBe BigDecimal("0.15")
             }
-            then("connectionInfo가 설정된 값이다") {
-                channel.connectionInfo shouldBe info
+            then("connectionInfo의 apiEndpoint가 설정된 값이다") {
+                channel.connectionInfo shouldBe ChannelConnectionInfo(apiEndpoint = otaEndpoint)
             }
         }
 
@@ -81,7 +75,7 @@ class ChannelTest : BehaviorSpec({
                         code = "",
                         name = "Agoda",
                         commissionRate = BigDecimal("0.15"),
-                        connectionInfo = otaConnectionInfo()
+                        apiEndpoint = otaEndpoint
                     )
                 }
             }
@@ -96,7 +90,7 @@ class ChannelTest : BehaviorSpec({
                         code = "AGODA",
                         name = "",
                         commissionRate = BigDecimal("0.15"),
-                        connectionInfo = otaConnectionInfo()
+                        apiEndpoint = otaEndpoint
                     )
                 }
             }
@@ -111,7 +105,7 @@ class ChannelTest : BehaviorSpec({
                         code = "AGODA",
                         name = "Agoda",
                         commissionRate = BigDecimal.ZERO,
-                        connectionInfo = otaConnectionInfo()
+                        apiEndpoint = otaEndpoint
                     )
                 }
             }
@@ -126,7 +120,7 @@ class ChannelTest : BehaviorSpec({
                         code = "AGODA",
                         name = "Agoda",
                         commissionRate = BigDecimal("1.01"),
-                        connectionInfo = otaConnectionInfo()
+                        apiEndpoint = otaEndpoint
                     )
                 }
             }
@@ -143,7 +137,7 @@ class ChannelTest : BehaviorSpec({
             code = "AGODA",
             name = "Agoda",
             commissionRate = BigDecimal("0.15"),
-            connectionInfo = otaConnectionInfo()
+            apiEndpoint = otaEndpoint
         )
 
         `when`("deactivate() 호출 시") {
@@ -180,7 +174,7 @@ class ChannelTest : BehaviorSpec({
             code = "BOOKING",
             name = "Booking.com",
             commissionRate = BigDecimal("0.18"),
-            connectionInfo = otaConnectionInfo()
+            apiEndpoint = otaEndpoint
         ).deactivate()
 
         `when`("activate() 호출 시") {
@@ -217,7 +211,7 @@ class ChannelTest : BehaviorSpec({
             code = "EXPEDIA",
             name = "Expedia",
             commissionRate = BigDecimal("0.20"),
-            connectionInfo = otaConnectionInfo()
+            apiEndpoint = otaEndpoint
         ).suspend()
 
         `when`("activate() 호출 시") {

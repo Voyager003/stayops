@@ -1,7 +1,6 @@
 package com.stayops.reservation.application.service
 
 import com.stayops.channel.domain.model.Channel
-import com.stayops.channel.domain.model.ChannelConnectionInfo
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
@@ -75,12 +74,7 @@ class ReservationApplicationTest : BehaviorSpec({
         code = "AGODA",
         name = "Agoda",
         commissionRate = BigDecimal("0.15"),
-        connectionInfo = ChannelConnectionInfo(
-            apiEndpoint = "https://mock-ota/ari",
-            apiKey = null,
-            apiSecret = null,
-            webhookSecret = "secret"
-        )
+        apiEndpoint = "https://mock-ota/ari"
     )
 
     fun sampleGuest() = Guest.create(

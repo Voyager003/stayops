@@ -2,6 +2,8 @@ package com.stayops.channel.application.service
 
 import com.stayops.channel.domain.model.*
 import com.stayops.channel.domain.repository.ChannelRepository
+import com.stayops.inventory.domain.repository.RoomInventoryRepository
+import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.exception.NotFoundException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -12,9 +14,16 @@ import java.math.BigDecimal
 class ChannelApplicationTest : BehaviorSpec({
 
     val channelRepository = mockk<ChannelRepository>()
+    val roomTypeRepository = mockk<RoomTypeRepository>()
+    val roomInventoryRepository = mockk<RoomInventoryRepository>()
+    val channelSyncApplication = mockk<ChannelSyncApplication>(relaxed = true)
 
     val sut = ChannelApplication(
-        channelRepository = channelRepository
+        channelRepository = channelRepository,
+        roomTypeRepository = roomTypeRepository,
+        roomInventoryRepository = roomInventoryRepository,
+        channelSyncApplication = channelSyncApplication,
+        otaEndpoint = "https://mock-ota/ari"
     )
 
     fun otaChannel(id: String = "ch-1", code: String = "AGODA") = Channel.createOta(
@@ -23,12 +32,7 @@ class ChannelApplicationTest : BehaviorSpec({
         code = code,
         name = code,
         commissionRate = BigDecimal("0.15"),
-        connectionInfo = ChannelConnectionInfo(
-            apiEndpoint = "https://mock-ota/ari",
-            apiKey = "key",
-            apiSecret = null,
-            webhookSecret = "secret"
-        )
+        apiEndpoint = "https://mock-ota/ari"
     )
 
     // -- createOtaChannel --
@@ -38,18 +42,13 @@ class ChannelApplicationTest : BehaviorSpec({
             then("채널이 저장되고 반환된다") {
                 clearAllMocks()
                 every { channelRepository.save(any()) } answers { firstArg() }
+                every { roomTypeRepository.findByPropertyId("prop-1") } returns emptyList()
 
                 val result = sut.createOtaChannel(
                     propertyId = "prop-1",
                     code = "AGODA",
                     name = "Agoda",
-                    commissionRate = BigDecimal("0.15"),
-                    connectionInfo = ChannelConnectionInfo(
-                        apiEndpoint = "https://mock-ota/ari",
-                        apiKey = null,
-                        apiSecret = null,
-                        webhookSecret = "secret"
-                    )
+                    commissionRate = BigDecimal("0.15")
                 )
 
                 result.code shouldBe "AGODA"

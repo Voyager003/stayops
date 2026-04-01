@@ -30,12 +30,7 @@ class ChannelSyncApplicationTest : BehaviorSpec({
         code = code,
         name = code,
         commissionRate = BigDecimal("0.15"),
-        connectionInfo = ChannelConnectionInfo(
-            apiEndpoint = "https://mock-ota:8081/api/v1/ari/availability",
-            apiKey = "test-key",
-            apiSecret = null,
-            webhookSecret = "secret"
-        )
+        apiEndpoint = "https://mock-ota:8081/api/v1/ari/availability"
     )
 
     fun directChannel() = Channel.createDirect(id = "ch-0", propertyId = "prop-1")
@@ -86,7 +81,7 @@ class ChannelSyncApplicationTest : BehaviorSpec({
                 verify {
                     syncAdapter.pushAvailability(
                         endpoint = "https://mock-ota:8081/api/v1/ari/availability",
-                        apiKey = "test-key",
+                        apiKey = null,
                         externalRoomTypeCode = "rt-1",
                         payload = any(),
                         idempotencyKey = any()

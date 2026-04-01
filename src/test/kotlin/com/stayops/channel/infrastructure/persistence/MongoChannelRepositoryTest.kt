@@ -2,7 +2,6 @@ package com.stayops.channel.infrastructure.persistence
 
 import com.stayops.TestcontainersConfiguration
 import com.stayops.channel.domain.model.Channel
-import com.stayops.channel.domain.model.ChannelConnectionInfo
 import com.stayops.channel.domain.model.ChannelStatus
 import com.stayops.channel.domain.repository.ChannelRepository
 import org.assertj.core.api.Assertions.assertThat
@@ -44,12 +43,7 @@ class MongoChannelRepositoryTest @Autowired constructor(
         code = code,
         name = name,
         commissionRate = BigDecimal("0.15"),
-        connectionInfo = ChannelConnectionInfo(
-            apiEndpoint = "https://mock-ota.example.com/ari",
-            apiKey = "test-key",
-            apiSecret = "test-secret",
-            webhookSecret = "webhook-secret-256bit"
-        )
+        apiEndpoint = "https://mock-ota.example.com/ari"
     )
 
     @Nested
@@ -74,7 +68,6 @@ class MongoChannelRepositoryTest @Autowired constructor(
             assertThat(saved.code).isEqualTo("AGODA")
             assertThat(saved.connectionInfo).isNotNull
             assertThat(saved.connectionInfo!!.apiEndpoint).isEqualTo("https://mock-ota.example.com/ari")
-            assertThat(saved.connectionInfo!!.webhookSecret).isEqualTo("webhook-secret-256bit")
         }
     }
 
