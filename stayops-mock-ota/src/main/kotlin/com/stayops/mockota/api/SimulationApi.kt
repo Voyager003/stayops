@@ -66,6 +66,9 @@ class SimulationApi(
         val guestName = GUEST_NAMES.random()
         val checkInDate = LocalDate.parse(selected.date)
 
+        // OTA 재고 즉시 차감
+        otaInventoryRepository.save(selected.copy(availableCount = selected.availableCount - 1))
+
         val booking = MockBooking(
             roomTypeCode = selected.roomTypeId,
             checkInDate = checkInDate,
