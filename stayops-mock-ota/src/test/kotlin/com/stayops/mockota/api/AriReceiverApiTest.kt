@@ -1,13 +1,16 @@
 package com.stayops.mockota.api
 
+import com.stayops.mockota.TestcontainersConfiguration
+import com.stayops.mockota.repository.OtaInventoryRepository
 import com.stayops.mockota.service.FailureMode
 import com.stayops.mockota.service.FailureSimulatorService
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
+import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
@@ -15,6 +18,7 @@ import org.springframework.test.web.servlet.post
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(TestcontainersConfiguration::class)
 class AriReceiverApiTest {
 
     @Autowired
@@ -25,6 +29,9 @@ class AriReceiverApiTest {
 
     @Autowired
     private lateinit var ariReceiverApi: AriReceiverApi
+
+    @Autowired
+    private lateinit var otaInventoryRepository: OtaInventoryRepository
 
     @BeforeEach
     fun setUp() {
@@ -48,7 +55,7 @@ class AriReceiverApiTest {
         }
 
         @Test
-        fun `should store received ARI`() {
+        fun `should store received ARI in MongoDB`() {
             mockMvc.post("/api/v1/ari/availability") {
                 contentType = MediaType.APPLICATION_JSON
                 content = """{"roomTypeCode":"DLX","date":"2026-04-02","availableCount":3}"""
@@ -58,7 +65,7 @@ class AriReceiverApiTest {
             mockMvc.get("/api/v1/ari/received").andExpect {
                 status { isOk() }
                 jsonPath("$.length()") { value(1) }
-                jsonPath("$[0].roomTypeCode") { value("DLX") }
+                jsonPath("$[0].roomTypeId") { value("DLX") }
                 jsonPath("$[0].date") { value("2026-04-02") }
                 jsonPath("$[0].availableCount") { value(3) }
             }
@@ -96,16 +103,32 @@ class AriReceiverApiTest {
         }
 
         @Test
-        fun `should not deduplicate when idempotency key is absent`() {
-            val payload = """{"roomTypeCode":"STD","date":"2026-04-01","availableCount":2}"""
-
+        fun `should upsert when same roomTypeId and date sent without idempotency key`() {
             mockMvc.post("/api/v1/ari/availability") {
                 contentType = MediaType.APPLICATION_JSON
-                content = payload
+                content = """{"roomTypeCode":"STD","date":"2026-04-01","availableCount":2}"""
             }
             mockMvc.post("/api/v1/ari/availability") {
                 contentType = MediaType.APPLICATION_JSON
-                content = payload
+                content = """{"roomTypeCode":"STD","date":"2026-04-01","availableCount":7}"""
+            }
+
+            mockMvc.get("/api/v1/ari/received").andExpect {
+                status { isOk() }
+                jsonPath("$.length()") { value(1) }
+                jsonPath("$[0].availableCount") { value(7) }
+            }
+        }
+
+        @Test
+        fun `should store separate records for different roomTypeId or date`() {
+            mockMvc.post("/api/v1/ari/availability") {
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"roomTypeCode":"STD","date":"2026-04-01","availableCount":2}"""
+            }
+            mockMvc.post("/api/v1/ari/availability") {
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"roomTypeCode":"DLX","date":"2026-04-01","availableCount":3}"""
             }
 
             mockMvc.get("/api/v1/ari/received").andExpect {
@@ -175,7 +198,7 @@ class AriReceiverApiTest {
     @Nested
     inner class ClearReceived {
         @Test
-        fun `should clear all received ARI`() {
+        fun `should clear all received ARI from MongoDB`() {
             mockMvc.post("/api/v1/ari/availability") {
                 contentType = MediaType.APPLICATION_JSON
                 content = """{"roomTypeCode":"STD","date":"2026-04-01","availableCount":5}"""
@@ -201,7 +224,7 @@ class AriReceiverApiTest {
         }
 
         @Test
-        fun `should return multiple ARI records in order`() {
+        fun `should return multiple ARI records`() {
             mockMvc.post("/api/v1/ari/availability") {
                 contentType = MediaType.APPLICATION_JSON
                 content = """{"roomTypeCode":"STD","date":"2026-04-01","availableCount":5}"""
@@ -216,8 +239,70 @@ class AriReceiverApiTest {
             mockMvc.get("/api/v1/ari/received").andExpect {
                 status { isOk() }
                 jsonPath("$.length()") { value(2) }
-                jsonPath("$[0].roomTypeCode") { value("STD") }
-                jsonPath("$[1].roomTypeCode") { value("DLX") }
+            }
+        }
+    }
+
+    @Nested
+    inner class GetInventory {
+        @Test
+        fun `should return inventory for roomTypeId within date range`() {
+            // Seed data
+            listOf("2026-04-01", "2026-04-02", "2026-04-03", "2026-04-04", "2026-04-05").forEachIndexed { i, date ->
+                mockMvc.post("/api/v1/ari/availability") {
+                    contentType = MediaType.APPLICATION_JSON
+                    content = """{"roomTypeCode":"STD","date":"$date","availableCount":${i + 1}}"""
+                    header("X-Idempotency-Key", "inv-$i")
+                }
+            }
+
+            mockMvc.get("/api/v1/ari/inventory") {
+                param("roomTypeId", "STD")
+                param("startDate", "2026-04-02")
+                param("endDate", "2026-04-04")
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.length()") { value(3) }
+                jsonPath("$[0].date") { value("2026-04-02") }
+                jsonPath("$[1].date") { value("2026-04-03") }
+                jsonPath("$[2].date") { value("2026-04-04") }
+            }
+        }
+
+        @Test
+        fun `should return empty list when no matching inventory exists`() {
+            mockMvc.get("/api/v1/ari/inventory") {
+                param("roomTypeId", "NONEXISTENT")
+                param("startDate", "2026-04-01")
+                param("endDate", "2026-04-30")
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.length()") { value(0) }
+            }
+        }
+
+        @Test
+        fun `should filter by roomTypeId`() {
+            mockMvc.post("/api/v1/ari/availability") {
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"roomTypeCode":"STD","date":"2026-04-01","availableCount":5}"""
+                header("X-Idempotency-Key", "filter-1")
+            }
+            mockMvc.post("/api/v1/ari/availability") {
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"roomTypeCode":"DLX","date":"2026-04-01","availableCount":3}"""
+                header("X-Idempotency-Key", "filter-2")
+            }
+
+            mockMvc.get("/api/v1/ari/inventory") {
+                param("roomTypeId", "STD")
+                param("startDate", "2026-04-01")
+                param("endDate", "2026-04-01")
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.length()") { value(1) }
+                jsonPath("$[0].roomTypeId") { value("STD") }
+                jsonPath("$[0].availableCount") { value(5) }
             }
         }
     }
