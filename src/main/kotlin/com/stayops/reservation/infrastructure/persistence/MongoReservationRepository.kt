@@ -103,6 +103,23 @@ class MongoReservationRepository(
         return mongoTemplate.count(query, ReservationDocument::class.java).toInt()
     }
 
+    override fun existsByMemberIdAndRoomTypeIdAndCheckInAndCheckOutAndStatusIn(
+        memberId: String,
+        roomTypeId: String,
+        checkIn: LocalDate,
+        checkOut: LocalDate,
+        statuses: List<ReservationStatus>
+    ): Boolean {
+        val query = Query(
+            Criteria.where("memberId").`is`(memberId)
+                .and("roomTypeId").`is`(roomTypeId)
+                .and("dateRange.checkIn").`is`(checkIn.toString())
+                .and("dateRange.checkOut").`is`(checkOut.toString())
+                .and("status").`in`(statuses.map { it.name })
+        )
+        return mongoTemplate.exists(query, ReservationDocument::class.java)
+    }
+
     override fun search(
         propertyId: String,
         criteria: ReservationSearchCriteria,

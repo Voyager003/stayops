@@ -19,4 +19,11 @@ interface ReservationRepository {
     fun findExpiredPending(now: Instant): List<Reservation>
     fun search(propertyId: String, criteria: ReservationSearchCriteria, page: Int, size: Int): PagedResult<Reservation>
     fun countByPropertyIdAndCreatedDate(propertyId: String, date: LocalDate): Int
+    fun existsByMemberIdAndRoomTypeIdAndCheckInAndCheckOutAndStatusIn(
+        memberId: String,
+        roomTypeId: String,
+        checkIn: LocalDate,
+        checkOut: LocalDate,
+        statuses: List<ReservationStatus>
+    ): Boolean
 }
