@@ -33,6 +33,7 @@ class WebhookApplicationTest : BehaviorSpec({
     val roomInventoryApplication = mockk<RoomInventoryApplication>()
     val guestRepository = mockk<GuestRepository>()
     val eventPublisher = mockk<ApplicationEventPublisher>()
+    val roomTypeRepository = mockk<com.stayops.room.domain.repository.RoomTypeRepository>(relaxed = true)
 
     val sut = WebhookApplication(
         channelRepository = channelRepository,
@@ -43,7 +44,8 @@ class WebhookApplicationTest : BehaviorSpec({
         reservationRepository = reservationRepository,
         roomInventoryApplication = roomInventoryApplication,
         guestRepository = guestRepository,
-        eventPublisher = eventPublisher
+        eventPublisher = eventPublisher,
+        roomTypeRepository = roomTypeRepository
     )
 
     val otaChannel = Channel.createOta(

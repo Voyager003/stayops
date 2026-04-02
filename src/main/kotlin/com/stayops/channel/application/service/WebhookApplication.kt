@@ -35,7 +35,8 @@ class WebhookApplication(
     private val reservationRepository: ReservationRepository,
     private val roomInventoryApplication: RoomInventoryApplication,
     private val guestRepository: GuestRepository,
-    private val eventPublisher: ApplicationEventPublisher
+    private val eventPublisher: ApplicationEventPublisher,
+    private val roomTypeRepository: com.stayops.room.domain.repository.RoomTypeRepository
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -137,8 +138,11 @@ class WebhookApplication(
             externalReservationId = bookingId,
             commissionRate = commissionRate
         )
+        val roomType = roomTypeRepository.findById(roomTypeId)
+        val nightCount = dateRange.nights().toInt()
+        val roomRate = if (roomType != null) roomType.basePrice.multiply(nightCount) else Money.ZERO
         val pricing = ReservationPricing.calculate(
-            roomRate = Money.ZERO,
+            roomRate = roomRate,
             additionalCharges = Money.ZERO,
             commissionRate = commissionRate
         )

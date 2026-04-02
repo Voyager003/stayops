@@ -79,7 +79,7 @@ class SimulationApi(
         webhookSender.sendBookingWebhook(
             propertyId = request.propertyId,
             channelCode = request.channelCode,
-            webhookSecret = "",
+            webhookSecret = request.channelCode,
             booking = booking
         )
 
