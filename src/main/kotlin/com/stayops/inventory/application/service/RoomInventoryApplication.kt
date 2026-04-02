@@ -1,5 +1,6 @@
 package com.stayops.inventory.application.service
 
+import com.stayops.channel.application.service.ChannelSyncApplication
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.inventory.infrastructure.cache.RedisRoomInventoryCache
@@ -16,7 +17,8 @@ import java.util.UUID
 class RoomInventoryApplication(
     private val inventoryRepository: RoomInventoryRepository,
     private val cache: RedisRoomInventoryCache,
-    private val roomRepository: RoomRepository
+    private val roomRepository: RoomRepository,
+    private val channelSyncApplication: ChannelSyncApplication
 ) {
 
     companion object {
@@ -83,6 +85,9 @@ class RoomInventoryApplication(
                         val updated = if (action == "BLOCK") inv.block(count) else inv.unblock(count)
                         if (updated !== inv) {
                             saveAndEvict(updated)
+                            channelSyncApplication.createAvailabilitySyncTasks(
+                                propertyId, roomTypeId, date, updated.availableCount
+                            )
                             processed++
                         }
                     } catch (_: IllegalArgumentException) {
@@ -93,6 +98,9 @@ class RoomInventoryApplication(
                 }
             }
             date = date.plusDays(1)
+        }
+        if (processed > 0) {
+            channelSyncApplication.processTasksImmediately(propertyId)
         }
         return processed
     }
@@ -105,7 +113,10 @@ class RoomInventoryApplication(
     ): RoomInventory {
         val inventory = getOrThrow(propertyId, roomTypeId, date)
         return try {
-            saveAndEvict(inventory.block(count))
+            val updated = saveAndEvict(inventory.block(count))
+            channelSyncApplication.createAvailabilitySyncTasks(propertyId, roomTypeId, date, updated.availableCount)
+            channelSyncApplication.processTasksImmediately(propertyId)
+            updated
         } catch (e: OptimisticLockingFailureException) {
             throw ConflictException("INVENTORY_CONFLICT", "재고 변경 충돌이 발생했습니다. 다시 시도해주세요.")
         }
@@ -119,7 +130,10 @@ class RoomInventoryApplication(
     ): RoomInventory {
         val inventory = getOrThrow(propertyId, roomTypeId, date)
         return try {
-            saveAndEvict(inventory.unblock(count))
+            val updated = saveAndEvict(inventory.unblock(count))
+            channelSyncApplication.createAvailabilitySyncTasks(propertyId, roomTypeId, date, updated.availableCount)
+            channelSyncApplication.processTasksImmediately(propertyId)
+            updated
         } catch (e: OptimisticLockingFailureException) {
             throw ConflictException("INVENTORY_CONFLICT", "재고 변경 충돌이 발생했습니다. 다시 시도해주세요.")
         }

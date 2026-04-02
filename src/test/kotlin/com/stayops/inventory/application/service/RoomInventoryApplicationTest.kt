@@ -17,6 +17,7 @@ import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import com.stayops.channel.application.service.ChannelSyncApplication
 import org.springframework.dao.OptimisticLockingFailureException
 import java.time.Instant
 import java.time.LocalDate
@@ -26,7 +27,8 @@ class RoomInventoryApplicationTest : BehaviorSpec({
     val inventoryRepository = mockk<RoomInventoryRepository>()
     val cache = mockk<RedisRoomInventoryCache>()
     val roomRepository = mockk<RoomRepository>()
-    val inventoryApplication = RoomInventoryApplication(inventoryRepository, cache, roomRepository)
+    val channelSyncApplication = mockk<ChannelSyncApplication>(relaxed = true)
+    val inventoryApplication = RoomInventoryApplication(inventoryRepository, cache, roomRepository, channelSyncApplication)
 
     val today = LocalDate.of(2026, 3, 12)
 
