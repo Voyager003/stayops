@@ -41,7 +41,7 @@ class RoomInventoryApi(
         @PathVariable pid: String,
         @PathVariable roomTypeId: String,
         @RequestBody @Valid request: BulkBlockRequest
-    ): Map<String, Int> {
+    ): Map<String, Any> {
         propertyAccessChecker.requireAccess(pid)
         val processed = inventoryApplication.bulkBlock(
             propertyId = pid,
@@ -52,7 +52,11 @@ class RoomInventoryApi(
             action = request.action.name,
             count = request.count
         )
-        return mapOf("processedDays" to processed)
+        val result = mutableMapOf<String, Any>("processedDays" to processed)
+        if (processed == 0) {
+            result["message"] = "변경 대상이 없습니다"
+        }
+        return result
     }
 
     @PutMapping("/inventory/{roomTypeId}/{date}")

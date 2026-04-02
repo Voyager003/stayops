@@ -121,12 +121,17 @@ class BookingSearchApiTest {
         @Test
         fun `날짜별 가용 재고를 반환한다`() {
             val date = LocalDate.of(2026, 4, 1)
-            val inventory = RoomInventory.create(
+            val inventory = RoomInventory.reconstitute(
                 id = "inv-1",
                 propertyId = "prop-1",
                 roomTypeId = "rt-1",
                 date = date,
-                totalCount = 5
+                totalCount = 5,
+                reservedCount = 0,
+                blockedCount = 0,
+                version = 0L,
+                createdAt = java.time.Instant.now(),
+                updatedAt = java.time.Instant.now()
             )
             every {
                 bookingSearchApplication.getAvailability("prop-1", "rt-1", date, date.plusDays(2))

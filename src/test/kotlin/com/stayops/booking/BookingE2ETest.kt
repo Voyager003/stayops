@@ -91,6 +91,17 @@ class BookingE2ETest @Autowired constructor(
         roomRepository.save(Room.create("room-e2e-3", "prop-e2e", "rt-e2e", "103", 1))
         inventoryApplication.syncInventoryForRoomType("prop-e2e", "rt-e2e")
 
+        // 기본 마감 상태에서 예약 대상 날짜를 오픈
+        inventoryApplication.bulkBlock(
+            propertyId = "prop-e2e",
+            roomTypeId = "rt-e2e",
+            startDate = checkIn,
+            endDate = checkOut.minusDays(1),
+            daysOfWeek = null,
+            action = "UNBLOCK",
+            count = 3
+        )
+
         memberRepository.save(
             Member.create(
                 id = "customer-e2e", email = "e2e@test.com",

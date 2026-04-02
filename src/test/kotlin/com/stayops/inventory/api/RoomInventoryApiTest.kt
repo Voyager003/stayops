@@ -60,7 +60,7 @@ class RoomInventoryApiTest @Autowired constructor(
         roomMongoRepo.deleteAll()
         redisTemplate.connectionFactory?.connection?.serverCommands()?.flushAll()
 
-        // 테스트용 객실 3개 생성 + 재고 자동 생성
+        // 테스트용 객실 3개 생성 + 재고 자동 생성 (기본 마감 — blockedCount=3)
         val now = Instant.now()
         listOf("101", "102", "103").forEach { num ->
             roomMongoRepo.save(
@@ -91,6 +91,8 @@ class RoomInventoryApiTest @Autowired constructor(
                 status { isOk() }
                 jsonPath("$.length()") { value(2) }
                 jsonPath("$[0].totalCount") { value(3) }
+                jsonPath("$[0].availableCount") { value(0) }
+                jsonPath("$[0].blockedCount") { value(3) }
             }
         }
     }
@@ -99,6 +101,13 @@ class RoomInventoryApiTest @Autowired constructor(
     inner class `PUT 재고 차단 및 해제` {
         @Test
         fun `BLOCK 요청이면 차단 후 변경된 재고를 반환한다`() {
+            // 기본 마감 상태에서 먼저 전부 오픈
+            mockMvc.put("$baseUrl/inventory/$roomTypeId/$today") {
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(UpdateInventoryRequest(InventoryUpdateAction.UNBLOCK, 3))
+            }
+
+            // 2개 차단
             mockMvc.put("$baseUrl/inventory/$roomTypeId/$today") {
                 contentType = MediaType.APPLICATION_JSON
                 content = objectMapper.writeValueAsString(UpdateInventoryRequest(InventoryUpdateAction.BLOCK, 2))
@@ -111,11 +120,7 @@ class RoomInventoryApiTest @Autowired constructor(
 
         @Test
         fun `UNBLOCK 요청이면 차단 해제 후 변경된 재고를 반환한다`() {
-            mockMvc.put("$baseUrl/inventory/$roomTypeId/$today") {
-                contentType = MediaType.APPLICATION_JSON
-                content = objectMapper.writeValueAsString(UpdateInventoryRequest(InventoryUpdateAction.BLOCK, 3))
-            }
-
+            // 기본 마감 상태 (blockedCount=3)에서 2개 오픈
             mockMvc.put("$baseUrl/inventory/$roomTypeId/$today") {
                 contentType = MediaType.APPLICATION_JSON
                 content = objectMapper.writeValueAsString(UpdateInventoryRequest(InventoryUpdateAction.UNBLOCK, 2))

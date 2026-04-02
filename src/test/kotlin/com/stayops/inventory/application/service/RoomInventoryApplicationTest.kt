@@ -66,8 +66,8 @@ class RoomInventoryApplicationTest : BehaviorSpec({
 
             inventoryApplication.syncInventoryForRoomType("prop-1", "rt-1")
 
-            then("향후 91일치 재고가 생성되고 totalCount는 Room 수와 같다") {
-                verify(exactly = 91) { inventoryRepository.save(match { it.totalCount == 3 }) }
+            then("향후 91일치 재고가 생성되고 totalCount는 Room 수, blockedCount는 totalCount와 같다 (기본 마감)") {
+                verify(exactly = 91) { inventoryRepository.save(match { it.totalCount == 3 && it.blockedCount == 3 }) }
             }
         }
 

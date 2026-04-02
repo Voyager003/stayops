@@ -81,10 +81,12 @@ class RoomInventoryApplication(
                 if (inv != null) {
                     try {
                         val updated = if (action == "BLOCK") inv.block(count) else inv.unblock(count)
-                        saveAndEvict(updated)
-                        processed++
+                        if (updated !== inv) {
+                            saveAndEvict(updated)
+                            processed++
+                        }
                     } catch (_: IllegalArgumentException) {
-                        // 가용 재고 부족 등 — 해당 날짜 건너뜀
+                        // count < 1 등 — 해당 날짜 건너뜀
                     } catch (_: OptimisticLockingFailureException) {
                         // 충돌 — 해당 날짜 건너뜀
                     }
