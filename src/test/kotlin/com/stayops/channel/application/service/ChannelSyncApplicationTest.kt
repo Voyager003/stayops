@@ -114,6 +114,73 @@ class ChannelSyncApplicationTest : BehaviorSpec({
         }
     }
 
+    // -- processTasksImmediately: 즉시 전송 --
+
+    given("SyncTask 생성 직후 즉시 전송 시") {
+        `when`("OTA push가 성공하면") {
+            then("태스크가 COMPLETED로 저장된다") {
+                clearAllMocks()
+                every { syncTaskRepository.findByPropertyIdAndStatus("prop-1", SyncTaskStatus.PENDING) } returns listOf(sampleTask())
+                every { syncTaskRepository.save(any()) } answers { firstArg() }
+                every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel()
+                every { adapterProvider.getAdapter("AGODA") } returns syncAdapter
+                every { syncAdapter.pushAvailability(any(), any(), any(), any(), any()) } returns SyncResult(success = true)
+
+                sut.processTasksImmediately("prop-1")
+
+                verify {
+                    syncTaskRepository.save(match { it.status == SyncTaskStatus.COMPLETED })
+                }
+            }
+        }
+
+        `when`("OTA push가 실패하면") {
+            then("태스크가 PENDING 상태로 유지된다 (폴링이 재시도)") {
+                clearAllMocks()
+                every { syncTaskRepository.findByPropertyIdAndStatus("prop-1", SyncTaskStatus.PENDING) } returns listOf(sampleTask())
+                every { syncTaskRepository.save(any()) } answers { firstArg() }
+                every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel()
+                every { adapterProvider.getAdapter("AGODA") } returns syncAdapter
+                every { syncAdapter.pushAvailability(any(), any(), any(), any(), any()) } returns
+                        SyncResult(success = false, errorMessage = "Connection refused")
+
+                sut.processTasksImmediately("prop-1")
+
+                verify(exactly = 0) {
+                    syncTaskRepository.save(match { it.status == SyncTaskStatus.COMPLETED })
+                }
+            }
+        }
+    }
+
+    // -- processPendingTasks: version 충돌 처리 --
+
+    given("폴링 중 version 충돌이 발생하면") {
+        `when`("OptimisticLockingFailureException이 발생해도") {
+            then("에러 없이 다음 태스크를 계속 처리한다") {
+                clearAllMocks()
+                val task1 = sampleTask()
+                val task2 = SyncTask.create("task-2", "prop-1", "BOOKING", SyncTaskType.AVAILABILITY_UPDATE,
+                    mapOf("roomTypeId" to "rt-1", "date" to "2026-03-20", "availableCount" to 3))
+
+                every { syncTaskRepository.findPendingTasksReadyForProcessing(any()) } returns listOf(task1, task2)
+                every { syncTaskRepository.save(match { it.id == "task-1" }) } throws
+                        org.springframework.dao.OptimisticLockingFailureException("version conflict")
+                every { syncTaskRepository.save(match { it.id == "task-2" }) } answers { firstArg() }
+                every { channelRepository.findByPropertyIdAndCode("prop-1", "BOOKING") } returns otaChannel("BOOKING")
+                every { adapterProvider.getAdapter("BOOKING") } returns syncAdapter
+                every { syncAdapter.pushAvailability(any(), any(), any(), any(), any()) } returns SyncResult(success = true)
+
+                sut.processPendingTasks()
+
+                // task2는 정상 처리됨
+                verify {
+                    syncAdapter.pushAvailability(any(), any(), any(), any(), any())
+                }
+            }
+        }
+    }
+
     // -- retryTask: 테넌트 격리 --
 
     given("다른 숙소의 taskId로 재시도 요청 시") {

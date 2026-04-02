@@ -31,6 +31,7 @@ class ChannelEventHandler(
             }
         }
         log.info("예약 생성 → ARI 동기화 태스크 생성: reservationId={}", event.reservationId)
+        channelSyncApplication.processTasksImmediately(event.propertyId)
     }
 
     @EventListener
@@ -49,5 +50,6 @@ class ChannelEventHandler(
             }
         }
         log.info("예약 취소 → ARI 동기화 태스크 생성: reservationId={}", event.reservationId)
+        channelSyncApplication.processTasksImmediately(event.propertyId)
     }
 }
