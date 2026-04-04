@@ -184,7 +184,7 @@ class SimulationApiTest {
             verify(webhookSender).sendBookingWebhook(
                 eq("prop-1"),
                 eq("YANOLJA"),
-                eq(""),
+                eq("YANOLJA"),
                 captor.capture()
             )
             assertEquals("rt-1", captor.firstValue.roomTypeCode)
