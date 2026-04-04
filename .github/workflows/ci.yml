@@ -24,8 +24,21 @@ jobs:
           java-version: 24
 
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+
+      - name: Cache Docker images
+        uses: actions/cache@v4
+        with:
+          path: /tmp/docker-cache
+          key: docker-${{ runner.os }}-${{ hashFiles('docker-compose.yml') }}
+          restore-keys: docker-${{ runner.os }}-
 
       - name: Start MongoDB and Redis
-        run: docker compose up -d && sleep 5
+        run: docker compose up -d mongodb mongo-init redis && sleep 5
 
-      - run: ./gradlew test --build-cache
+      - name: Download dependencies
+        run: ./gradlew dependencies --no-daemon
+
+      - name: Run tests
+        run: ./gradlew test --build-cache --no-daemon
