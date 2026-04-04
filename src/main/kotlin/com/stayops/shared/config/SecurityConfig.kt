@@ -29,7 +29,6 @@ class SecurityConfig {
             authorizeHttpRequests {
                 authorize("/actuator/health", permitAll)
                 authorize("/actuator/info", permitAll)
-                authorize("/actuator/prometheus", permitAll)
                 authorize("/api/v1/auth/**", permitAll)
                 authorize("/api/v1/properties/*/channels/webhook/**", permitAll)
                 authorize("/api/v1/booking/auth/**", permitAll)
