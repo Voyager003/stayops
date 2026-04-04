@@ -12,6 +12,7 @@ data class SettlementResponse(
     val totalRevenue: BigDecimal,
     val totalCommission: BigDecimal,
     val netSettlement: BigDecimal,
+    val documentCount: Int,
     val byChannel: List<ChannelSettlementResponse>
 ) {
     data class ChannelSettlementResponse(
@@ -30,6 +31,7 @@ data class SettlementResponse(
             totalRevenue = summary.totalRevenue.amount,
             totalCommission = summary.totalCommission.amount,
             netSettlement = summary.netSettlement.amount,
+            documentCount = summary.documentCount,
             byChannel = summary.byChannel.map { it.toResponse() }
         )
 

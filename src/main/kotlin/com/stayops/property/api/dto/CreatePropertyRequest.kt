@@ -19,7 +19,9 @@ data class CreatePropertyRequest(
         @field:NotBlank val city: String,
         @field:NotBlank val state: String,
         @field:NotBlank val zipCode: String,
-        @field:NotBlank val country: String
+        @field:NotBlank val country: String,
+        val latitude: Double? = null,
+        val longitude: Double? = null
     )
 
     data class ContactInfoRequest(

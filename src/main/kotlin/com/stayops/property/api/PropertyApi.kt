@@ -40,7 +40,7 @@ class PropertyApi(
             ownerId = currentMember.id,
             name = request.name,
             type = request.type,
-            address = Address.of(request.address.street, request.address.city, request.address.state, request.address.zipCode, request.address.country),
+            address = Address.of(request.address.street, request.address.city, request.address.state, request.address.zipCode, request.address.country, request.address.latitude, request.address.longitude),
             contactInfo = ContactInfo.of(request.contactInfo.phone, request.contactInfo.email, request.contactInfo.website),
             description = request.description,
             timezone = request.timezone,
@@ -98,7 +98,7 @@ class PropertyApi(
             id = pid,
             name = request.name,
             description = request.description,
-            address = Address.of(request.address.street, request.address.city, request.address.state, request.address.zipCode, request.address.country),
+            address = Address.of(request.address.street, request.address.city, request.address.state, request.address.zipCode, request.address.country, request.address.latitude, request.address.longitude),
             contactInfo = ContactInfo.of(request.contactInfo.phone, request.contactInfo.email, request.contactInfo.website)
         )
         return PropertyResponse.from(property)

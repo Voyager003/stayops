@@ -27,6 +27,7 @@ class SettlementQueryServiceTest : BehaviorSpec({
                     ChannelSettlement("AGODA", 2, Money.won(400_000), Money.won(60_000), Money.won(340_000))
                 )
                 every { repository.findChannelSettlements("prop-1", startDate, endDate) } returns channelSettlements
+                every { repository.countReservations("prop-1", startDate, endDate) } returns 5
 
                 val result = sut.getSettlementSummary("prop-1", startDate, endDate)
 
@@ -36,6 +37,7 @@ class SettlementQueryServiceTest : BehaviorSpec({
                 result.totalRevenue shouldBe Money.won(1_000_000)
                 result.totalCommission shouldBe Money.won(60_000)
                 result.netSettlement shouldBe Money.won(940_000)
+                result.documentCount shouldBe 5
                 result.byChannel shouldBe channelSettlements
             }
         }
@@ -43,6 +45,7 @@ class SettlementQueryServiceTest : BehaviorSpec({
         `when`("정산 대상이 없으면") {
             then("모든 금액이 0인 요약을 반환한다") {
                 every { repository.findChannelSettlements("prop-1", startDate, endDate) } returns emptyList()
+                every { repository.countReservations("prop-1", startDate, endDate) } returns 0
 
                 val result = sut.getSettlementSummary("prop-1", startDate, endDate)
 
@@ -50,6 +53,7 @@ class SettlementQueryServiceTest : BehaviorSpec({
                 result.totalRevenue shouldBe Money.ZERO
                 result.totalCommission shouldBe Money.ZERO
                 result.netSettlement shouldBe Money.ZERO
+                result.documentCount shouldBe 0
                 result.byChannel shouldBe emptyList()
             }
         }

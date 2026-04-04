@@ -30,7 +30,9 @@ data class PropertyDocument(
         val city: String,
         val state: String,
         val zipCode: String,
-        val country: String
+        val country: String,
+        val latitude: Double? = null,
+        val longitude: Double? = null
     )
 
     data class ContactInfoData(
@@ -44,7 +46,7 @@ data class PropertyDocument(
         ownerId = ownerId,
         name = name,
         type = type,
-        address = Address.of(address.street, address.city, address.state, address.zipCode, address.country),
+        address = Address.of(address.street, address.city, address.state, address.zipCode, address.country, address.latitude, address.longitude),
         contactInfo = ContactInfo.of(contactInfo.phone, contactInfo.email, contactInfo.website),
         description = description,
         status = status,
@@ -66,7 +68,9 @@ data class PropertyDocument(
                 city = property.address.city,
                 state = property.address.state,
                 zipCode = property.address.zipCode,
-                country = property.address.country
+                country = property.address.country,
+                latitude = property.address.latitude,
+                longitude = property.address.longitude
             ),
             contactInfo = ContactInfoData(
                 phone = property.contactInfo.phone,

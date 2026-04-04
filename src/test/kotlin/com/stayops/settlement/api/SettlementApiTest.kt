@@ -1,9 +1,11 @@
 package com.stayops.settlement.api
 
+import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.settlement.application.dto.ChannelSettlement
 import com.stayops.settlement.application.dto.SettlementSummary
 import com.stayops.settlement.application.service.SettlementQueryService
 import com.stayops.shared.domain.Money
+import com.stayops.shared.exception.GlobalExceptionHandler
 import com.stayops.shared.security.PropertyAccessChecker
 import io.mockk.every
 import io.mockk.mockk
@@ -18,8 +20,10 @@ class SettlementApiTest {
 
     private val settlementQueryService = mockk<SettlementQueryService>()
     private val propertyAccessChecker = mockk<PropertyAccessChecker>(relaxed = true)
+    private val propertyRepository = mockk<PropertyRepository>()
     private val mockMvc: MockMvc = MockMvcBuilders
-        .standaloneSetup(SettlementApi(settlementQueryService, propertyAccessChecker))
+        .standaloneSetup(SettlementApi(settlementQueryService, propertyAccessChecker, propertyRepository))
+        .setControllerAdvice(GlobalExceptionHandler())
         .build()
 
     private val startDate = LocalDate.of(2026, 4, 1)
@@ -37,6 +41,7 @@ class SettlementApiTest {
                 totalRevenue = Money.won(600_000),
                 totalCommission = Money.won(30_000),
                 netSettlement = Money.won(570_000),
+                documentCount = 3,
                 byChannel = listOf(
                     ChannelSettlement("DIRECT", 2, Money.won(400_000), Money.won(0), Money.won(400_000)),
                     ChannelSettlement("AGODA", 1, Money.won(200_000), Money.won(30_000), Money.won(170_000))
@@ -66,6 +71,7 @@ class SettlementApiTest {
                 totalRevenue = Money.ZERO,
                 totalCommission = Money.ZERO,
                 netSettlement = Money.ZERO,
+                documentCount = 0,
                 byChannel = emptyList()
             )
             every { settlementQueryService.getSettlementSummary("prop-1", startDate, endDate) } returns emptySummary

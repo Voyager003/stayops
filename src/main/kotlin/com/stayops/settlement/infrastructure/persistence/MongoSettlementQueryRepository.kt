@@ -50,6 +50,56 @@ class MongoSettlementQueryRepository(
         }
     }
 
+    override fun findChannelSettlementsByPropertyIds(
+        propertyIds: List<String>,
+        startDate: LocalDate,
+        endDate: LocalDate
+    ): List<ChannelSettlement> {
+        val matchOp = Aggregation.match(
+            Criteria.where("propertyId").`in`(propertyIds)
+                .and("status").`in`(ReservationStatus.CHECKED_OUT.name, ReservationStatus.NO_SHOW.name)
+                .and("dateRange.checkOut").gte(startDate.toString()).lte(endDate.toString())
+        )
+
+        val groupOp = Aggregation.group("channel.channelCode")
+            .count().`as`("reservationCount")
+            .sum("pricing.totalAmount").`as`("totalRevenue")
+            .sum("pricing.commissionAmount").`as`("totalCommission")
+            .sum("pricing.netAmount").`as`("netSettlement")
+
+        val aggregation = Aggregation.newAggregation(matchOp, groupOp)
+        val results = mongoTemplate.aggregate(aggregation, "reservations", AggregationResult::class.java)
+
+        return results.mappedResults.map { row ->
+            ChannelSettlement(
+                channelCode = row.id,
+                reservationCount = row.reservationCount,
+                totalRevenue = Money.won(row.totalRevenue),
+                totalCommission = Money.won(row.totalCommission),
+                netSettlement = Money.won(row.netSettlement)
+            )
+        }
+    }
+
+    override fun countReservations(
+        propertyId: String,
+        startDate: LocalDate,
+        endDate: LocalDate
+    ): Int {
+        val matchOp = Aggregation.match(
+            Criteria.where("propertyId").`is`(propertyId)
+                .and("status").`in`(ReservationStatus.CHECKED_OUT.name, ReservationStatus.NO_SHOW.name)
+                .and("dateRange.checkOut").gte(startDate.toString()).lte(endDate.toString())
+        )
+
+        val countOp = Aggregation.count().`as`("total")
+
+        val aggregation = Aggregation.newAggregation(matchOp, countOp)
+        val results = mongoTemplate.aggregate(aggregation, "reservations", CountResult::class.java)
+
+        return results.mappedResults.firstOrNull()?.total ?: 0
+    }
+
     override fun findDailyTrend(
         propertyId: String,
         startDate: LocalDate,
@@ -120,6 +170,10 @@ class MongoSettlementQueryRepository(
             )
         }
     }
+
+    private data class CountResult(
+        val total: Int
+    )
 
     private data class AggregationResult(
         val id: String,

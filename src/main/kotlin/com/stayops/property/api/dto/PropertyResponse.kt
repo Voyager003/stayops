@@ -24,7 +24,9 @@ data class PropertyResponse(
         val city: String,
         val state: String,
         val zipCode: String,
-        val country: String
+        val country: String,
+        val latitude: Double?,
+        val longitude: Double?
     )
 
     data class ContactInfoResponse(
@@ -44,7 +46,9 @@ data class PropertyResponse(
                 city = property.address.city,
                 state = property.address.state,
                 zipCode = property.address.zipCode,
-                country = property.address.country
+                country = property.address.country,
+                latitude = property.address.latitude,
+                longitude = property.address.longitude
             ),
             contactInfo = ContactInfoResponse(
                 phone = property.contactInfo.phone,
