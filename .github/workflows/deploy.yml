@@ -28,9 +28,13 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Start MongoDB and Redis
-        run: docker compose up -d && sleep 5
+        run: docker compose up -d mongodb mongo-init redis && sleep 5
 
-      - run: ./gradlew test --build-cache
+      - name: Download dependencies
+        run: ./gradlew dependencies --no-daemon
+
+      - name: Run tests
+        run: ./gradlew test --build-cache --no-daemon
 
   build-and-push:
     needs: test
