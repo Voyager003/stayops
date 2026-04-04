@@ -86,4 +86,4 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          script: cd ~/stayops && git pull origin main && ./deploy.sh
+          script: cd ~/stayops && git checkout -- . && git pull origin main && ./deploy.sh
