@@ -120,6 +120,16 @@ class MongoReservationRepository(
         return mongoTemplate.exists(query, ReservationDocument::class.java)
     }
 
+    override fun searchByPropertyIds(
+        propertyIds: List<String>,
+        criteria: ReservationSearchCriteria,
+        page: Int,
+        size: Int
+    ): PagedResult<Reservation> {
+        val criteriaList = mutableListOf(Criteria.where("propertyId").`in`(propertyIds))
+        return executeSearch(criteriaList, criteria, page, size)
+    }
+
     override fun search(
         propertyId: String,
         criteria: ReservationSearchCriteria,
@@ -127,7 +137,15 @@ class MongoReservationRepository(
         size: Int
     ): PagedResult<Reservation> {
         val criteriaList = mutableListOf(Criteria.where("propertyId").`is`(propertyId))
+        return executeSearch(criteriaList, criteria, page, size)
+    }
 
+    private fun executeSearch(
+        criteriaList: MutableList<Criteria>,
+        criteria: ReservationSearchCriteria,
+        page: Int,
+        size: Int
+    ): PagedResult<Reservation> {
         criteria.statuses?.takeIf { it.isNotEmpty() }?.let {
             criteriaList.add(Criteria.where("status").`in`(it.map { s -> s.name }))
         }

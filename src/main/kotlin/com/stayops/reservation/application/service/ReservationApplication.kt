@@ -137,6 +137,13 @@ class ReservationApplication(
         size: Int
     ): PagedResult<Reservation> = reservationRepository.search(propertyId, criteria, page, size)
 
+    fun searchReservationsByPropertyIds(
+        propertyIds: List<String>,
+        criteria: ReservationSearchCriteria,
+        page: Int,
+        size: Int
+    ): PagedResult<Reservation> = reservationRepository.searchByPropertyIds(propertyIds, criteria, page, size)
+
     fun confirmReservation(propertyId: String, reservationId: String): Reservation {
         val reservation = getReservation(propertyId, reservationId)
         return reservationRepository.save(reservation.confirm())
