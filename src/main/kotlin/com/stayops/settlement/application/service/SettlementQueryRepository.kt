@@ -13,6 +13,12 @@ interface SettlementQueryRepository {
         endDate: LocalDate
     ): List<ChannelSettlement>
 
+    fun findChannelSettlementsByPropertyIds(
+        propertyIds: List<String>,
+        startDate: LocalDate,
+        endDate: LocalDate
+    ): List<ChannelSettlement>
+
     fun findDailyTrend(
         propertyId: String,
         startDate: LocalDate,
@@ -23,4 +29,10 @@ interface SettlementQueryRepository {
         propertyId: String,
         year: Int
     ): List<MonthlySettlement>
+
+    fun countReservations(
+        propertyId: String,
+        startDate: LocalDate,
+        endDate: LocalDate
+    ): Int
 }

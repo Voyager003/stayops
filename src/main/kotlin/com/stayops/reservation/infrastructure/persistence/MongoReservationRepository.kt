@@ -18,6 +18,7 @@ import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.stereotype.Repository
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 @Repository
 class MongoReservationRepository(
@@ -91,6 +92,44 @@ class MongoReservationRepository(
         return mongoTemplate.find(query, ReservationDocument::class.java).map { it.toDomain() }
     }
 
+    override fun countByPropertyIdAndCreatedDate(propertyId: String, date: LocalDate): Int {
+        val zone = ZoneId.of("Asia/Seoul")
+        val startOfDay = date.atStartOfDay(zone).toInstant()
+        val startOfNextDay = date.plusDays(1).atStartOfDay(zone).toInstant()
+        val query = Query(
+            Criteria.where("propertyId").`is`(propertyId)
+                .and("createdAt").gte(startOfDay).lt(startOfNextDay)
+        )
+        return mongoTemplate.count(query, ReservationDocument::class.java).toInt()
+    }
+
+    override fun existsByMemberIdAndRoomTypeIdAndCheckInAndCheckOutAndStatusIn(
+        memberId: String,
+        roomTypeId: String,
+        checkIn: LocalDate,
+        checkOut: LocalDate,
+        statuses: List<ReservationStatus>
+    ): Boolean {
+        val query = Query(
+            Criteria.where("memberId").`is`(memberId)
+                .and("roomTypeId").`is`(roomTypeId)
+                .and("dateRange.checkIn").`is`(checkIn.toString())
+                .and("dateRange.checkOut").`is`(checkOut.toString())
+                .and("status").`in`(statuses.map { it.name })
+        )
+        return mongoTemplate.exists(query, ReservationDocument::class.java)
+    }
+
+    override fun searchByPropertyIds(
+        propertyIds: List<String>,
+        criteria: ReservationSearchCriteria,
+        page: Int,
+        size: Int
+    ): PagedResult<Reservation> {
+        val criteriaList = mutableListOf(Criteria.where("propertyId").`in`(propertyIds))
+        return executeSearch(criteriaList, criteria, page, size)
+    }
+
     override fun search(
         propertyId: String,
         criteria: ReservationSearchCriteria,
@@ -98,7 +137,15 @@ class MongoReservationRepository(
         size: Int
     ): PagedResult<Reservation> {
         val criteriaList = mutableListOf(Criteria.where("propertyId").`is`(propertyId))
+        return executeSearch(criteriaList, criteria, page, size)
+    }
 
+    private fun executeSearch(
+        criteriaList: MutableList<Criteria>,
+        criteria: ReservationSearchCriteria,
+        page: Int,
+        size: Int
+    ): PagedResult<Reservation> {
         criteria.statuses?.takeIf { it.isNotEmpty() }?.let {
             criteriaList.add(Criteria.where("status").`in`(it.map { s -> s.name }))
         }

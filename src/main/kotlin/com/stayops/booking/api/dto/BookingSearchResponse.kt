@@ -1,5 +1,6 @@
 package com.stayops.booking.api.dto
 
+import com.stayops.booking.application.service.PropertyOffer
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.property.domain.model.Property
 import com.stayops.property.domain.model.PropertyStatus
@@ -15,7 +16,9 @@ data class PropertySearchResponse(
     val type: PropertyType,
     val address: AddressResponse,
     val description: String,
-    val status: PropertyStatus
+    val status: PropertyStatus,
+    val timezone: String,
+    val currency: String
 ) {
     companion object {
         fun from(property: Property) = PropertySearchResponse(
@@ -30,7 +33,9 @@ data class PropertySearchResponse(
                 country = property.address.country
             ),
             description = property.description,
-            status = property.status
+            status = property.status,
+            timezone = property.timezone,
+            currency = property.currency
         )
     }
 }
@@ -59,6 +64,32 @@ data class RoomTypeSearchResponse(
             maxOccupancy = roomType.maxOccupancy,
             basePrice = roomType.basePrice.amount,
             amenities = roomType.amenities
+        )
+    }
+}
+
+data class PropertyOfferResponse(
+    val roomTypeId: String,
+    val name: String,
+    val description: String,
+    val maxOccupancy: Int,
+    val amenities: List<String>,
+    val basePrice: BigDecimal,
+    val availableCount: Int,
+    val fitsGuests: Boolean,
+    val rateQuote: RatePreviewResponse
+) {
+    companion object {
+        fun from(offer: PropertyOffer) = PropertyOfferResponse(
+            roomTypeId = offer.roomType.id,
+            name = offer.roomType.name,
+            description = offer.roomType.description,
+            maxOccupancy = offer.roomType.maxOccupancy,
+            amenities = offer.roomType.amenities,
+            basePrice = offer.roomType.basePrice.amount,
+            availableCount = offer.availableCount,
+            fitsGuests = offer.fitsGuests,
+            rateQuote = RatePreviewResponse.of(offer.rateQuote, offer.checkIn, offer.checkOut)
         )
     }
 }

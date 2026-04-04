@@ -25,6 +25,13 @@ services:
     volumes:
       - redis_data:/data
 
+  mongo-ota:
+    image: mongo:8
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo_ota_data:/data/db
+
   mock-ota:
     build:
       context: .
@@ -33,7 +40,32 @@ services:
       - "8081:8081"
     environment:
       MOCK_OTA_PMS_WEBHOOK_URL: http://app:8080/api/v1/properties/{propertyId}/channels/webhook/{channelCode}
+      SPRING_DATA_MONGODB_URI: mongodb://mongo-ota:27017/mock-ota
+    depends_on:
+      - mongo-ota
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
 
 volumes:
   mongodb_data:
   redis_data:
+  mongo_ota_data:
+  prometheus_data:
+  grafana_data:

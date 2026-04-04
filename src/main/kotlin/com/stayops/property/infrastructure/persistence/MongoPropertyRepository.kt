@@ -19,6 +19,9 @@ class MongoPropertyRepository(
     override fun findByOwnerId(ownerId: String): List<Property> =
         mongo.findByOwnerId(ownerId).map { it.toDomain() }
 
+    override fun findByIds(ids: List<String>): List<Property> =
+        mongo.findAllById(ids).map { it.toDomain() }
+
     override fun findAll(): List<Property> =
         mongo.findAll().map { it.toDomain() }
 }

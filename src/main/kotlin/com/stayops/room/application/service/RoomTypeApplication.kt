@@ -69,8 +69,8 @@ class RoomTypeApplication(
         return roomTypeRepository.save(updated)
     }
 
-    fun deactivateRoomType(id: String) {
-        val roomType = getRoomType(id)
-        roomTypeRepository.save(roomType.deactivate())
+    fun deleteRoomType(id: String) {
+        getRoomType(id)
+        roomTypeRepository.deleteById(id)
     }
 }

@@ -26,10 +26,7 @@ data class ChannelDocument(
 ) {
 
     data class ConnectionInfoData(
-        val apiEndpoint: String,
-        val apiKey: String?,
-        val apiSecret: String?,
-        val webhookSecret: String
+        val apiEndpoint: String
     )
 
     fun toDomain(): Channel = Channel.reconstitute(
@@ -41,10 +38,7 @@ data class ChannelDocument(
         commissionRate = commissionRate,
         connectionInfo = connectionInfo?.let {
             ChannelConnectionInfo(
-                apiEndpoint = it.apiEndpoint,
-                apiKey = it.apiKey,
-                apiSecret = it.apiSecret,
-                webhookSecret = it.webhookSecret
+                apiEndpoint = it.apiEndpoint
             )
         },
         status = status,
@@ -63,10 +57,7 @@ data class ChannelDocument(
             commissionRate = channel.commissionRate,
             connectionInfo = channel.connectionInfo?.let {
                 ConnectionInfoData(
-                    apiEndpoint = it.apiEndpoint,
-                    apiKey = it.apiKey,
-                    apiSecret = it.apiSecret,
-                    webhookSecret = it.webhookSecret
+                    apiEndpoint = it.apiEndpoint
                 )
             },
             status = channel.status,

@@ -1,7 +1,6 @@
 package com.stayops.room.api.dto
 
 import com.stayops.room.domain.model.RoomType
-import com.stayops.room.domain.model.RoomTypeStatus
 import java.math.BigDecimal
 import java.time.Instant
 
@@ -13,7 +12,6 @@ data class RoomTypeResponse(
     val maxOccupancy: Int,
     val basePrice: MoneyResponse,
     val amenities: List<String>,
-    val status: RoomTypeStatus,
     val createdAt: Instant,
     val updatedAt: Instant
 ) {
@@ -31,7 +29,6 @@ data class RoomTypeResponse(
             maxOccupancy = roomType.maxOccupancy,
             basePrice = MoneyResponse(roomType.basePrice.amount, roomType.basePrice.currency),
             amenities = roomType.amenities,
-            status = roomType.status,
             createdAt = roomType.createdAt,
             updatedAt = roomType.updatedAt
         )

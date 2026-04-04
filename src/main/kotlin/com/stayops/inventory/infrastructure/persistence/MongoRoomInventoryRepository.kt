@@ -43,6 +43,7 @@ class MongoRoomInventoryRepository(
     ): List<RoomInventory> =
         mongo.findByPropertyIdAndRoomTypeIdAndDateBetween(propertyId, roomTypeId, startDate.toString(), endDate.toString())
             .map { it.toDomain() }
+
 }
 
 interface RoomInventoryMongoDataRepository : MongoRepository<RoomInventoryDocument, String> {

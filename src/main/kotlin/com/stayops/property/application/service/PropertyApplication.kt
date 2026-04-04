@@ -2,6 +2,8 @@ package com.stayops.property.application.service
 
 import com.stayops.auth.domain.model.PropertyRole
 import com.stayops.auth.domain.repository.MemberRepository
+import com.stayops.channel.domain.model.Channel
+import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo
 import com.stayops.property.domain.model.Property
@@ -14,7 +16,8 @@ import java.util.UUID
 @Service
 class PropertyApplication(
     private val propertyRepository: PropertyRepository,
-    private val memberRepository: MemberRepository
+    private val memberRepository: MemberRepository,
+    private val channelRepository: ChannelRepository
 ) {
     fun createProperty(
         ownerId: String,
@@ -39,6 +42,8 @@ class PropertyApplication(
         )
         val saved = propertyRepository.save(property)
 
+        channelRepository.save(Channel.createDirect(UUID.randomUUID().toString(), saved.id))
+
         val member = memberRepository.findById(ownerId)
         if (member != null) {
             val granted = member.grantAccess(saved.id, PropertyRole.OWNER)
@@ -52,8 +57,23 @@ class PropertyApplication(
         propertyRepository.findById(id)
             ?: throw NotFoundException("PROPERTY_NOT_FOUND", "숙소를 찾을 수 없습니다: $id")
 
+    fun getAccessibleProperties(propertyIds: List<String>): List<Property> =
+        propertyRepository.findByIds(propertyIds)
+
     fun getAllProperties(): List<Property> =
         propertyRepository.findAll()
+
+    fun activateProperty(id: String): Property {
+        val property = getProperty(id)
+        val activated = property.activate()
+        return propertyRepository.save(activated)
+    }
+
+    fun deactivateProperty(id: String): Property {
+        val property = getProperty(id)
+        val deactivated = property.deactivate()
+        return propertyRepository.save(deactivated)
+    }
 
     fun updateProperty(
         id: String,

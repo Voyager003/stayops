@@ -13,7 +13,6 @@ data class RoomType private constructor(
     val maxOccupancy: Int,
     val basePrice: Money,
     val amenities: List<String>,
-    val status: RoomTypeStatus,
     val version: Long,
     val createdAt: Instant,
     val updatedAt: Instant
@@ -22,20 +21,6 @@ data class RoomType private constructor(
         require(name.isNotBlank()) { "객실타입 이름은 비어있을 수 없습니다" }
         require(maxOccupancy >= 1) { "최대 수용 인원은 1 이상이어야 합니다: $maxOccupancy" }
         require(basePrice.amount > BigDecimal.ZERO) { "기본 요금은 0보다 커야 합니다: ${basePrice.amount}" }
-    }
-
-    fun activate(): RoomType {
-        require(status == RoomTypeStatus.INACTIVE) {
-            "INACTIVE 상태에서만 활성화할 수 있습니다: $status"
-        }
-        return copy(status = RoomTypeStatus.ACTIVE, updatedAt = Instant.now())
-    }
-
-    fun deactivate(): RoomType {
-        require(status == RoomTypeStatus.ACTIVE) {
-            "ACTIVE 상태에서만 비활성화할 수 있습니다: $status"
-        }
-        return copy(status = RoomTypeStatus.INACTIVE, updatedAt = Instant.now())
     }
 
     fun updateInfo(
@@ -77,7 +62,6 @@ data class RoomType private constructor(
                 maxOccupancy = maxOccupancy,
                 basePrice = basePrice,
                 amenities = amenities,
-                status = RoomTypeStatus.INACTIVE,
                 version = 0,
                 createdAt = now,
                 updatedAt = now
@@ -93,7 +77,6 @@ data class RoomType private constructor(
             maxOccupancy: Int,
             basePrice: Money,
             amenities: List<String>,
-            status: RoomTypeStatus,
             version: Long,
             createdAt: Instant,
             updatedAt: Instant
@@ -105,7 +88,6 @@ data class RoomType private constructor(
             maxOccupancy = maxOccupancy,
             basePrice = basePrice,
             amenities = amenities,
-            status = status,
             version = version,
             createdAt = createdAt,
             updatedAt = updatedAt

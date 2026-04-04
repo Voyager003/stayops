@@ -15,7 +15,7 @@ data class Member private constructor(
     val version: Long,
     val createdAt: Instant,
     val updatedAt: Instant
-) {
+) : java.io.Serializable {
 
     fun hasAccessTo(propertyId: String): Boolean {
         if (role == MemberRole.ADMIN) return true
@@ -50,6 +50,8 @@ data class Member private constructor(
     }
 
     companion object {
+        private const val serialVersionUID = 1L
+
         fun create(
             id: String,
             email: String,

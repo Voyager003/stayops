@@ -44,18 +44,24 @@ data class RoomInventory private constructor(
 
     fun block(count: Int): RoomInventory {
         require(count >= 1) { "차단 수는 1 이상이어야 합니다: $count" }
-        require(availableCount >= count) {
-            "가용 객실이 부족합니다: available=$availableCount, requested=$count"
+        val actual = minOf(count, availableCount)
+        if (actual == 0) return this
+        return copy(blockedCount = blockedCount + actual, updatedAt = Instant.now())
+    }
+
+    fun updateTotalCount(newTotalCount: Int): RoomInventory {
+        require(newTotalCount >= 1) { "총 객실 수는 1 이상이어야 합니다: $newTotalCount" }
+        require(reservedCount + blockedCount <= newTotalCount) {
+            "총 객실 수가 현재 예약+차단 수보다 작을 수 없습니다: reserved=$reservedCount, blocked=$blockedCount, newTotal=$newTotalCount"
         }
-        return copy(blockedCount = blockedCount + count, updatedAt = Instant.now())
+        return copy(totalCount = newTotalCount, updatedAt = Instant.now())
     }
 
     fun unblock(count: Int): RoomInventory {
         require(count >= 1) { "해제 수는 1 이상이어야 합니다: $count" }
-        require(blockedCount >= count) {
-            "차단된 객실이 부족합니다: blockedCount=$blockedCount, requested=$count"
-        }
-        return copy(blockedCount = blockedCount - count, updatedAt = Instant.now())
+        val actual = minOf(count, blockedCount)
+        if (actual == 0) return this
+        return copy(blockedCount = blockedCount - actual, updatedAt = Instant.now())
     }
 
     companion object {
@@ -74,7 +80,7 @@ data class RoomInventory private constructor(
                 date = date,
                 totalCount = totalCount,
                 reservedCount = 0,
-                blockedCount = 0,
+                blockedCount = totalCount,
                 version = null,
                 createdAt = now,
                 updatedAt = now

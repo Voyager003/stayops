@@ -1,37 +1,59 @@
 package com.stayops.inventory.application.service
 
+import com.stayops.channel.application.service.ChannelSyncApplication
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.inventory.infrastructure.cache.RedisRoomInventoryCache
+import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
 import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.stereotype.Service
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.util.UUID
 
 @Service
 class RoomInventoryApplication(
     private val inventoryRepository: RoomInventoryRepository,
-    private val cache: RedisRoomInventoryCache
+    private val cache: RedisRoomInventoryCache,
+    private val roomRepository: RoomRepository,
+    private val channelSyncApplication: ChannelSyncApplication
 ) {
-    fun initializeInventory(
-        propertyId: String,
-        roomTypeId: String,
-        date: LocalDate,
-        totalCount: Int
-    ): RoomInventory {
-        inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate(propertyId, roomTypeId, date)?.let {
-            throw ConflictException("INVENTORY_ALREADY_EXISTS", "해당 날짜의 재고가 이미 존재합니다: $date")
+
+    companion object {
+        const val INVENTORY_HORIZON_DAYS = 90L
+    }
+
+    fun syncInventoryForRoomType(propertyId: String, roomTypeId: String) {
+        val roomCount = roomRepository.findByRoomTypeId(roomTypeId)
+            .count { it.propertyId == propertyId }
+        if (roomCount < 1) return
+
+        val today = LocalDate.now()
+        val endDate = today.plusDays(INVENTORY_HORIZON_DAYS)
+        val existing = inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(
+            propertyId, roomTypeId, today, endDate
+        ).associateBy { it.date }
+
+        var date = today
+        while (!date.isAfter(endDate)) {
+            val inv = existing[date]
+            if (inv == null) {
+                inventoryRepository.save(
+                    RoomInventory.create(
+                        id = UUID.randomUUID().toString(),
+                        propertyId = propertyId,
+                        roomTypeId = roomTypeId,
+                        date = date,
+                        totalCount = roomCount
+                    )
+                )
+            } else if (inv.totalCount != roomCount) {
+                inventoryRepository.save(inv.updateTotalCount(roomCount))
+            }
+            date = date.plusDays(1)
         }
-        val inventory = RoomInventory.create(
-            id = UUID.randomUUID().toString(),
-            propertyId = propertyId,
-            roomTypeId = roomTypeId,
-            date = date,
-            totalCount = totalCount
-        )
-        return inventoryRepository.save(inventory).also { cache.put(it) }
     }
 
     fun getAvailability(
@@ -42,6 +64,47 @@ class RoomInventoryApplication(
     ): List<RoomInventory> =
         inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(propertyId, roomTypeId, startDate, endDate)
 
+    fun bulkBlock(
+        propertyId: String,
+        roomTypeId: String,
+        startDate: LocalDate,
+        endDate: LocalDate,
+        daysOfWeek: List<DayOfWeek>?,
+        action: String,
+        count: Int
+    ): Int {
+        require(!startDate.isAfter(endDate)) { "시작일이 종료일보다 클 수 없습니다." }
+
+        var processed = 0
+        var date = startDate
+        while (!date.isAfter(endDate)) {
+            if (daysOfWeek == null || date.dayOfWeek in daysOfWeek) {
+                val inv = inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate(propertyId, roomTypeId, date)
+                if (inv != null) {
+                    try {
+                        val updated = if (action == "BLOCK") inv.block(count) else inv.unblock(count)
+                        if (updated !== inv) {
+                            saveAndEvict(updated)
+                            channelSyncApplication.createAvailabilitySyncTasks(
+                                propertyId, roomTypeId, date, updated.availableCount
+                            )
+                            processed++
+                        }
+                    } catch (_: IllegalArgumentException) {
+                        // count < 1 등 — 해당 날짜 건너뜀
+                    } catch (_: OptimisticLockingFailureException) {
+                        // 충돌 — 해당 날짜 건너뜀
+                    }
+                }
+            }
+            date = date.plusDays(1)
+        }
+        if (processed > 0) {
+            channelSyncApplication.processTasksImmediately(propertyId)
+        }
+        return processed
+    }
+
     fun blockInventory(
         propertyId: String,
         roomTypeId: String,
@@ -50,7 +113,10 @@ class RoomInventoryApplication(
     ): RoomInventory {
         val inventory = getOrThrow(propertyId, roomTypeId, date)
         return try {
-            saveAndEvict(inventory.block(count))
+            val updated = saveAndEvict(inventory.block(count))
+            channelSyncApplication.createAvailabilitySyncTasks(propertyId, roomTypeId, date, updated.availableCount)
+            channelSyncApplication.processTasksImmediately(propertyId)
+            updated
         } catch (e: OptimisticLockingFailureException) {
             throw ConflictException("INVENTORY_CONFLICT", "재고 변경 충돌이 발생했습니다. 다시 시도해주세요.")
         }
@@ -64,13 +130,15 @@ class RoomInventoryApplication(
     ): RoomInventory {
         val inventory = getOrThrow(propertyId, roomTypeId, date)
         return try {
-            saveAndEvict(inventory.unblock(count))
+            val updated = saveAndEvict(inventory.unblock(count))
+            channelSyncApplication.createAvailabilitySyncTasks(propertyId, roomTypeId, date, updated.availableCount)
+            channelSyncApplication.processTasksImmediately(propertyId)
+            updated
         } catch (e: OptimisticLockingFailureException) {
             throw ConflictException("INVENTORY_CONFLICT", "재고 변경 충돌이 발생했습니다. 다시 시도해주세요.")
         }
     }
 
-    // Used internally by Reservation domain
     fun reserve(propertyId: String, roomTypeId: String, date: LocalDate): RoomInventory {
         val inventory = getOrThrow(propertyId, roomTypeId, date)
         return try {
@@ -80,7 +148,6 @@ class RoomInventoryApplication(
         }
     }
 
-    // Used internally by Reservation domain
     fun release(propertyId: String, roomTypeId: String, date: LocalDate): RoomInventory {
         val inventory = getOrThrow(propertyId, roomTypeId, date)
         return try {

@@ -25,6 +25,7 @@ import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.BusinessException
+import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.ForbiddenException
 import com.stayops.shared.exception.NotFoundException
 import io.kotest.assertions.throwables.shouldThrow
@@ -77,7 +78,7 @@ class BookingApplicationTest : BehaviorSpec({
         id = "rt-1", propertyId = "prop-1", name = "디럭스룸",
         description = "넓은 객실", maxOccupancy = 2,
         basePrice = Money.won(100_000)
-    ).activate()
+    )
 
     fun directChannel() = Channel.createDirect(id = "ch-1", propertyId = "prop-1")
 
@@ -87,6 +88,7 @@ class BookingApplicationTest : BehaviorSpec({
     )
 
     fun setupCommonMocks() {
+        every { reservationRepository.existsByMemberIdAndRoomTypeIdAndCheckInAndCheckOutAndStatusIn(any(), any(), any(), any(), any()) } returns false
         every { propertyRepository.findById("prop-1") } returns activeProperty()
         every { roomTypeRepository.findById("rt-1") } returns activeRoomType()
         every { channelRepository.findByPropertyIdAndCode("prop-1", "DIRECT") } returns directChannel()
@@ -178,6 +180,7 @@ class BookingApplicationTest : BehaviorSpec({
                 description = "비활성", timezone = "Asia/Seoul", currency = "KRW"
             )
             every { propertyRepository.findById("prop-2") } returns inactive
+            every { reservationRepository.existsByMemberIdAndRoomTypeIdAndCheckInAndCheckOutAndStatusIn(any(), any(), any(), any(), any()) } returns false
 
             then("예외가 발생한다") {
                 shouldThrow<BusinessException> {
@@ -187,6 +190,27 @@ class BookingApplicationTest : BehaviorSpec({
                         guestName = "김고객", guestPhone = "010-1111-2222", guestEmail = null
                     )
                 }
+            }
+        }
+
+        `when`("동일 조건의 PENDING/CONFIRMED 예약이 이미 존재하면") {
+            clearAllMocks()
+            every { reservationRepository.existsByMemberIdAndRoomTypeIdAndCheckInAndCheckOutAndStatusIn(
+                "member-1", "rt-1", checkIn, checkOut,
+                listOf(ReservationStatus.PENDING, ReservationStatus.CONFIRMED)
+            ) } returns true
+
+            then("ConflictException이 발생하고 재고 차감이 호출되지 않는다") {
+                val ex = shouldThrow<ConflictException> {
+                    service.createBooking(
+                        memberId = "member-1", propertyId = "prop-1", roomTypeId = "rt-1",
+                        checkIn = checkIn, checkOut = checkOut, numberOfGuests = 2,
+                        guestName = "김고객", guestPhone = "010-1111-2222", guestEmail = null
+                    )
+                }
+                ex.code shouldBe "DUPLICATE_BOOKING"
+                verify(exactly = 0) { inventoryApplication.reserve(any(), any(), any()) }
+                verify(exactly = 0) { reservationRepository.save(any()) }
             }
         }
     }
@@ -291,6 +315,29 @@ class BookingApplicationTest : BehaviorSpec({
                         paymentKey = "pk", orderId = "oid", amount = BigDecimal(200_000)
                     )
                 }
+            }
+        }
+
+        `when`("이미 CONFIRMED 상태인 예약에 결제를 다시 요청하면") {
+            clearAllMocks()
+            val confirmedReservation = pendingReservation().confirm()
+            val approvedPayment = pendingPayment().approve(
+                paymentKey = "toss_pk_123", method = "카드", approvedAt = Instant.now()
+            )
+            every { reservationRepository.findById("rsv-1") } returns confirmedReservation
+            every { paymentRepository.findByReservationId("rsv-1") } returns approvedPayment
+
+            val result = service.confirmPayment(
+                memberId = "member-1", reservationId = "rsv-1",
+                paymentKey = "toss_pk_123", orderId = approvedPayment.orderId,
+                amount = BigDecimal(200_000)
+            )
+
+            then("Toss 승인 없이 기존 결과를 반환한다 (멱등성)") {
+                result.reservation.status shouldBe ReservationStatus.CONFIRMED
+                result.payment.status shouldBe PaymentStatus.APPROVED
+                result.payment.paymentKey shouldBe "toss_pk_123"
+                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any()) }
             }
         }
     }

@@ -10,5 +10,6 @@ data class SettlementSummary(
     val totalRevenue: Money,
     val totalCommission: Money,
     val netSettlement: Money,
+    val documentCount: Int,
     val byChannel: List<ChannelSettlement>
 )

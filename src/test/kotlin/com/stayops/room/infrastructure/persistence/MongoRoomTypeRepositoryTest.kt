@@ -2,7 +2,6 @@ package com.stayops.room.infrastructure.persistence
 
 import com.stayops.TestcontainersConfiguration
 import com.stayops.room.domain.model.RoomType
-import com.stayops.room.domain.model.RoomTypeStatus
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.Money
 import org.assertj.core.api.Assertions.assertThat
@@ -48,18 +47,7 @@ class MongoRoomTypeRepositoryTest @Autowired constructor(
 
             assertThat(saved.id).isEqualTo(roomType.id)
             assertThat(saved.name).isEqualTo(roomType.name)
-            assertThat(saved.status).isEqualTo(RoomTypeStatus.INACTIVE)
             assertThat(saved.basePrice).isEqualTo(Money.won(150_000))
-        }
-
-        @Test
-        fun `상태 변경 후 저장하면 변경된 상태가 유지된다`() {
-            val roomType = newRoomType().activate()
-            roomTypeRepository.save(roomType)
-
-            val found = roomTypeRepository.findById(roomType.id)
-            assertThat(found).isNotNull
-            assertThat(found!!.status).isEqualTo(RoomTypeStatus.ACTIVE)
         }
 
         @Test

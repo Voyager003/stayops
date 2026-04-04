@@ -18,6 +18,7 @@ import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
+import org.springframework.test.web.servlet.patch
 import org.springframework.test.web.servlet.put
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
@@ -89,7 +90,7 @@ class PropertyApiTest @Autowired constructor(
     @Nested
     inner class `GET 전체 숙소 조회` {
         @Test
-        fun `저장된 숙소 목록을 반환한다`() {
+        fun `ADMIN은 모든 숙소를 조회할 수 있다`() {
             mockMvc.post("/api/v1/properties") {
                 contentType = MediaType.APPLICATION_JSON
                 content = objectMapper.writeValueAsString(createRequest("펜션A"))
@@ -102,6 +103,35 @@ class PropertyApiTest @Autowired constructor(
             mockMvc.get("/api/v1/properties").andExpect {
                 status { isOk() }
                 jsonPath("$.length()") { value(2) }
+            }
+        }
+
+        @Test
+        fun `OWNER는 자신의 propertyAccess에 포함된 숙소만 조회할 수 있다`() {
+            // 숙소 2개 생성 (ADMIN으로)
+            val createdA = mockMvc.post("/api/v1/properties") {
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(createRequest("펜션A"))
+            }.andReturn().response.contentAsString
+            val idA = objectMapper.readTree(createdA).get("id").asText()
+
+            mockMvc.post("/api/v1/properties") {
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(createRequest("펜션B"))
+            }
+
+            // OWNER로 전환 — 펜션A에만 접근 권한
+            val owner = Member.create(
+                id = "test-owner", email = "owner@test.com",
+                passwordHash = "hashed", name = "테스트운영자", role = MemberRole.OWNER
+            ).grantAccess(idA, com.stayops.auth.domain.model.PropertyRole.OWNER)
+            SecurityContextHolder.getContext().authentication =
+                UsernamePasswordAuthenticationToken(owner, null, emptyList())
+
+            mockMvc.get("/api/v1/properties").andExpect {
+                status { isOk() }
+                jsonPath("$.length()") { value(1) }
+                jsonPath("$[0].name") { value("펜션A") }
             }
         }
     }
@@ -127,6 +157,72 @@ class PropertyApiTest @Autowired constructor(
         fun `존재하지 않는 id이면 404를 반환한다`() {
             mockMvc.get("/api/v1/properties/not-exist").andExpect {
                 status { isNotFound() }
+            }
+        }
+    }
+
+    @Nested
+    inner class `PATCH 숙소 활성화` {
+        @Test
+        fun `INACTIVE 숙소를 활성화하면 ACTIVE로 변경된다`() {
+            val created = mockMvc.post("/api/v1/properties") {
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(createRequest())
+            }.andReturn().response.contentAsString
+
+            val id = objectMapper.readTree(created).get("id").asText()
+
+            mockMvc.patch("/api/v1/properties/$id/activate").andExpect {
+                status { isOk() }
+                jsonPath("$.status") { value("ACTIVE") }
+            }
+        }
+
+        @Test
+        fun `이미 ACTIVE인 숙소를 활성화하면 400을 반환한다`() {
+            val created = mockMvc.post("/api/v1/properties") {
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(createRequest())
+            }.andReturn().response.contentAsString
+
+            val id = objectMapper.readTree(created).get("id").asText()
+
+            mockMvc.patch("/api/v1/properties/$id/activate")
+            mockMvc.patch("/api/v1/properties/$id/activate").andExpect {
+                status { isBadRequest() }
+            }
+        }
+    }
+
+    @Nested
+    inner class `PATCH 숙소 비활성화` {
+        @Test
+        fun `ACTIVE 숙소를 비활성화하면 INACTIVE로 변경된다`() {
+            val created = mockMvc.post("/api/v1/properties") {
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(createRequest())
+            }.andReturn().response.contentAsString
+
+            val id = objectMapper.readTree(created).get("id").asText()
+
+            mockMvc.patch("/api/v1/properties/$id/activate")
+            mockMvc.patch("/api/v1/properties/$id/deactivate").andExpect {
+                status { isOk() }
+                jsonPath("$.status") { value("INACTIVE") }
+            }
+        }
+
+        @Test
+        fun `INACTIVE 숙소를 비활성화하면 400을 반환한다`() {
+            val created = mockMvc.post("/api/v1/properties") {
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(createRequest())
+            }.andReturn().response.contentAsString
+
+            val id = objectMapper.readTree(created).get("id").asText()
+
+            mockMvc.patch("/api/v1/properties/$id/deactivate").andExpect {
+                status { isBadRequest() }
             }
         }
     }

@@ -8,16 +8,17 @@ import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolver
 import com.stayops.room.domain.model.RoomType
-import com.stayops.room.domain.model.RoomTypeStatus
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
+import java.time.Instant
 import java.time.LocalDate
 
 class BookingSearchApplicationTest : BehaviorSpec({
@@ -68,7 +69,7 @@ class BookingSearchApplicationTest : BehaviorSpec({
         maxOccupancy = 2,
         basePrice = Money.won(100_000),
         amenities = listOf("WiFi", "TV")
-    ).activate()
+    )
 
     fun inactiveRoomType(id: String = "rt-2", propertyId: String = "prop-1") = RoomType.create(
         id = id,
@@ -80,12 +81,17 @@ class BookingSearchApplicationTest : BehaviorSpec({
     )
 
     fun inventory(propertyId: String, roomTypeId: String, date: LocalDate, totalCount: Int = 5, reservedCount: Int = 0) =
-        RoomInventory.create(
+        RoomInventory.reconstitute(
             id = "inv-$date",
             propertyId = propertyId,
             roomTypeId = roomTypeId,
             date = date,
-            totalCount = totalCount
+            totalCount = totalCount,
+            reservedCount = reservedCount,
+            blockedCount = 0,
+            version = 0,
+            createdAt = Instant.parse("2026-01-01T00:00:00Z"),
+            updatedAt = Instant.parse("2026-01-01T00:00:00Z")
         )
 
     // -- 숙소 목록 조회 --
@@ -119,6 +125,8 @@ class BookingSearchApplicationTest : BehaviorSpec({
 
             then("숙소 정보를 반환한다") {
                 result.name shouldBe "테스트 호텔"
+                result.timezone shouldBe "Asia/Seoul"
+                result.currency shouldBe "KRW"
             }
         }
 
@@ -147,7 +155,7 @@ class BookingSearchApplicationTest : BehaviorSpec({
 
     given("객실타입 목록 조회 시") {
 
-        `when`("ACTIVE 객실타입과 INACTIVE 객실타입이 있으면") {
+        `when`("여러 객실타입이 있으면") {
             every { propertyRepository.findById("prop-1") } returns activeProperty()
             every { roomTypeRepository.findByPropertyId("prop-1") } returns listOf(
                 activeRoomType("rt-1"),
@@ -156,9 +164,10 @@ class BookingSearchApplicationTest : BehaviorSpec({
 
             val result = service.searchRoomTypes("prop-1")
 
-            then("ACTIVE 객실타입만 반환된다") {
-                result shouldHaveSize 1
+            then("모든 객실타입을 반환한다") {
+                result shouldHaveSize 2
                 result[0].name shouldBe "디럭스룸"
+                result[1].name shouldBe "이코노미룸"
             }
         }
     }
@@ -208,6 +217,67 @@ class BookingSearchApplicationTest : BehaviorSpec({
 
             then("basePrice × 박수로 계산된다") {
                 result shouldBe Money.won(200_000) // 100,000 × 2박
+            }
+        }
+    }
+
+    // -- 공개 예약 Offer 조회 --
+
+    given("공개 예약 Offer 조회 시") {
+        val checkIn = LocalDate.of(2026, 4, 10)
+        val checkOut = LocalDate.of(2026, 4, 12)
+        val deluxe = activeRoomType("rt-1", "prop-1")
+        val suite = RoomType.create(
+            id = "rt-2",
+            propertyId = "prop-1",
+            name = "패밀리 스위트",
+            description = "가족 여행에 적합한 스위트",
+            maxOccupancy = 4,
+            basePrice = Money.won(180_000),
+            amenities = listOf("WiFi", "욕조", "테라스")
+        )
+
+        `when`("숙박 기간의 최저 가용 수량과 요금을 객실별로 집계하면") {
+            every { propertyRepository.findById("prop-1") } returns activeProperty()
+            every { roomTypeRepository.findByPropertyId("prop-1") } returns listOf(deluxe, suite)
+            every {
+                inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(
+                    "prop-1", "rt-1", checkIn, checkOut.minusDays(1)
+                )
+            } returns listOf(
+                inventory("prop-1", "rt-1", checkIn, totalCount = 5, reservedCount = 4),
+                inventory("prop-1", "rt-1", checkIn.plusDays(1), totalCount = 5, reservedCount = 2)
+            )
+            every {
+                inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(
+                    "prop-1", "rt-2", checkIn, checkOut.minusDays(1)
+                )
+            } returns listOf(
+                inventory("prop-1", "rt-2", checkIn, totalCount = 2, reservedCount = 0),
+                inventory("prop-1", "rt-2", checkIn.plusDays(1), totalCount = 2, reservedCount = 0)
+            )
+            every {
+                ratePlanRepository.findByPropertyIdAndRoomTypeIdAndStatus(
+                    "prop-1", "rt-1", RatePlanStatus.ACTIVE
+                )
+            } returns emptyList()
+            every {
+                ratePlanRepository.findByPropertyIdAndRoomTypeIdAndStatus(
+                    "prop-1", "rt-2", RatePlanStatus.ACTIVE
+                )
+            } returns emptyList()
+
+            val result = service.getPropertyOffers("prop-1", checkIn, checkOut, 3)
+
+            then("객실별 예약 제안과 인원 적합 여부를 반환한다") {
+                result shouldHaveSize 2
+                result.map { it.roomType.id } shouldContainExactly listOf("rt-1", "rt-2")
+                result[0].availableCount shouldBe 1
+                result[0].fitsGuests shouldBe false
+                result[0].rateQuote shouldBe Money.won(200_000)
+                result[1].availableCount shouldBe 2
+                result[1].fitsGuests shouldBe true
+                result[1].rateQuote shouldBe Money.won(360_000)
             }
         }
     }

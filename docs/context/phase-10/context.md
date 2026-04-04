@@ -8,7 +8,9 @@
   - JWT의 장점(MSA 간 무상태 인증 전파, 모바일 앱 지원)이 필요 없는 구조
   - JWT + Redis 블랙리스트 = 결국 stateful인데 세션보다 구현만 복잡
   - 세션은 로그아웃 즉시 무효화가 자연스러움 (세션 삭제 한 줄)
-- **세션 스토어**: 서버 메모리 (Tomcat 기본값). 필요 시 `spring-session-data-redis`로 전환 가능
+- **세션 스토어**:
+  - 초기 결정: 서버 메모리 (Tomcat 기본값)
+  - 2026-03-30 전환: Redis 기반 Spring Session (`spring-boot-starter-session-data-redis`)
 
 ## UUID ID 문제 인식
 
@@ -36,11 +38,11 @@
 
 ## 코드 리뷰 미해결 이슈 (추후 수정)
 
-### C3: Member Serializable 미구현
-- **현상**: Member가 세션 principal로 저장되지만 `java.io.Serializable` 미구현
-- **현재 영향 없음**: 서버 메모리 세션 사용 중이므로 직렬화 불필요
-- **Redis 세션 전환 시 대응 필요**: `spring-session-data-redis` 도입 시 `NotSerializableException` 발생
-- **해결 방안**: (A) Member에 Serializable 구현 또는 (B) 세션에 memberId만 저장하고 매 요청마다 DB 조회
+### C3: Member Serializable 미구현 [해결됨]
+- **기존 현상**: Member가 세션 principal로 저장되지만 `java.io.Serializable` 미구현
+- **문제**: Redis 세션 전환 시 principal 직렬화가 필요하므로 `NotSerializableException` 위험
+- **해결**: `Member`, `PropertyAccess`에 `Serializable` 적용
+- **검증**: Redis-backed 세션 통합 테스트에서 로그인 후 `spring:session:sessions:{id}` 키 생성 확인
 
 ### H1: 세션 고정 공격 미방어
 - 로그인 시 기존 세션 무효화 없이 SecurityContext만 설정
@@ -49,3 +51,13 @@
 ### H5: passwordHash가 data class toString()에 노출
 - Member가 로그에 출력되면 해시 노출 가능
 - 대응: `toString()` 오버라이드하여 passwordHash 제외
+
+## Redis 세션 저장소 전환 메모
+
+- **자동설정 기준**: Spring Boot 4 서블릿 앱은 `spring-boot-starter-session-data-redis`를 사용해야 Redis 세션 저장소가 자동설정된다
+- **설정**: `spring.session.redis.repository-type=default`, `spring.session.timeout=30m`
+- **테스트 방식**:
+  - `@SpringBootTest(RANDOM_PORT)` + Testcontainers MongoDB/Redis
+  - `/api/v1/auth/login` 호출 후 `Set-Cookie`의 `SESSION` 쿠키 확인
+  - 쿠키 값은 Base64 인코딩된 세션 ID이므로 디코딩 후 Redis 키 `spring:session:sessions:{decodedId}` 존재 여부 확인
+  - 같은 쿠키로 보호 API 접근 가능, 로그아웃 후 동일 쿠키 재사용 불가 확인

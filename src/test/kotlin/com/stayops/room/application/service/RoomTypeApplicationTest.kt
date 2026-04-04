@@ -1,7 +1,6 @@
 package com.stayops.room.application.service
 
 import com.stayops.room.domain.model.RoomType
-import com.stayops.room.domain.model.RoomTypeStatus
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.ConflictException
@@ -46,7 +45,7 @@ class RoomTypeApplicationTest : BehaviorSpec({
             then("저장된 객실타입을 반환한다") {
                 result.name shouldBe "디럭스"
                 result.propertyId shouldBe "prop-1"
-                result.status shouldBe RoomTypeStatus.INACTIVE
+                result.maxOccupancy shouldBe 2
             }
             then("Repository.save()가 한 번 호출된다") {
                 verify(exactly = 1) { roomTypeRepository.save(any()) }
@@ -147,27 +146,24 @@ class RoomTypeApplicationTest : BehaviorSpec({
         }
     }
 
-    given("객실타입 비활성화 시") {
-        `when`("ACTIVE 상태이면") {
-            val active = newRoomType().activate()
-            val savedSlot = slot<RoomType>()
-            every { roomTypeRepository.findById("rt-1") } returns active
-            every { roomTypeRepository.save(capture(savedSlot)) } answers { firstArg() }
+    given("객실타입 삭제 시") {
+        `when`("존재하는 객실타입이면") {
+            every { roomTypeRepository.findById("rt-1") } returns newRoomType()
+            every { roomTypeRepository.deleteById("rt-1") } returns Unit
 
-            roomTypeApplication.deactivateRoomType("rt-1")
+            roomTypeApplication.deleteRoomType("rt-1")
 
-            then("INACTIVE 상태로 저장된다") {
-                savedSlot.captured.status shouldBe RoomTypeStatus.INACTIVE
+            then("deleteById가 호출된다") {
+                verify { roomTypeRepository.deleteById("rt-1") }
             }
         }
 
-        `when`("INACTIVE 상태이면") {
-            val inactive = newRoomType()
-            every { roomTypeRepository.findById("rt-1") } returns inactive
+        `when`("존재하지 않는 객실타입이면") {
+            every { roomTypeRepository.findById("unknown") } returns null
 
-            then("IllegalArgumentException이 발생한다") {
-                shouldThrow<IllegalArgumentException> {
-                    roomTypeApplication.deactivateRoomType("rt-1")
+            then("NotFoundException이 발생한다") {
+                shouldThrow<NotFoundException> {
+                    roomTypeApplication.deleteRoomType("unknown")
                 }
             }
         }

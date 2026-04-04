@@ -19,6 +19,7 @@ import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.BusinessException
+import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.ForbiddenException
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
@@ -61,6 +62,15 @@ class BookingApplication(
         guestPhone: String,
         guestEmail: String?
     ): BookingResult {
+        // 0. 중복 예약 검증
+        val activeStatuses = listOf(ReservationStatus.PENDING, ReservationStatus.CONFIRMED)
+        val hasDuplicate = reservationRepository.existsByMemberIdAndRoomTypeIdAndCheckInAndCheckOutAndStatusIn(
+            memberId, roomTypeId, checkIn, checkOut, activeStatuses
+        )
+        if (hasDuplicate) {
+            throw ConflictException("DUPLICATE_BOOKING", "이미 동일 조건의 예약이 존재합니다")
+        }
+
         // 1. Property 검증
         val property = propertyRepository.findById(propertyId)
             ?: throw NotFoundException("PROPERTY_NOT_FOUND", "숙소를 찾을 수 없습니다: $propertyId")
@@ -72,9 +82,11 @@ class BookingApplication(
         val roomType = roomTypeRepository.findById(roomTypeId)
             ?: throw NotFoundException("ROOM_TYPE_NOT_FOUND", "객실타입을 찾을 수 없습니다: $roomTypeId")
 
-        // 3. Channel (DIRECT) 조회
+        // 3. Channel (DIRECT) 조회 — 없으면 자동 생성 (기존 Property 호환)
         val channel = channelRepository.findByPropertyIdAndCode(propertyId, "DIRECT")
-            ?: throw NotFoundException("CHANNEL_NOT_FOUND", "DIRECT 채널을 찾을 수 없습니다")
+            ?: channelRepository.save(
+                com.stayops.channel.domain.model.Channel.createDirect(UUID.randomUUID().toString(), propertyId)
+            )
 
         // 4. 요금 계산
         val dateRange = DateRange.of(checkIn, checkOut)
@@ -167,6 +179,11 @@ class BookingApplication(
         // 2. Payment 조회
         val payment = paymentRepository.findByReservationId(reservationId)
             ?: throw NotFoundException("PAYMENT_NOT_FOUND", "결제 정보를 찾을 수 없습니다: $reservationId")
+
+        // 2-1. 멱등성: 이미 CONFIRMED 상태이면 기존 결과 반환
+        if (reservation.status == ReservationStatus.CONFIRMED) {
+            return BookingResult(reservation, payment)
+        }
 
         // 3. 만료 검증 — expiresAt이 지났으면 결제 불가
         if (reservation.expiresAt != null && Instant.now().isAfter(reservation.expiresAt)) {

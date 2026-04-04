@@ -66,7 +66,7 @@ data class Channel private constructor(
             code: String,
             name: String,
             commissionRate: BigDecimal,
-            connectionInfo: ChannelConnectionInfo
+            apiEndpoint: String
         ): Channel {
             require(code.isNotBlank()) { "채널 코드는 공백일 수 없습니다." }
             require(name.isNotBlank()) { "채널 이름은 공백일 수 없습니다." }
@@ -81,7 +81,7 @@ data class Channel private constructor(
                 name = name,
                 type = ChannelType.OTA,
                 commissionRate = commissionRate,
-                connectionInfo = connectionInfo,
+                connectionInfo = ChannelConnectionInfo(apiEndpoint = apiEndpoint),
                 status = ChannelStatus.ACTIVE,
                 version = 0L,
                 createdAt = now,

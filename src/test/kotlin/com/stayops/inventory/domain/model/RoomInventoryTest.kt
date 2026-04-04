@@ -3,6 +3,7 @@ package com.stayops.inventory.domain.model
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeSameInstanceAs
 import java.time.LocalDate
 
 class RoomInventoryTest : BehaviorSpec({
@@ -35,10 +36,10 @@ class RoomInventoryTest : BehaviorSpec({
                 date = today,
                 totalCount = 5
             )
-            then("reservedCount와 blockedCount가 0으로 초기화된다") {
+            then("reservedCount는 0이고 blockedCount는 totalCount와 같다 (기본 마감)") {
                 inventory.reservedCount shouldBe 0
-                inventory.blockedCount shouldBe 0
-                inventory.availableCount shouldBe 5
+                inventory.blockedCount shouldBe 5
+                inventory.availableCount shouldBe 0
             }
             then("version이 null로 초기화된다") {
                 inventory.version shouldBe null
@@ -117,12 +118,12 @@ class RoomInventoryTest : BehaviorSpec({
                 blocked.availableCount shouldBe 1
             }
         }
-        `when`("가용 객실보다 많은 수를 차단하려 하면") {
+        `when`("가용 객실보다 많은 수를 차단하려 하면 가능한 만큼만 차단한다") {
             val inventory = newInventory(totalCount = 3, reservedCount = 1, blockedCount = 1)
-            then("예외가 발생한다") {
-                shouldThrow<IllegalArgumentException> {
-                    inventory.block(2)
-                }
+            val blocked = inventory.block(2)
+            then("가용 객실 수만큼만 차단된다") {
+                blocked.blockedCount shouldBe 2
+                blocked.availableCount shouldBe 0
             }
         }
         `when`("count가 0이면") {
@@ -131,6 +132,13 @@ class RoomInventoryTest : BehaviorSpec({
                 shouldThrow<IllegalArgumentException> {
                     inventory.block(0)
                 }
+            }
+        }
+        `when`("이미 전부 마감된 재고에 block하면") {
+            val inventory = newInventory(totalCount = 3, reservedCount = 0, blockedCount = 3)
+            val result = inventory.block(1)
+            then("자기 자신을 반환한다 (no-op)") {
+                result shouldBeSameInstanceAs inventory
             }
         }
     }
@@ -144,12 +152,12 @@ class RoomInventoryTest : BehaviorSpec({
                 unblocked.availableCount shouldBe 4
             }
         }
-        `when`("차단된 객실보다 많은 수를 해제하려 하면") {
+        `when`("차단된 객실보다 많은 수를 해제하려 하면 가능한 만큼만 해제한다") {
             val inventory = newInventory(totalCount = 5, reservedCount = 0, blockedCount = 1)
-            then("예외가 발생한다") {
-                shouldThrow<IllegalArgumentException> {
-                    inventory.unblock(2)
-                }
+            val unblocked = inventory.unblock(2)
+            then("차단된 수만큼만 해제된다") {
+                unblocked.blockedCount shouldBe 0
+                unblocked.availableCount shouldBe 5
             }
         }
         `when`("count가 0이면") {
@@ -158,6 +166,13 @@ class RoomInventoryTest : BehaviorSpec({
                 shouldThrow<IllegalArgumentException> {
                     inventory.unblock(0)
                 }
+            }
+        }
+        `when`("이미 전부 오픈된 재고에 unblock하면") {
+            val inventory = newInventory(totalCount = 5, reservedCount = 0, blockedCount = 0)
+            val result = inventory.unblock(1)
+            then("자기 자신을 반환한다 (no-op)") {
+                result shouldBeSameInstanceAs inventory
             }
         }
     }

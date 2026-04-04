@@ -1,6 +1,7 @@
 package com.stayops.mockota.api
 
-import com.stayops.mockota.model.ReceivedAri
+import com.stayops.mockota.model.OtaInventory
+import com.stayops.mockota.repository.OtaInventoryRepository
 import com.stayops.mockota.service.FailureSimulatorService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -9,16 +10,19 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
-import java.util.concurrent.CopyOnWriteArrayList
+import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 
 @RestController
 @RequestMapping("/api/v1/ari")
 class AriReceiverApi(
-    private val failureSimulator: FailureSimulatorService
+    private val failureSimulator: FailureSimulatorService,
+    private val otaInventoryRepository: OtaInventoryRepository
 ) {
 
-    private val receivedAriList = CopyOnWriteArrayList<ReceivedAri>()
+    private val processedIdempotencyKeys = ConcurrentHashMap.newKeySet<String>()
 
     @PostMapping("/availability")
     fun receiveAvailability(
@@ -42,26 +46,41 @@ class AriReceiverApi(
         }
 
         val key = idempotencyKey ?: ""
-        if (receivedAriList.any { it.idempotencyKey == key && key.isNotEmpty() }) {
+        if (key.isNotEmpty() && !processedIdempotencyKeys.add(key)) {
             return ResponseEntity.ok(mapOf("status" to "duplicate", "idempotencyKey" to key))
         }
 
-        val ari = ReceivedAri(
-            roomTypeCode = payload["roomTypeCode"]?.toString() ?: "",
-            date = payload["date"]?.toString() ?: "",
-            availableCount = (payload["availableCount"] as? Number)?.toInt() ?: 0,
-            idempotencyKey = key
-        )
-        receivedAriList.add(ari)
+        val roomTypeId = payload["roomTypeCode"]?.toString() ?: ""
+        val date = payload["date"]?.toString() ?: ""
+        val availableCount = (payload["availableCount"] as? Number)?.toInt() ?: 0
+
+        val existing = otaInventoryRepository.findByRoomTypeIdAndDate(roomTypeId, date)
+        if (existing != null) {
+            otaInventoryRepository.save(existing.copy(availableCount = availableCount, updatedAt = Instant.now()))
+        } else {
+            otaInventoryRepository.save(
+                OtaInventory(roomTypeId = roomTypeId, date = date, availableCount = availableCount)
+            )
+        }
 
         return ResponseEntity.ok(mapOf("status" to "accepted", "idempotencyKey" to key))
     }
 
     @GetMapping("/received")
-    fun getReceivedAri(): List<ReceivedAri> = receivedAriList.toList()
+    fun getReceivedAri(): List<OtaInventory> = otaInventoryRepository.findAll()
+
+    @GetMapping("/inventory")
+    fun getInventory(
+        @RequestParam roomTypeId: String,
+        @RequestParam startDate: String,
+        @RequestParam endDate: String
+    ): List<OtaInventory> {
+        return otaInventoryRepository.findByRoomTypeIdAndDateRange(roomTypeId, startDate, endDate)
+    }
 
     @PostMapping("/clear")
     fun clearReceived() {
-        receivedAriList.clear()
+        otaInventoryRepository.deleteAll()
+        processedIdempotencyKeys.clear()
     }
 }

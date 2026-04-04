@@ -1,7 +1,6 @@
 package com.stayops.channel.application.service
 
 import com.stayops.channel.domain.model.*
-import com.stayops.channel.domain.repository.ChannelMappingRepository
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.repository.SyncTaskRepository
 import com.stayops.channel.domain.service.ChannelAdapterProvider
@@ -15,14 +14,12 @@ import java.time.LocalDate
 class ChannelSyncApplicationTest : BehaviorSpec({
 
     val channelRepository = mockk<ChannelRepository>()
-    val mappingRepository = mockk<ChannelMappingRepository>()
     val syncTaskRepository = mockk<SyncTaskRepository>()
     val adapterProvider = mockk<ChannelAdapterProvider>()
     val syncAdapter = mockk<ChannelSyncAdapter>()
 
     val sut = ChannelSyncApplication(
         channelRepository = channelRepository,
-        channelMappingRepository = mappingRepository,
         syncTaskRepository = syncTaskRepository,
         adapterProvider = adapterProvider
     )
@@ -33,12 +30,7 @@ class ChannelSyncApplicationTest : BehaviorSpec({
         code = code,
         name = code,
         commissionRate = BigDecimal("0.15"),
-        connectionInfo = ChannelConnectionInfo(
-            apiEndpoint = "https://mock-ota:8081/api/v1/ari/availability",
-            apiKey = "test-key",
-            apiSecret = null,
-            webhookSecret = "secret"
-        )
+        apiEndpoint = "https://mock-ota:8081/api/v1/ari/availability"
     )
 
     fun directChannel() = Channel.createDirect(id = "ch-0", propertyId = "prop-1")
@@ -50,9 +42,6 @@ class ChannelSyncApplicationTest : BehaviorSpec({
         type = SyncTaskType.AVAILABILITY_UPDATE,
         payload = mapOf("roomTypeId" to "rt-1", "date" to "2026-03-20", "availableCount" to 5)
     )
-
-    fun sampleMapping() = ChannelMapping.create("map-1", "prop-1", "AGODA")
-        .addMapping(MappingEntry("rt-1", "AGD-DELUXE", MappingType.ROOM_TYPE))
 
     // -- createAvailabilitySyncTasks --
 
@@ -75,12 +64,11 @@ class ChannelSyncApplicationTest : BehaviorSpec({
 
     given("PENDING SyncTask가 있고 ARI push가 성공할 때") {
         `when`("processPendingTasks() 호출하면") {
-            then("태스크가 COMPLETED로 저장되고 외부 코드로 변환되어 push된다") {
+            then("태스크가 COMPLETED로 저장되고 roomTypeId로 push된다") {
                 clearAllMocks()
                 every { syncTaskRepository.findPendingTasksReadyForProcessing(any()) } returns listOf(sampleTask())
                 every { syncTaskRepository.save(any()) } answers { firstArg() }
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel()
-                every { mappingRepository.findByPropertyIdAndChannelCode("prop-1", "AGODA") } returns sampleMapping()
                 every { adapterProvider.getAdapter("AGODA") } returns syncAdapter
                 every { syncAdapter.pushAvailability(any(), any(), any(), any(), any()) } returns SyncResult(success = true)
 
@@ -93,8 +81,8 @@ class ChannelSyncApplicationTest : BehaviorSpec({
                 verify {
                     syncAdapter.pushAvailability(
                         endpoint = "https://mock-ota:8081/api/v1/ari/availability",
-                        apiKey = "test-key",
-                        externalRoomTypeCode = "AGD-DELUXE",
+                        apiKey = null,
+                        externalRoomTypeCode = "rt-1",
                         payload = any(),
                         idempotencyKey = any()
                     )
@@ -112,7 +100,6 @@ class ChannelSyncApplicationTest : BehaviorSpec({
                 every { syncTaskRepository.findPendingTasksReadyForProcessing(any()) } returns listOf(sampleTask())
                 every { syncTaskRepository.save(any()) } answers { firstArg() }
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel()
-                every { mappingRepository.findByPropertyIdAndChannelCode("prop-1", "AGODA") } returns sampleMapping()
                 every { adapterProvider.getAdapter("AGODA") } returns syncAdapter
                 every { syncAdapter.pushAvailability(any(), any(), any(), any(), any()) } returns
                         SyncResult(success = false, errorMessage = "Connection timeout")
@@ -122,6 +109,73 @@ class ChannelSyncApplicationTest : BehaviorSpec({
                 verify {
                     syncTaskRepository.save(match { it.status == SyncTaskStatus.IN_PROGRESS })
                     syncTaskRepository.save(match { it.lastError == "Connection timeout" })
+                }
+            }
+        }
+    }
+
+    // -- processTasksImmediately: 즉시 전송 --
+
+    given("SyncTask 생성 직후 즉시 전송 시") {
+        `when`("OTA push가 성공하면") {
+            then("태스크가 COMPLETED로 저장된다") {
+                clearAllMocks()
+                every { syncTaskRepository.findByPropertyIdAndStatus("prop-1", SyncTaskStatus.PENDING) } returns listOf(sampleTask())
+                every { syncTaskRepository.save(any()) } answers { firstArg() }
+                every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel()
+                every { adapterProvider.getAdapter("AGODA") } returns syncAdapter
+                every { syncAdapter.pushAvailability(any(), any(), any(), any(), any()) } returns SyncResult(success = true)
+
+                sut.processTasksImmediately("prop-1")
+
+                verify {
+                    syncTaskRepository.save(match { it.status == SyncTaskStatus.COMPLETED })
+                }
+            }
+        }
+
+        `when`("OTA push가 실패하면") {
+            then("태스크가 PENDING 상태로 유지된다 (폴링이 재시도)") {
+                clearAllMocks()
+                every { syncTaskRepository.findByPropertyIdAndStatus("prop-1", SyncTaskStatus.PENDING) } returns listOf(sampleTask())
+                every { syncTaskRepository.save(any()) } answers { firstArg() }
+                every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel()
+                every { adapterProvider.getAdapter("AGODA") } returns syncAdapter
+                every { syncAdapter.pushAvailability(any(), any(), any(), any(), any()) } returns
+                        SyncResult(success = false, errorMessage = "Connection refused")
+
+                sut.processTasksImmediately("prop-1")
+
+                verify(exactly = 0) {
+                    syncTaskRepository.save(match { it.status == SyncTaskStatus.COMPLETED })
+                }
+            }
+        }
+    }
+
+    // -- processPendingTasks: version 충돌 처리 --
+
+    given("폴링 중 version 충돌이 발생하면") {
+        `when`("OptimisticLockingFailureException이 발생해도") {
+            then("에러 없이 다음 태스크를 계속 처리한다") {
+                clearAllMocks()
+                val task1 = sampleTask()
+                val task2 = SyncTask.create("task-2", "prop-1", "BOOKING", SyncTaskType.AVAILABILITY_UPDATE,
+                    mapOf("roomTypeId" to "rt-1", "date" to "2026-03-20", "availableCount" to 3))
+
+                every { syncTaskRepository.findPendingTasksReadyForProcessing(any()) } returns listOf(task1, task2)
+                every { syncTaskRepository.save(match { it.id == "task-1" }) } throws
+                        org.springframework.dao.OptimisticLockingFailureException("version conflict")
+                every { syncTaskRepository.save(match { it.id == "task-2" }) } answers { firstArg() }
+                every { channelRepository.findByPropertyIdAndCode("prop-1", "BOOKING") } returns otaChannel("BOOKING")
+                every { adapterProvider.getAdapter("BOOKING") } returns syncAdapter
+                every { syncAdapter.pushAvailability(any(), any(), any(), any(), any()) } returns SyncResult(success = true)
+
+                sut.processPendingTasks()
+
+                // task2는 정상 처리됨
+                verify {
+                    syncAdapter.pushAvailability(any(), any(), any(), any(), any())
                 }
             }
         }

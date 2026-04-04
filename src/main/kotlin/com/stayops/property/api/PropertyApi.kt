@@ -1,6 +1,7 @@
 package com.stayops.property.api
 
 import com.stayops.auth.domain.model.Member
+import com.stayops.auth.domain.model.MemberRole
 import com.stayops.auth.domain.repository.MemberRepository
 import com.stayops.property.api.dto.CreatePropertyRequest
 import com.stayops.property.api.dto.PropertyResponse
@@ -13,7 +14,10 @@ import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository
 import org.springframework.web.bind.annotation.*
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 
 @RestController
 @RequestMapping("/api/v1/properties")
@@ -22,15 +26,21 @@ class PropertyApi(
     private val propertyAccessChecker: PropertyAccessChecker,
     private val memberRepository: MemberRepository
 ) {
+    private val securityContextRepository = HttpSessionSecurityContextRepository()
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    fun create(@RequestBody @Valid request: CreatePropertyRequest): PropertyResponse {
+    fun create(
+        @RequestBody @Valid request: CreatePropertyRequest,
+        httpRequest: HttpServletRequest,
+        httpResponse: HttpServletResponse
+    ): PropertyResponse {
         val currentMember = SecurityContextHolder.getContext().authentication?.principal as Member
         val property = propertyApplication.createProperty(
             ownerId = currentMember.id,
             name = request.name,
             type = request.type,
-            address = Address.of(request.address.street, request.address.city, request.address.state, request.address.zipCode, request.address.country),
+            address = Address.of(request.address.street, request.address.city, request.address.state, request.address.zipCode, request.address.country, request.address.latitude, request.address.longitude),
             contactInfo = ContactInfo.of(request.contactInfo.phone, request.contactInfo.email, request.contactInfo.website),
             description = request.description,
             timezone = request.timezone,
@@ -41,15 +51,36 @@ class PropertyApi(
         val updatedMember = memberRepository.findById(currentMember.id)
         if (updatedMember != null) {
             val newAuth = UsernamePasswordAuthenticationToken(updatedMember, null, emptyList())
-            SecurityContextHolder.getContext().authentication = newAuth
+            val context = SecurityContextHolder.getContext()
+            context.authentication = newAuth
+            securityContextRepository.saveContext(context, httpRequest, httpResponse)
         }
 
         return PropertyResponse.from(property)
     }
 
     @GetMapping
-    fun getAll(): List<PropertyResponse> =
-        propertyApplication.getAllProperties().map { PropertyResponse.from(it) }
+    fun getAll(): List<PropertyResponse> {
+        val member = SecurityContextHolder.getContext().authentication?.principal as Member
+        if (member.role == MemberRole.ADMIN) {
+            return propertyApplication.getAllProperties().map { PropertyResponse.from(it) }
+        }
+        val accessibleIds = member.propertyAccess.map { it.propertyId }
+        return propertyApplication.getAccessibleProperties(accessibleIds)
+            .map { PropertyResponse.from(it) }
+    }
+
+    @PatchMapping("/{pid}/activate")
+    fun activate(@PathVariable pid: String): PropertyResponse {
+        propertyAccessChecker.requireAccess(pid)
+        return PropertyResponse.from(propertyApplication.activateProperty(pid))
+    }
+
+    @PatchMapping("/{pid}/deactivate")
+    fun deactivate(@PathVariable pid: String): PropertyResponse {
+        propertyAccessChecker.requireAccess(pid)
+        return PropertyResponse.from(propertyApplication.deactivateProperty(pid))
+    }
 
     @GetMapping("/{pid}")
     fun getOne(@PathVariable pid: String): PropertyResponse {
@@ -67,7 +98,7 @@ class PropertyApi(
             id = pid,
             name = request.name,
             description = request.description,
-            address = Address.of(request.address.street, request.address.city, request.address.state, request.address.zipCode, request.address.country),
+            address = Address.of(request.address.street, request.address.city, request.address.state, request.address.zipCode, request.address.country, request.address.latitude, request.address.longitude),
             contactInfo = ContactInfo.of(request.contactInfo.phone, request.contactInfo.email, request.contactInfo.website)
         )
         return PropertyResponse.from(property)

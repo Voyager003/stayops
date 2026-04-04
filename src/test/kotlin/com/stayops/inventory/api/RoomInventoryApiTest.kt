@@ -1,10 +1,13 @@
 package com.stayops.inventory.api
 
 import com.stayops.TestcontainersConfiguration
-import com.stayops.inventory.api.dto.InitializeInventoryRequest
 import com.stayops.inventory.api.dto.InventoryUpdateAction
 import com.stayops.inventory.api.dto.UpdateInventoryRequest
+import com.stayops.inventory.application.service.RoomInventoryApplication
 import com.stayops.inventory.infrastructure.persistence.RoomInventoryMongoDataRepository
+import com.stayops.room.infrastructure.persistence.RoomMongoDataRepository
+import com.stayops.room.infrastructure.persistence.RoomDocument
+import com.stayops.room.domain.model.RoomStatus
 import com.stayops.auth.domain.model.Member
 import com.stayops.auth.domain.model.MemberRole
 import org.junit.jupiter.api.AfterEach
@@ -18,13 +21,13 @@ import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
-import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.put
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import tools.jackson.databind.ObjectMapper
+import java.time.Instant
 import java.time.LocalDate
 
 @SpringBootTest
@@ -32,14 +35,16 @@ import java.time.LocalDate
 class RoomInventoryApiTest @Autowired constructor(
     private val context: WebApplicationContext,
     private val objectMapper: ObjectMapper,
-    private val mongoDataRepository: RoomInventoryMongoDataRepository,
+    private val inventoryMongoRepo: RoomInventoryMongoDataRepository,
+    private val roomMongoRepo: RoomMongoDataRepository,
+    private val inventoryApplication: RoomInventoryApplication,
     private val redisTemplate: StringRedisTemplate
 ) {
     private lateinit var mockMvc: MockMvc
 
     private val pid = "prop-1"
     private val roomTypeId = "rt-1"
-    private val today = LocalDate.of(2026, 3, 12)
+    private val today = LocalDate.now()
     private val baseUrl = "/api/v1/properties/$pid"
 
     @BeforeEach
@@ -51,8 +56,22 @@ class RoomInventoryApiTest @Autowired constructor(
         SecurityContextHolder.getContext().authentication =
             UsernamePasswordAuthenticationToken(admin, null, emptyList())
         mockMvc = MockMvcBuilders.webAppContextSetup(context).build()
-        mongoDataRepository.deleteAll()
+        inventoryMongoRepo.deleteAll()
+        roomMongoRepo.deleteAll()
         redisTemplate.connectionFactory?.connection?.serverCommands()?.flushAll()
+
+        // 테스트용 객실 3개 생성 + 재고 자동 생성 (기본 마감 — blockedCount=3)
+        val now = Instant.now()
+        listOf("101", "102", "103").forEach { num ->
+            roomMongoRepo.save(
+                RoomDocument(
+                    id = "room-$num", propertyId = pid, roomTypeId = roomTypeId,
+                    roomNumber = num, floor = 1, status = RoomStatus.AVAILABLE,
+                    memo = null, version = 0L, createdAt = now, updatedAt = now
+                )
+            )
+        }
+        inventoryApplication.syncInventoryForRoomType(pid, roomTypeId)
     }
 
     @AfterEach
@@ -60,62 +79,10 @@ class RoomInventoryApiTest @Autowired constructor(
         SecurityContextHolder.clearContext()
     }
 
-    private fun initializeRequest(date: LocalDate = today, totalCount: Int = 5) =
-        InitializeInventoryRequest(roomTypeId = roomTypeId, date = date, totalCount = totalCount)
-
-    private fun initializeInventory(date: LocalDate = today, totalCount: Int = 5): String {
-        return mockMvc.post("$baseUrl/inventory/initialize") {
-            contentType = MediaType.APPLICATION_JSON
-            content = objectMapper.writeValueAsString(initializeRequest(date, totalCount))
-        }.andReturn().response.contentAsString
-    }
-
-    @Nested
-    inner class `POST 재고 초기화` {
-        @Test
-        fun `유효한 요청이면 201과 재고 정보를 반환한다`() {
-            mockMvc.post("$baseUrl/inventory/initialize") {
-                contentType = MediaType.APPLICATION_JSON
-                content = objectMapper.writeValueAsString(initializeRequest())
-            }.andExpect {
-                status { isCreated() }
-                jsonPath("$.date") { value("2026-03-12") }
-                jsonPath("$.totalCount") { value(5) }
-                jsonPath("$.availableCount") { value(5) }
-                jsonPath("$.reservedCount") { value(0) }
-                jsonPath("$.blockedCount") { value(0) }
-            }
-        }
-
-        @Test
-        fun `같은 날짜에 재고가 이미 있으면 409를 반환한다`() {
-            initializeInventory()
-            mockMvc.post("$baseUrl/inventory/initialize") {
-                contentType = MediaType.APPLICATION_JSON
-                content = objectMapper.writeValueAsString(initializeRequest())
-            }.andExpect {
-                status { isConflict() }
-            }
-        }
-
-        @Test
-        fun `totalCount가 0이면 400을 반환한다`() {
-            mockMvc.post("$baseUrl/inventory/initialize") {
-                contentType = MediaType.APPLICATION_JSON
-                content = objectMapper.writeValueAsString(initializeRequest(totalCount = 0))
-            }.andExpect {
-                status { isBadRequest() }
-            }
-        }
-    }
-
     @Nested
     inner class `GET 가용성 조회` {
         @Test
         fun `날짜 범위의 재고 목록을 반환한다`() {
-            initializeInventory(date = today, totalCount = 5)
-            initializeInventory(date = today.plusDays(1), totalCount = 3)
-
             mockMvc.get("$baseUrl/availability") {
                 param("roomTypeId", roomTypeId)
                 param("startDate", today.toString())
@@ -123,18 +90,9 @@ class RoomInventoryApiTest @Autowired constructor(
             }.andExpect {
                 status { isOk() }
                 jsonPath("$.length()") { value(2) }
-            }
-        }
-
-        @Test
-        fun `해당 범위에 재고가 없으면 빈 배열을 반환한다`() {
-            mockMvc.get("$baseUrl/availability") {
-                param("roomTypeId", roomTypeId)
-                param("startDate", today.toString())
-                param("endDate", today.plusDays(7).toString())
-            }.andExpect {
-                status { isOk() }
-                jsonPath("$.length()") { value(0) }
+                jsonPath("$[0].totalCount") { value(3) }
+                jsonPath("$[0].availableCount") { value(0) }
+                jsonPath("$[0].blockedCount") { value(3) }
             }
         }
     }
@@ -143,55 +101,33 @@ class RoomInventoryApiTest @Autowired constructor(
     inner class `PUT 재고 차단 및 해제` {
         @Test
         fun `BLOCK 요청이면 차단 후 변경된 재고를 반환한다`() {
-            initializeInventory(totalCount = 5)
+            // 기본 마감 상태에서 먼저 전부 오픈
+            mockMvc.put("$baseUrl/inventory/$roomTypeId/$today") {
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(UpdateInventoryRequest(InventoryUpdateAction.UNBLOCK, 3))
+            }
 
+            // 2개 차단
             mockMvc.put("$baseUrl/inventory/$roomTypeId/$today") {
                 contentType = MediaType.APPLICATION_JSON
                 content = objectMapper.writeValueAsString(UpdateInventoryRequest(InventoryUpdateAction.BLOCK, 2))
             }.andExpect {
                 status { isOk() }
                 jsonPath("$.blockedCount") { value(2) }
-                jsonPath("$.availableCount") { value(3) }
+                jsonPath("$.availableCount") { value(1) }
             }
         }
 
         @Test
         fun `UNBLOCK 요청이면 차단 해제 후 변경된 재고를 반환한다`() {
-            initializeInventory(totalCount = 5)
-            mockMvc.put("$baseUrl/inventory/$roomTypeId/$today") {
-                contentType = MediaType.APPLICATION_JSON
-                content = objectMapper.writeValueAsString(UpdateInventoryRequest(InventoryUpdateAction.BLOCK, 3))
-            }
-
+            // 기본 마감 상태 (blockedCount=3)에서 2개 오픈
             mockMvc.put("$baseUrl/inventory/$roomTypeId/$today") {
                 contentType = MediaType.APPLICATION_JSON
                 content = objectMapper.writeValueAsString(UpdateInventoryRequest(InventoryUpdateAction.UNBLOCK, 2))
             }.andExpect {
                 status { isOk() }
                 jsonPath("$.blockedCount") { value(1) }
-                jsonPath("$.availableCount") { value(4) }
-            }
-        }
-
-        @Test
-        fun `존재하지 않는 재고에 차단하면 404를 반환한다`() {
-            mockMvc.put("$baseUrl/inventory/$roomTypeId/$today") {
-                contentType = MediaType.APPLICATION_JSON
-                content = objectMapper.writeValueAsString(UpdateInventoryRequest(InventoryUpdateAction.BLOCK, 1))
-            }.andExpect {
-                status { isNotFound() }
-            }
-        }
-
-        @Test
-        fun `가용 재고보다 많이 차단하면 400을 반환한다`() {
-            initializeInventory(totalCount = 3)
-
-            mockMvc.put("$baseUrl/inventory/$roomTypeId/$today") {
-                contentType = MediaType.APPLICATION_JSON
-                content = objectMapper.writeValueAsString(UpdateInventoryRequest(InventoryUpdateAction.BLOCK, 5))
-            }.andExpect {
-                status { isBadRequest() }
+                jsonPath("$.availableCount") { value(2) }
             }
         }
     }

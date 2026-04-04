@@ -23,7 +23,7 @@ class HttpChannelSyncAdapter : ChannelSyncAdapter {
 
         return try {
             val requestSpec = restClient.post()
-                .uri(endpoint)
+                .uri("$endpoint/api/v1/ari/availability")
                 .header("Content-Type", "application/json")
                 .header("X-Idempotency-Key", idempotencyKey)
 

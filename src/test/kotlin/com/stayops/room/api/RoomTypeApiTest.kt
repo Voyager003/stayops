@@ -80,7 +80,6 @@ class RoomTypeApiTest @Autowired constructor(
             }.andExpect {
                 status { isCreated() }
                 jsonPath("$.name") { value("디럭스 더블") }
-                jsonPath("$.status") { value("INACTIVE") }
                 jsonPath("$.propertyId") { value(pid) }
                 jsonPath("$.basePrice.amount") { value(150000) }
             }
@@ -169,15 +168,11 @@ class RoomTypeApiTest @Autowired constructor(
     }
 
     @Nested
-    inner class `DELETE 객실타입 비활성화` {
+    inner class `DELETE 객실타입 삭제` {
         @Test
-        fun `ACTIVE 상태의 객실타입을 비활성화하면 204를 반환한다`() {
+        fun `존재하는 객실타입을 삭제하면 204를 반환한다`() {
             val created = createRoomType()
             val id = objectMapper.readTree(created).get("id").asText()
-
-            // activate first
-            val roomType = mongoDataRepository.findById(id).get()
-            mongoDataRepository.save(roomType.copy(status = com.stayops.room.domain.model.RoomTypeStatus.ACTIVE))
 
             mockMvc.delete("$baseUrl/$id").andExpect {
                 status { isNoContent() }

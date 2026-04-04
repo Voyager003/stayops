@@ -7,4 +7,5 @@ interface RoomTypeRepository {
     fun findById(id: String): RoomType?
     fun findByPropertyId(propertyId: String): List<RoomType>
     fun findByPropertyIdAndName(propertyId: String, name: String): RoomType?
+    fun deleteById(id: String)
 }

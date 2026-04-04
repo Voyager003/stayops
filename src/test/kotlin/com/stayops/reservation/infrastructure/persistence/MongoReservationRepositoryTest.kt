@@ -162,4 +162,29 @@ class MongoReservationRepositoryTest @Autowired constructor(
             assertThat(otaResults).hasSize(1)
         }
     }
+
+    @Nested
+    inner class `countByPropertyIdAndCreatedDate` {
+        @Test
+        fun `해당 날짜에 생성된 예약 수를 반환한다`() {
+            reservationRepository.save(newReservation(id = "rsv-1"))
+            reservationRepository.save(newReservation(id = "rsv-2"))
+            reservationRepository.save(newReservation(id = "rsv-3", propertyId = "prop-2"))
+
+            val today = LocalDate.now()
+            val count = reservationRepository.countByPropertyIdAndCreatedDate("prop-1", today)
+
+            assertThat(count).isEqualTo(2)
+        }
+
+        @Test
+        fun `다른 날짜에 생성된 예약은 포함하지 않는다`() {
+            reservationRepository.save(newReservation(id = "rsv-1"))
+
+            val tomorrow = LocalDate.now().plusDays(1)
+            val count = reservationRepository.countByPropertyIdAndCreatedDate("prop-1", tomorrow)
+
+            assertThat(count).isEqualTo(0)
+        }
+    }
 }

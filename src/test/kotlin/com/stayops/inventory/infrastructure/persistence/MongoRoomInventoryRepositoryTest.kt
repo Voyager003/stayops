@@ -32,13 +32,19 @@ class MongoRoomInventoryRepositoryTest @Autowired constructor(
         propertyId: String = "prop-1",
         roomTypeId: String = "rt-1",
         date: LocalDate = today,
-        totalCount: Int = 5
-    ) = RoomInventory.create(
+        totalCount: Int = 5,
+        blockedCount: Int = 0
+    ) = RoomInventory.reconstitute(
         id = id,
         propertyId = propertyId,
         roomTypeId = roomTypeId,
         date = date,
-        totalCount = totalCount
+        totalCount = totalCount,
+        reservedCount = 0,
+        blockedCount = blockedCount,
+        version = null,
+        createdAt = java.time.Instant.now(),
+        updatedAt = java.time.Instant.now()
     )
 
     @Nested

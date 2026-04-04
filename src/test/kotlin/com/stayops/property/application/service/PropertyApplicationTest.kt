@@ -5,6 +5,9 @@ import com.stayops.auth.domain.model.MemberRole
 import com.stayops.auth.domain.model.PropertyAccess
 import com.stayops.auth.domain.model.PropertyRole
 import com.stayops.auth.domain.repository.MemberRepository
+import com.stayops.channel.domain.model.Channel
+import com.stayops.channel.domain.model.ChannelType
+import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo
 import com.stayops.property.domain.model.Property
@@ -20,7 +23,8 @@ class PropertyApplicationTest : BehaviorSpec({
 
     val propertyRepository = mockk<PropertyRepository>()
     val memberRepository = mockk<MemberRepository>()
-    val propertyApplication = PropertyApplication(propertyRepository, memberRepository)
+    val channelRepository = mockk<ChannelRepository>()
+    val propertyApplication = PropertyApplication(propertyRepository, memberRepository, channelRepository)
 
     fun sampleAddress() = Address.of("해운대로 123", "부산", "부산광역시", "48099", "KR")
     fun sampleContactInfo() = ContactInfo.of("051-123-4567", "test@pension.com")
@@ -36,6 +40,7 @@ class PropertyApplicationTest : BehaviorSpec({
             )
 
             every { propertyRepository.save(any()) } answers { firstArg() }
+            every { channelRepository.save(any()) } answers { firstArg() }
             every { memberRepository.findById("owner-1") } returns owner
             every { memberRepository.save(any()) } answers { firstArg() }
 
@@ -58,6 +63,13 @@ class PropertyApplicationTest : BehaviorSpec({
                         it.propertyAccess.any { access ->
                             access.propertyId == result.id && access.role == PropertyRole.OWNER
                         }
+                    })
+                }
+            }
+            then("DIRECT 채널이 자동 생성된다") {
+                verify {
+                    channelRepository.save(match<Channel> {
+                        it.propertyId == result.id && it.code == "DIRECT" && it.type == ChannelType.DIRECT
                     })
                 }
             }

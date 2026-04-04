@@ -1,7 +1,6 @@
 package com.stayops.reservation.application.service
 
 import com.stayops.channel.domain.model.Channel
-import com.stayops.channel.domain.model.ChannelConnectionInfo
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
@@ -17,7 +16,6 @@ import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.shared.domain.PagedResult
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomType
-import com.stayops.room.domain.model.RoomTypeStatus
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
@@ -66,7 +64,7 @@ class ReservationApplicationTest : BehaviorSpec({
         description = "넓은 객실",
         maxOccupancy = 3,
         basePrice = Money.won(100_000)
-    ).activate()
+    )
 
     fun directChannel() = Channel.createDirect(id = "ch-0", propertyId = "prop-1")
 
@@ -76,12 +74,7 @@ class ReservationApplicationTest : BehaviorSpec({
         code = "AGODA",
         name = "Agoda",
         commissionRate = BigDecimal("0.15"),
-        connectionInfo = ChannelConnectionInfo(
-            apiEndpoint = "https://mock-ota/ari",
-            apiKey = null,
-            apiSecret = null,
-            webhookSecret = "secret"
-        )
+        apiEndpoint = "https://mock-ota/ari"
     )
 
     fun sampleGuest() = Guest.create(

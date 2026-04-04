@@ -3,9 +3,6 @@ package com.stayops.channel.api
 import com.stayops.channel.api.dto.*
 import com.stayops.channel.application.service.ChannelApplication
 import com.stayops.shared.security.PropertyAccessChecker
-import com.stayops.channel.domain.model.ChannelConnectionInfo
-import com.stayops.channel.domain.model.MappingEntry
-import com.stayops.channel.domain.model.MappingType
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -28,13 +25,7 @@ class ChannelApi(
             propertyId = propertyId,
             code = request.code,
             name = request.name,
-            commissionRate = request.commissionRate,
-            connectionInfo = ChannelConnectionInfo(
-                apiEndpoint = request.apiEndpoint,
-                apiKey = request.apiKey,
-                apiSecret = request.apiSecret,
-                webhookSecret = request.webhookSecret
-            )
+            commissionRate = request.commissionRate
         )
         return ResponseEntity.status(HttpStatus.CREATED).body(ChannelResponse.from(channel))
     }
@@ -67,11 +58,7 @@ class ChannelApi(
             propertyId = propertyId,
             channelId = channelId,
             name = request.name,
-            commissionRate = request.commissionRate,
-            apiEndpoint = request.apiEndpoint,
-            apiKey = request.apiKey,
-            apiSecret = request.apiSecret,
-            webhookSecret = request.webhookSecret
+            commissionRate = request.commissionRate
         )
         return ResponseEntity.ok(ChannelResponse.from(channel))
     }
@@ -116,46 +103,4 @@ class ChannelApi(
         return ResponseEntity.noContent().build()
     }
 
-    // -- Mapping API --
-
-    @GetMapping("/code/{channelCode}/mappings")
-    fun getMappings(
-        @PathVariable propertyId: String,
-        @PathVariable channelCode: String
-    ): ResponseEntity<ChannelMappingResponse> {
-        propertyAccessChecker.requireAccess(propertyId)
-        val mapping = channelApplication.getMappings(propertyId, channelCode)
-            ?: return ResponseEntity.ok(
-                ChannelMappingResponse(propertyId = propertyId, channelCode = channelCode, mappings = emptyList())
-            )
-        return ResponseEntity.ok(ChannelMappingResponse.from(mapping))
-    }
-
-    @PostMapping("/code/{channelCode}/mappings")
-    fun addMapping(
-        @PathVariable propertyId: String,
-        @PathVariable channelCode: String,
-        @Valid @RequestBody request: CreateMappingRequest
-    ): ResponseEntity<ChannelMappingResponse> {
-        propertyAccessChecker.requireAccess(propertyId)
-        val entry = MappingEntry(
-            internalId = request.internalId,
-            externalCode = request.externalCode,
-            type = request.type
-        )
-        val mapping = channelApplication.addMapping(propertyId, channelCode, entry)
-        return ResponseEntity.status(HttpStatus.CREATED).body(ChannelMappingResponse.from(mapping))
-    }
-
-    @DeleteMapping("/code/{channelCode}/mappings/{internalId}")
-    fun removeMapping(
-        @PathVariable propertyId: String,
-        @PathVariable channelCode: String,
-        @PathVariable internalId: String,
-        @RequestParam(defaultValue = "ROOM_TYPE") type: MappingType
-    ): ResponseEntity<ChannelMappingResponse> {
-        propertyAccessChecker.requireAccess(propertyId)
-        val mapping = channelApplication.removeMapping(propertyId, channelCode, internalId, type)
-        return ResponseEntity.ok(ChannelMappingResponse.from(mapping))
-    }
 }

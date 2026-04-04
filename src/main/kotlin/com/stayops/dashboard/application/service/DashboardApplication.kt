@@ -14,11 +14,64 @@ class DashboardApplication(
     private val roomRepository: RoomRepository
 ) {
 
-    fun getDashboard(propertyId: String, today: LocalDate): DashboardResponse {
-        val todayReservations = reservationRepository.findByPropertyIdAndDateRange(propertyId, today, today)
+    private val revenueExcludedStatuses = setOf(ReservationStatus.CANCELLED, ReservationStatus.NO_SHOW)
 
-        val checkInCount = todayReservations.count { it.dateRange.checkIn == today }
-        val checkOutCount = todayReservations.count { it.dateRange.checkOut == today }
+    fun getAggregatedDashboard(propertyIds: List<String>, today: LocalDate): DashboardResponse {
+        if (propertyIds.isEmpty()) {
+            return DashboardResponse(
+                todayCheckInCount = 0, todayCheckOutCount = 0,
+                todayRevenue = 0, todayNewReservations = 0,
+                yesterdayCheckInCount = 0, yesterdayCheckOutCount = 0,
+                yesterdayRevenue = 0, yesterdayNewReservations = 0,
+                pendingReservations = 0,
+                occupancy = DashboardResponse.OccupancyResponse(0, 0, 0, 0.0)
+            )
+        }
+
+        val dashboards = propertyIds.map { getDashboard(it, today) }
+
+        val total = dashboards.sumOf { it.occupancy.total }
+        val occupied = dashboards.sumOf { it.occupancy.occupied }
+        val available = dashboards.sumOf { it.occupancy.available }
+        val rate = if (total > 0) occupied.toDouble() / total * 100 else 0.0
+
+        return DashboardResponse(
+            todayCheckInCount = dashboards.sumOf { it.todayCheckInCount },
+            todayCheckOutCount = dashboards.sumOf { it.todayCheckOutCount },
+            todayRevenue = dashboards.sumOf { it.todayRevenue },
+            todayNewReservations = dashboards.sumOf { it.todayNewReservations },
+            yesterdayCheckInCount = dashboards.sumOf { it.yesterdayCheckInCount },
+            yesterdayCheckOutCount = dashboards.sumOf { it.yesterdayCheckOutCount },
+            yesterdayRevenue = dashboards.sumOf { it.yesterdayRevenue },
+            yesterdayNewReservations = dashboards.sumOf { it.yesterdayNewReservations },
+            pendingReservations = dashboards.sumOf { it.pendingReservations },
+            occupancy = DashboardResponse.OccupancyResponse(
+                total = total, occupied = occupied, available = available,
+                rate = Math.round(rate * 10) / 10.0
+            )
+        )
+    }
+
+    fun getDashboard(propertyId: String, today: LocalDate): DashboardResponse {
+        val yesterday = today.minusDays(1)
+
+        val todayReservations = reservationRepository.findByPropertyIdAndDateRange(propertyId, today, today)
+        val yesterdayReservations = reservationRepository.findByPropertyIdAndDateRange(propertyId, yesterday, yesterday)
+
+        val todayCheckInCount = todayReservations.count { it.dateRange.checkIn == today }
+        val todayCheckOutCount = todayReservations.count { it.dateRange.checkOut == today }
+        val todayRevenue = todayReservations
+            .filter { it.dateRange.checkIn == today && it.status !in revenueExcludedStatuses }
+            .sumOf { it.pricing.totalAmount.amount.toLong() }
+
+        val yesterdayCheckInCount = yesterdayReservations.count { it.dateRange.checkIn == yesterday }
+        val yesterdayCheckOutCount = yesterdayReservations.count { it.dateRange.checkOut == yesterday }
+        val yesterdayRevenue = yesterdayReservations
+            .filter { it.dateRange.checkIn == yesterday && it.status !in revenueExcludedStatuses }
+            .sumOf { it.pricing.totalAmount.amount.toLong() }
+
+        val todayNewReservations = reservationRepository.countByPropertyIdAndCreatedDate(propertyId, today)
+        val yesterdayNewReservations = reservationRepository.countByPropertyIdAndCreatedDate(propertyId, yesterday)
 
         val pendingCount = reservationRepository
             .findByPropertyIdAndStatus(propertyId, ReservationStatus.PENDING).size
@@ -30,8 +83,14 @@ class DashboardApplication(
         val rate = if (total > 0) occupied.toDouble() / total * 100 else 0.0
 
         return DashboardResponse(
-            todayCheckInCount = checkInCount,
-            todayCheckOutCount = checkOutCount,
+            todayCheckInCount = todayCheckInCount,
+            todayCheckOutCount = todayCheckOutCount,
+            todayRevenue = todayRevenue,
+            todayNewReservations = todayNewReservations,
+            yesterdayCheckInCount = yesterdayCheckInCount,
+            yesterdayCheckOutCount = yesterdayCheckOutCount,
+            yesterdayRevenue = yesterdayRevenue,
+            yesterdayNewReservations = yesterdayNewReservations,
             pendingReservations = pendingCount,
             occupancy = DashboardResponse.OccupancyResponse(
                 total = total,

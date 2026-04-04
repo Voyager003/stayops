@@ -3,16 +3,21 @@ package com.stayops.inventory.application.service
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.inventory.infrastructure.cache.RedisRoomInventoryCache
+import com.stayops.room.domain.model.Room
+import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
+import com.stayops.channel.application.service.ChannelSyncApplication
 import org.springframework.dao.OptimisticLockingFailureException
 import java.time.Instant
 import java.time.LocalDate
@@ -21,7 +26,9 @@ class RoomInventoryApplicationTest : BehaviorSpec({
 
     val inventoryRepository = mockk<RoomInventoryRepository>()
     val cache = mockk<RedisRoomInventoryCache>()
-    val inventoryApplication = RoomInventoryApplication(inventoryRepository, cache)
+    val roomRepository = mockk<RoomRepository>()
+    val channelSyncApplication = mockk<ChannelSyncApplication>(relaxed = true)
+    val inventoryApplication = RoomInventoryApplication(inventoryRepository, cache, roomRepository, channelSyncApplication)
 
     val today = LocalDate.of(2026, 3, 12)
 
@@ -46,32 +53,34 @@ class RoomInventoryApplicationTest : BehaviorSpec({
         updatedAt = Instant.now()
     )
 
-    given("재고 초기화 시") {
-        `when`("해당 날짜에 재고가 없으면") {
-            every { inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate("prop-1", "rt-1", today) } returns null
+    given("재고 자동 동기화 시") {
+        `when`("Room이 등록되어 있으면") {
+            val rooms = listOf(
+                Room.create("r-1", "prop-1", "rt-1", "101", 1),
+                Room.create("r-2", "prop-1", "rt-1", "102", 1),
+                Room.create("r-3", "prop-1", "rt-1", "103", 1)
+            )
+            every { roomRepository.findByRoomTypeId("rt-1") } returns rooms
+            every {
+                inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween("prop-1", "rt-1", any(), any())
+            } returns emptyList()
             every { inventoryRepository.save(any()) } answers { firstArg() }
-            val cachedSlot = slot<RoomInventory>()
-            justRun { cache.put(capture(cachedSlot)) }
 
-            val result = inventoryApplication.initializeInventory("prop-1", "rt-1", today, 5)
+            inventoryApplication.syncInventoryForRoomType("prop-1", "rt-1")
 
-            then("재고를 생성하고 캐시에 저장한다") {
-                result.propertyId shouldBe "prop-1"
-                result.roomTypeId shouldBe "rt-1"
-                result.date shouldBe today
-                result.totalCount shouldBe 5
-                result.availableCount shouldBe 5
-                cachedSlot.captured.totalCount shouldBe 5
+            then("향후 91일치 재고가 생성되고 totalCount는 Room 수, blockedCount는 totalCount와 같다 (기본 마감)") {
+                verify(exactly = 91) { inventoryRepository.save(match { it.totalCount == 3 && it.blockedCount == 3 }) }
             }
         }
 
-        `when`("해당 날짜에 이미 재고가 있으면") {
-            every { inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate("prop-1", "rt-1", today) } returns newInventory()
+        `when`("등록된 객실이 없으면") {
+            clearAllMocks()
+            every { roomRepository.findByRoomTypeId("rt-1") } returns emptyList()
 
-            then("ConflictException이 발생한다") {
-                shouldThrow<ConflictException> {
-                    inventoryApplication.initializeInventory("prop-1", "rt-1", today, 5)
-                }
+            inventoryApplication.syncInventoryForRoomType("prop-1", "rt-1")
+
+            then("아무것도 생성하지 않는다") {
+                verify(exactly = 0) { inventoryRepository.save(any()) }
             }
         }
     }
@@ -168,6 +177,59 @@ class RoomInventoryApplicationTest : BehaviorSpec({
                 result.blockedCount shouldBe 1
                 result.availableCount shouldBe 4
                 evictedSlot.captured shouldBe "rt-1"
+            }
+        }
+    }
+
+    given("일괄 차단 시") {
+        `when`("요일을 지정하면 해당 요일만 차단한다") {
+            clearAllMocks()
+
+            // today(2026-03-12)부터 7일간 — 요일에 따라 필터
+            val inventories = (0L..6L).map { d ->
+                newInventory(id = "inv-$d", date = today.plusDays(d), totalCount = 5)
+            }
+            inventories.forEach { inv ->
+                every {
+                    inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate("prop-1", "rt-1", inv.date)
+                } returns inv
+            }
+            every { inventoryRepository.save(any()) } answers { firstArg() }
+            justRun { cache.evict(any(), any(), any()) }
+
+            val mondayCount = (0L..6L).count { today.plusDays(it).dayOfWeek == java.time.DayOfWeek.MONDAY }
+
+            val processed = inventoryApplication.bulkBlock(
+                "prop-1", "rt-1", today, today.plusDays(6),
+                listOf(java.time.DayOfWeek.MONDAY), "BLOCK", 1
+            )
+
+            then("월요일에 해당하는 날짜만 차단된다") {
+                processed shouldBe mondayCount
+            }
+        }
+
+        `when`("요일을 지정하지 않으면 전체 날짜를 차단한다") {
+            clearAllMocks()
+
+            val inventories = (0L..2L).map { d ->
+                newInventory(id = "inv-$d", date = today.plusDays(d), totalCount = 5)
+            }
+            inventories.forEach { inv ->
+                every {
+                    inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate("prop-1", "rt-1", inv.date)
+                } returns inv
+            }
+            every { inventoryRepository.save(any()) } answers { firstArg() }
+            justRun { cache.evict(any(), any(), any()) }
+
+            val processed = inventoryApplication.bulkBlock(
+                "prop-1", "rt-1", today, today.plusDays(2),
+                null, "BLOCK", 1
+            )
+
+            then("3일 모두 차단된다") {
+                processed shouldBe 3
             }
         }
     }
