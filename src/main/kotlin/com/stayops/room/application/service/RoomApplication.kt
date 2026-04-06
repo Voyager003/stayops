@@ -6,6 +6,7 @@ import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
 
@@ -14,6 +15,8 @@ class RoomApplication(
     private val roomRepository: RoomRepository,
     private val inventoryApplication: RoomInventoryApplication
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     fun createRoom(
         propertyId: String,
         roomTypeId: String,
@@ -32,6 +35,7 @@ class RoomApplication(
         )
         val saved = roomRepository.save(room)
         inventoryApplication.syncInventoryForRoomType(propertyId, roomTypeId)
+        log.info("객실 생성: roomId={}, propertyId={}, roomNumber={}", saved.id, propertyId, roomNumber)
         return saved
     }
 
@@ -44,7 +48,9 @@ class RoomApplication(
 
     fun updateMemo(id: String, memo: String?): Room {
         val room = getRoom(id)
-        return roomRepository.save(room.updateMemo(memo))
+        val saved = roomRepository.save(room.updateMemo(memo))
+        log.info("객실 메모 수정: roomId={}", id)
+        return saved
     }
 
     fun changeStatus(id: String, action: RoomStatusAction): Room {
@@ -56,6 +62,8 @@ class RoomApplication(
             RoomStatusAction.START_MAINTENANCE -> room.startMaintenance()
             RoomStatusAction.COMPLETE_MAINTENANCE -> room.completeMaintenance()
         }
-        return roomRepository.save(updated)
+        val saved = roomRepository.save(updated)
+        log.info("객실 상태 변경: roomId={}, action={}", id, action)
+        return saved
     }
 }

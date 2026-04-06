@@ -5,6 +5,7 @@ import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.util.UUID
@@ -13,6 +14,8 @@ import java.util.UUID
 class RoomTypeApplication(
     private val roomTypeRepository: RoomTypeRepository
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     fun createRoomType(
         propertyId: String,
         name: String,
@@ -34,7 +37,9 @@ class RoomTypeApplication(
             basePrice = Money.of(basePrice, currency),
             amenities = amenities
         )
-        return roomTypeRepository.save(roomType)
+        val saved = roomTypeRepository.save(roomType)
+        log.info("객실타입 생성: roomTypeId={}, propertyId={}, name={}", saved.id, propertyId, name)
+        return saved
     }
 
     fun getRoomType(id: String): RoomType =
@@ -66,11 +71,14 @@ class RoomTypeApplication(
             basePrice = Money.of(basePrice, currency),
             amenities = amenities
         )
-        return roomTypeRepository.save(updated)
+        val saved = roomTypeRepository.save(updated)
+        log.info("객실타입 수정: roomTypeId={}, name={}", id, name)
+        return saved
     }
 
     fun deleteRoomType(id: String) {
         getRoomType(id)
         roomTypeRepository.deleteById(id)
+        log.info("객실타입 삭제: roomTypeId={}", id)
     }
 }

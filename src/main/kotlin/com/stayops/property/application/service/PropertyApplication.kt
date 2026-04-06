@@ -10,6 +10,7 @@ import com.stayops.property.domain.model.Property
 import com.stayops.property.domain.model.PropertyType
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.shared.exception.NotFoundException
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
 
@@ -19,6 +20,8 @@ class PropertyApplication(
     private val memberRepository: MemberRepository,
     private val channelRepository: ChannelRepository
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     fun createProperty(
         ownerId: String,
         name: String,
@@ -50,6 +53,7 @@ class PropertyApplication(
             memberRepository.save(granted)
         }
 
+        log.info("숙소 생성: propertyId={}, ownerId={}, name={}", saved.id, ownerId, name)
         return saved
     }
 
@@ -66,12 +70,14 @@ class PropertyApplication(
     fun activateProperty(id: String): Property {
         val property = getProperty(id)
         val activated = property.activate()
+        log.info("숙소 활성화: propertyId={}", id)
         return propertyRepository.save(activated)
     }
 
     fun deactivateProperty(id: String): Property {
         val property = getProperty(id)
         val deactivated = property.deactivate()
+        log.info("숙소 비활성화: propertyId={}", id)
         return propertyRepository.save(deactivated)
     }
 
@@ -84,6 +90,7 @@ class PropertyApplication(
     ): Property {
         val property = getProperty(id)
         val updated = property.updateInfo(name = name, description = description, address = address, contactInfo = contactInfo)
+        log.info("숙소 수정: propertyId={}, name={}", id, name)
         return propertyRepository.save(updated)
     }
 }

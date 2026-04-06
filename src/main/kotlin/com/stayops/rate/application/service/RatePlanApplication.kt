@@ -9,6 +9,7 @@ import com.stayops.rate.domain.service.RateResolver
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.NotFoundException
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.LocalDate
 import java.util.UUID
@@ -17,6 +18,7 @@ import java.util.UUID
 class RatePlanApplication(
     private val ratePlanRepository: RatePlanRepository
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
     private val rateResolver = RateResolver()
 
     fun createRatePlan(
@@ -42,7 +44,9 @@ class RatePlanApplication(
             price = price,
             priority = priority
         )
-        return ratePlanRepository.save(ratePlan)
+        val saved = ratePlanRepository.save(ratePlan)
+        log.info("요금제 생성: ratePlanId={}, propertyId={}, name={}", saved.id, propertyId, name)
+        return saved
     }
 
     fun getRatePlans(propertyId: String): List<RatePlan> =
@@ -60,16 +64,20 @@ class RatePlanApplication(
     ): RatePlan {
         val ratePlan = findRatePlanWithOwnership(propertyId, id)
         val updated = ratePlan.updateInfo(name, dateRange, dayOfWeekRules, channelCode, price, priority)
-        return ratePlanRepository.save(updated)
+        val saved = ratePlanRepository.save(updated)
+        log.info("요금제 수정: ratePlanId={}, propertyId={}", id, propertyId)
+        return saved
     }
 
     fun activateRatePlan(propertyId: String, id: String): RatePlan {
         val ratePlan = findRatePlanWithOwnership(propertyId, id)
+        log.info("요금제 활성화: ratePlanId={}, propertyId={}", id, propertyId)
         return ratePlanRepository.save(ratePlan.activate())
     }
 
     fun deactivateRatePlan(propertyId: String, id: String): RatePlan {
         val ratePlan = findRatePlanWithOwnership(propertyId, id)
+        log.info("요금제 비활성화: ratePlanId={}, propertyId={}", id, propertyId)
         return ratePlanRepository.save(ratePlan.deactivate())
     }
 
@@ -84,6 +92,7 @@ class RatePlanApplication(
         ratePlanRepository.findById(id)
             ?: throw NotFoundException("RATE_PLAN_NOT_FOUND", "요금제를 찾을 수 없습니다: $id")
         ratePlanRepository.deleteById(id)
+        log.info("요금제 삭제: ratePlanId={}", id)
     }
 
     fun previewRates(
