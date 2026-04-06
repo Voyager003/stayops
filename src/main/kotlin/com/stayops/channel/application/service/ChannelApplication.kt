@@ -5,6 +5,7 @@ import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.exception.NotFoundException
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
@@ -20,6 +21,8 @@ class ChannelApplication(
     private val channelSyncApplication: ChannelSyncApplication,
     @Value("\${mock-ota.endpoint}") private val otaEndpoint: String
 ) {
+
+    private val log = LoggerFactory.getLogger(javaClass)
 
     fun createOtaChannel(
         propertyId: String,
@@ -52,6 +55,7 @@ class ChannelApplication(
             }
         }
 
+        log.info("OTA 채널 생성: channelId={}, propertyId={}, code={}", saved.id, propertyId, code)
         return saved
     }
 
@@ -87,27 +91,33 @@ class ChannelApplication(
             createdAt = channel.createdAt,
             updatedAt = Instant.now()
         )
-        return channelRepository.save(updated)
+        val saved = channelRepository.save(updated)
+        log.info("채널 수정: channelId={}, propertyId={}", channelId, propertyId)
+        return saved
     }
 
     fun activateChannel(propertyId: String, channelId: String): Channel {
         val channel = findChannel(propertyId, channelId)
+        log.info("채널 활성화: channelId={}, propertyId={}", channelId, propertyId)
         return channelRepository.save(channel.activate())
     }
 
     fun deactivateChannel(propertyId: String, channelId: String): Channel {
         val channel = findChannel(propertyId, channelId)
+        log.info("채널 비활성화: channelId={}, propertyId={}", channelId, propertyId)
         return channelRepository.save(channel.deactivate())
     }
 
     fun suspendChannel(propertyId: String, channelId: String): Channel {
         val channel = findChannel(propertyId, channelId)
+        log.info("채널 정지: channelId={}, propertyId={}", channelId, propertyId)
         return channelRepository.save(channel.suspend())
     }
 
     fun deleteChannel(propertyId: String, channelId: String) {
         findChannel(propertyId, channelId)
         channelRepository.deleteById(channelId)
+        log.info("채널 삭제: channelId={}, propertyId={}", channelId, propertyId)
     }
 
 }

@@ -4,12 +4,15 @@ import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.model.GuestTier
 import com.stayops.guest.domain.repository.GuestRepository
 import com.stayops.shared.exception.NotFoundException
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
 @Service
 class GuestApplication(
     private val guestRepository: GuestRepository
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     fun getGuest(id: String): Guest =
         guestRepository.findById(id)
             ?: throw NotFoundException("GUEST_NOT_FOUND", "고객을 찾을 수 없습니다: $id")
@@ -23,6 +26,8 @@ class GuestApplication(
     fun updateGuest(id: String, name: String, memo: String?): Guest {
         val guest = guestRepository.findById(id)
             ?: throw NotFoundException("GUEST_NOT_FOUND", "고객을 찾을 수 없습니다: $id")
-        return guestRepository.save(guest.update(name = name, memo = memo))
+        val saved = guestRepository.save(guest.update(name = name, memo = memo))
+        log.info("고객 정보 수정: guestId={}", id)
+        return saved
     }
 }
