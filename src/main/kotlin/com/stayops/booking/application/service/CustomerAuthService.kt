@@ -6,6 +6,7 @@ import com.stayops.auth.domain.model.MemberStatus
 import com.stayops.auth.domain.repository.MemberRepository
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.ConflictException
+import org.slf4j.LoggerFactory
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import java.util.UUID
@@ -15,6 +16,8 @@ class CustomerAuthService(
     private val memberRepository: MemberRepository,
     private val passwordEncoder: PasswordEncoder
 ) {
+
+    private val log = LoggerFactory.getLogger(javaClass)
 
     fun signup(email: String, password: String, name: String): Member {
         if (memberRepository.existsByEmail(email)) {
@@ -29,7 +32,9 @@ class CustomerAuthService(
             role = MemberRole.CUSTOMER
         )
 
-        return memberRepository.save(member)
+        val saved = memberRepository.save(member)
+        log.info("고객 회원가입 완료: memberId={}, email={}", saved.id, email)
+        return saved
     }
 
     fun login(email: String, password: String): Member {
@@ -48,6 +53,8 @@ class CustomerAuthService(
         }
 
         val loggedIn = member.recordLogin()
-        return memberRepository.save(loggedIn)
+        val saved = memberRepository.save(loggedIn)
+        log.info("고객 로그인 성공: memberId={}, email={}", saved.id, email)
+        return saved
     }
 }
