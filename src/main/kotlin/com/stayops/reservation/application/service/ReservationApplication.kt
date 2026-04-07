@@ -21,7 +21,7 @@ import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
-import java.math.BigDecimal
+import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
 import java.util.UUID
 
@@ -40,6 +40,7 @@ class ReservationApplication(
 
     private val log = LoggerFactory.getLogger(javaClass)
 
+    @Transactional
     fun createReservation(
         propertyId: String,
         roomTypeId: String,
@@ -149,6 +150,7 @@ class ReservationApplication(
         return reservationRepository.save(reservation.confirm())
     }
 
+    @Transactional
     fun cancelReservation(propertyId: String, reservationId: String): Reservation {
         val reservation = getReservation(propertyId, reservationId)
         val cancelled = reservation.cancel()
@@ -173,6 +175,7 @@ class ReservationApplication(
         return saved
     }
 
+    @Transactional
     fun checkInReservation(propertyId: String, reservationId: String, roomId: String): Reservation {
         val reservation = getReservation(propertyId, reservationId)
 
@@ -190,6 +193,7 @@ class ReservationApplication(
         return saved
     }
 
+    @Transactional
     fun checkOutReservation(propertyId: String, reservationId: String): Reservation {
         val reservation = getReservation(propertyId, reservationId)
         val checkedOut = reservation.checkOut()
