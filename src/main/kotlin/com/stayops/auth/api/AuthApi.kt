@@ -52,7 +52,7 @@ class AuthApi(
 
     @PostMapping("/logout")
     fun logout(session: HttpSession): ResponseEntity<Void> {
-        authService.logout(session)
+        session.invalidate()
         SecurityContextHolder.clearContext()
         return ResponseEntity.noContent().build()
     }
