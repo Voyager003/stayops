@@ -3,6 +3,7 @@ package com.stayops.channel.infrastructure.persistence
 import com.stayops.channel.domain.model.ProcessedWebhookEvent
 import com.stayops.channel.domain.repository.ProcessedWebhookEventRepository
 import jakarta.annotation.PostConstruct
+import org.springframework.dao.DuplicateKeyException
 import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.index.Index
@@ -28,13 +29,13 @@ class MongoProcessedWebhookEventRepository(
         )
     }
 
-    override fun save(event: ProcessedWebhookEvent): ProcessedWebhookEvent =
-        mongo.save(ProcessedWebhookEventDocument.from(event)).toDomain()
-
-    override fun existsByEventId(eventId: String): Boolean =
-        mongo.existsByEventId(eventId)
+    override fun saveIfAbsent(event: ProcessedWebhookEvent): Boolean =
+        try {
+            mongo.save(ProcessedWebhookEventDocument.from(event))
+            true
+        } catch (e: DuplicateKeyException) {
+            false
+        }
 }
 
-interface ProcessedWebhookEventMongoDataRepository : MongoRepository<ProcessedWebhookEventDocument, String> {
-    fun existsByEventId(eventId: String): Boolean
-}
+interface ProcessedWebhookEventMongoDataRepository : MongoRepository<ProcessedWebhookEventDocument, String>

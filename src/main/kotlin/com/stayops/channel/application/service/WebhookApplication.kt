@@ -20,7 +20,6 @@ import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.BusinessException
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
-import org.springframework.dao.DuplicateKeyException
 import org.springframework.stereotype.Service
 import java.time.LocalDate
 import java.util.UUID
@@ -57,16 +56,15 @@ class WebhookApplication(
             throw BusinessException(code = "INVALID_SIGNATURE", message = "Webhook 서명이 유효하지 않습니다")
         }
 
-        try {
-            processedEventRepository.save(
-                ProcessedWebhookEvent(
-                    id = UUID.randomUUID().toString(),
-                    eventId = eventId,
-                    channelCode = channelCode,
-                    propertyId = propertyId
-                )
+        val saved = processedEventRepository.saveIfAbsent(
+            ProcessedWebhookEvent(
+                id = UUID.randomUUID().toString(),
+                eventId = eventId,
+                channelCode = channelCode,
+                propertyId = propertyId
             )
-        } catch (e: DuplicateKeyException) {
+        )
+        if (!saved) {
             log.info("중복 이벤트 (동시 요청): eventId={}", eventId)
             return
         }
