@@ -7,6 +7,7 @@ import org.bson.Document
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
 import org.springframework.data.mongodb.repository.MongoRepository
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
 @Repository
@@ -33,7 +34,7 @@ class MongoPaymentRepository(
         mongo.save(PaymentDocument.from(payment)).toDomain()
 
     override fun findById(id: String): Payment? =
-        mongo.findById(id).orElse(null)?.toDomain()
+        mongo.findByIdOrNull(id)?.toDomain()
 
     override fun findByReservationId(reservationId: String): Payment? =
         mongo.findByReservationId(reservationId)?.toDomain()

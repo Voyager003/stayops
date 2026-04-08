@@ -3,6 +3,7 @@ package com.stayops.property.infrastructure.persistence
 import com.stayops.property.domain.model.Property
 import com.stayops.property.domain.repository.PropertyRepository
 import org.springframework.data.mongodb.repository.MongoRepository
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
 @Repository
@@ -14,7 +15,7 @@ class MongoPropertyRepository(
         mongo.save(PropertyDocument.from(property)).toDomain()
 
     override fun findById(id: String): Property? =
-        mongo.findById(id).orElse(null)?.toDomain()
+        mongo.findByIdOrNull(id)?.toDomain()
 
     override fun findByOwnerId(ownerId: String): List<Property> =
         mongo.findByOwnerId(ownerId).map { it.toDomain() }

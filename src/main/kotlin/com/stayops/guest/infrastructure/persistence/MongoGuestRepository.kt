@@ -8,6 +8,7 @@ import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
 import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.data.mongodb.repository.Query
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
 @Repository
@@ -29,7 +30,7 @@ class MongoGuestRepository(
         mongo.save(GuestDocument.from(guest)).toDomain()
 
     override fun findById(id: String): Guest? =
-        mongo.findById(id).orElse(null)?.toDomain()
+        mongo.findByIdOrNull(id)?.toDomain()
 
     override fun findByPropertyIdAndPhone(propertyId: String, phone: String): Guest? =
         mongo.findByPropertyIdAndPhone(propertyId, phone)?.toDomain()
