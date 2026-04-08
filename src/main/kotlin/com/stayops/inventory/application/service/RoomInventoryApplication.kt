@@ -2,8 +2,8 @@ package com.stayops.inventory.application.service
 
 import com.stayops.channel.application.service.ChannelSyncApplication
 import com.stayops.inventory.domain.model.RoomInventory
+import com.stayops.inventory.domain.repository.RoomInventoryCache
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
-import com.stayops.inventory.infrastructure.cache.RedisRoomInventoryCache
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
@@ -16,7 +16,7 @@ import java.util.UUID
 @Service
 class RoomInventoryApplication(
     private val inventoryRepository: RoomInventoryRepository,
-    private val cache: RedisRoomInventoryCache,
+    private val cache: RoomInventoryCache,
     private val roomRepository: RoomRepository,
     private val channelSyncApplication: ChannelSyncApplication
 ) {

@@ -1,8 +1,8 @@
 package com.stayops.inventory.application.service
 
 import com.stayops.inventory.domain.model.RoomInventory
+import com.stayops.inventory.domain.repository.RoomInventoryCache
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
-import com.stayops.inventory.infrastructure.cache.RedisRoomInventoryCache
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.shared.exception.ConflictException
@@ -24,7 +24,7 @@ import java.time.LocalDate
 class RoomInventoryApplicationTest : BehaviorSpec({
 
     val inventoryRepository = mockk<RoomInventoryRepository>()
-    val cache = mockk<RedisRoomInventoryCache>()
+    val cache = mockk<RoomInventoryCache>()
     val roomRepository = mockk<RoomRepository>()
     val channelSyncApplication = mockk<ChannelSyncApplication>(relaxed = true)
     val inventoryApplication = RoomInventoryApplication(inventoryRepository, cache, roomRepository, channelSyncApplication)
