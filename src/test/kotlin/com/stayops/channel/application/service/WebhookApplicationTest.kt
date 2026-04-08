@@ -12,6 +12,7 @@ import com.stayops.reservation.domain.event.ReservationCreated
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.BusinessException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -33,6 +34,9 @@ class WebhookApplicationTest : BehaviorSpec({
     val guestRepository = mockk<GuestRepository>()
     val eventPublisher = mockk<ApplicationEventPublisher>()
     val roomTypeRepository = mockk<com.stayops.room.domain.repository.RoomTypeRepository>(relaxed = true)
+    val idGenerator = object : IdGenerator {
+        override fun generate(): String = "test-id"
+    }
 
     val sut = WebhookApplication(
         channelRepository = channelRepository,
@@ -44,7 +48,8 @@ class WebhookApplicationTest : BehaviorSpec({
         roomInventoryApplication = roomInventoryApplication,
         guestRepository = guestRepository,
         eventPublisher = eventPublisher,
-        roomTypeRepository = roomTypeRepository
+        roomTypeRepository = roomTypeRepository,
+        idGenerator = idGenerator
     )
 
     val otaChannel = Channel.createOta(

@@ -23,6 +23,7 @@ import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.ConflictException
@@ -34,8 +35,10 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.mockk.*
 import java.math.BigDecimal
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 class BookingApplicationTest : BehaviorSpec({
 
@@ -49,6 +52,11 @@ class BookingApplicationTest : BehaviorSpec({
     val inventoryApplication = mockk<RoomInventoryApplication>()
     val paymentGateway = mockk<PaymentGateway>()
     val rateResolver = RateResolver()
+    val fixedInstant = Instant.parse("2026-04-08T10:00:00Z")
+    val clock = Clock.fixed(fixedInstant, ZoneId.of("Asia/Seoul"))
+    val idGenerator = object : IdGenerator {
+        override fun generate(): String = "test-id"
+    }
 
     val service = BookingApplication(
         propertyRepository = propertyRepository,
@@ -60,7 +68,9 @@ class BookingApplicationTest : BehaviorSpec({
         paymentRepository = paymentRepository,
         inventoryApplication = inventoryApplication,
         paymentGateway = paymentGateway,
-        rateResolver = rateResolver
+        rateResolver = rateResolver,
+        clock = clock,
+        idGenerator = idGenerator
     )
 
     val checkIn = LocalDate.of(2026, 4, 1)
@@ -118,7 +128,7 @@ class BookingApplicationTest : BehaviorSpec({
         channel = BookingChannel("DIRECT", commissionRate = BigDecimal.ZERO),
         pricing = ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO),
         memberId = memberId,
-        expiresAt = Instant.now().minusSeconds(60)  // 1분 전 만료
+        expiresAt = fixedInstant.minusSeconds(60)  // fixed clock 기준 1분 전 만료
     )
 
     fun pendingPayment(reservationId: String = "rsv-1", memberId: String = "member-1") = Payment.create(

@@ -12,19 +12,23 @@ import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.*
 import java.math.BigDecimal
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 class PendingReservationSchedulerTest : BehaviorSpec({
 
     val reservationRepository = mockk<ReservationRepository>()
     val paymentRepository = mockk<PaymentRepository>()
     val inventoryApplication = mockk<RoomInventoryApplication>()
+    val clock = Clock.fixed(Instant.parse("2026-04-08T10:00:00Z"), ZoneId.of("Asia/Seoul"))
 
     val scheduler = PendingReservationScheduler(
         reservationRepository = reservationRepository,
         paymentRepository = paymentRepository,
-        inventoryApplication = inventoryApplication
+        inventoryApplication = inventoryApplication,
+        clock = clock
     )
 
     val checkIn = LocalDate.of(2026, 4, 1)

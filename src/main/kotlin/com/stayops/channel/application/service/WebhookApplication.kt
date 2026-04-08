@@ -16,13 +16,13 @@ import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationPricing
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.shared.domain.DateRange
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.BusinessException
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import java.time.LocalDate
-import java.util.UUID
 
 @Service
 class WebhookApplication(
@@ -35,7 +35,8 @@ class WebhookApplication(
     private val roomInventoryApplication: RoomInventoryApplication,
     private val guestRepository: GuestRepository,
     private val eventPublisher: ApplicationEventPublisher,
-    private val roomTypeRepository: com.stayops.room.domain.repository.RoomTypeRepository
+    private val roomTypeRepository: com.stayops.room.domain.repository.RoomTypeRepository,
+    private val idGenerator: IdGenerator
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -58,7 +59,7 @@ class WebhookApplication(
 
         val saved = processedEventRepository.saveIfAbsent(
             ProcessedWebhookEvent(
-                id = UUID.randomUUID().toString(),
+                id = idGenerator.generate(),
                 eventId = eventId,
                 channelCode = channelCode,
                 propertyId = propertyId
@@ -123,7 +124,7 @@ class WebhookApplication(
         val guest = guestRepository.findByPropertyIdAndPhone(propertyId, "OTA-$bookingId")
             ?: guestRepository.save(
                 Guest.create(
-                    id = UUID.randomUUID().toString(),
+                    id = idGenerator.generate(),
                     propertyId = propertyId,
                     name = guestName,
                     phone = "OTA-$bookingId"
@@ -145,7 +146,7 @@ class WebhookApplication(
             commissionRate = commissionRate
         )
         val reservation = Reservation.create(
-            id = UUID.randomUUID().toString(),
+            id = idGenerator.generate(),
             propertyId = propertyId,
             roomTypeId = roomTypeId,
             guestId = guest.id,

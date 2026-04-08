@@ -6,20 +6,21 @@ import com.stayops.reservation.domain.repository.ReservationRepository
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
-import java.time.Instant
+import java.time.Clock
 
 @Component
 class PendingReservationScheduler(
     private val reservationRepository: ReservationRepository,
     private val paymentRepository: PaymentRepository,
-    private val inventoryApplication: RoomInventoryApplication
+    private val inventoryApplication: RoomInventoryApplication,
+    private val clock: Clock
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
 
     @Scheduled(fixedRate = 60_000)
     fun expirePendingReservations() {
-        val now = Instant.now()
+        val now = clock.instant()
         val expiredReservations = reservationRepository.findExpiredPending(now)
 
         if (expiredReservations.isEmpty()) return
