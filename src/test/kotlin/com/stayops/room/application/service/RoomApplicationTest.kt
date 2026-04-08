@@ -1,7 +1,6 @@
 package com.stayops.room.application.service
 
 import com.stayops.inventory.application.service.RoomInventoryApplication
-import com.stayops.room.api.dto.RoomStatusAction
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomStatus
 import com.stayops.room.domain.repository.RoomRepository
@@ -92,36 +91,58 @@ class RoomApplicationTest : BehaviorSpec({
     }
 
     given("객실 상태 전이 시") {
-        `when`("AVAILABLE 객실에 CHECK_IN 액션이면") {
+        `when`("AVAILABLE 객실에 checkIn을 호출하면") {
             every { roomRepository.findById("room-1") } returns newRoom()
             every { roomRepository.save(any()) } answers { firstArg() }
 
-            val result = roomApplication.changeStatus("room-1", RoomStatusAction.CHECK_IN)
+            val result = roomApplication.checkIn("room-1")
 
             then("상태가 OCCUPIED로 변경된다") {
                 result.status shouldBe RoomStatus.OCCUPIED
             }
         }
 
-        `when`("OCCUPIED 객실에 CHECK_OUT 액션이면") {
+        `when`("OCCUPIED 객실에 checkOut을 호출하면") {
             every { roomRepository.findById("room-1") } returns newRoom().checkIn()
             every { roomRepository.save(any()) } answers { firstArg() }
 
-            val result = roomApplication.changeStatus("room-1", RoomStatusAction.CHECK_OUT)
+            val result = roomApplication.checkOut("room-1")
 
             then("상태가 CLEANING으로 변경된다") {
                 result.status shouldBe RoomStatus.CLEANING
             }
         }
 
-        `when`("AVAILABLE 객실에 START_MAINTENANCE 액션이면") {
+        `when`("CLEANING 객실에 completeCleaning을 호출하면") {
+            every { roomRepository.findById("room-1") } returns newRoom().checkIn().checkOut()
+            every { roomRepository.save(any()) } answers { firstArg() }
+
+            val result = roomApplication.completeCleaning("room-1")
+
+            then("상태가 AVAILABLE로 변경된다") {
+                result.status shouldBe RoomStatus.AVAILABLE
+            }
+        }
+
+        `when`("AVAILABLE 객실에 startMaintenance를 호출하면") {
             every { roomRepository.findById("room-1") } returns newRoom()
             every { roomRepository.save(any()) } answers { firstArg() }
 
-            val result = roomApplication.changeStatus("room-1", RoomStatusAction.START_MAINTENANCE)
+            val result = roomApplication.startMaintenance("room-1")
 
             then("상태가 MAINTENANCE로 변경된다") {
                 result.status shouldBe RoomStatus.MAINTENANCE
+            }
+        }
+
+        `when`("MAINTENANCE 객실에 completeMaintenance를 호출하면") {
+            every { roomRepository.findById("room-1") } returns newRoom().startMaintenance()
+            every { roomRepository.save(any()) } answers { firstArg() }
+
+            val result = roomApplication.completeMaintenance("room-1")
+
+            then("상태가 AVAILABLE로 변경된다") {
+                result.status shouldBe RoomStatus.AVAILABLE
             }
         }
 
@@ -130,7 +151,7 @@ class RoomApplicationTest : BehaviorSpec({
 
             then("IllegalArgumentException이 발생한다") {
                 shouldThrow<IllegalArgumentException> {
-                    roomApplication.changeStatus("room-1", RoomStatusAction.CHECK_OUT)
+                    roomApplication.checkOut("room-1")
                 }
             }
         }

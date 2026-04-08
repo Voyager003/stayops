@@ -1,7 +1,6 @@
 package com.stayops.room.application.service
 
 import com.stayops.inventory.application.service.RoomInventoryApplication
-import com.stayops.room.api.dto.RoomStatusAction
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.shared.exception.ConflictException
@@ -53,16 +52,19 @@ class RoomApplication(
         return saved
     }
 
-    fun changeStatus(id: String, action: RoomStatusAction): Room {
+    fun checkIn(id: String): Room = transition(id, "CHECK_IN") { it.checkIn() }
+
+    fun checkOut(id: String): Room = transition(id, "CHECK_OUT") { it.checkOut() }
+
+    fun completeCleaning(id: String): Room = transition(id, "COMPLETE_CLEANING") { it.completeCleaning() }
+
+    fun startMaintenance(id: String): Room = transition(id, "START_MAINTENANCE") { it.startMaintenance() }
+
+    fun completeMaintenance(id: String): Room = transition(id, "COMPLETE_MAINTENANCE") { it.completeMaintenance() }
+
+    private fun transition(id: String, action: String, transition: (Room) -> Room): Room {
         val room = getRoom(id)
-        val updated = when (action) {
-            RoomStatusAction.CHECK_IN -> room.checkIn()
-            RoomStatusAction.CHECK_OUT -> room.checkOut()
-            RoomStatusAction.COMPLETE_CLEANING -> room.completeCleaning()
-            RoomStatusAction.START_MAINTENANCE -> room.startMaintenance()
-            RoomStatusAction.COMPLETE_MAINTENANCE -> room.completeMaintenance()
-        }
-        val saved = roomRepository.save(updated)
+        val saved = roomRepository.save(transition(room))
         log.info("객실 상태 변경: roomId={}, action={}", id, action)
         return saved
     }
