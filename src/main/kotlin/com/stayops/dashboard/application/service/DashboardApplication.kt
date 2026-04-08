@@ -1,6 +1,6 @@
 package com.stayops.dashboard.application.service
 
-import com.stayops.dashboard.api.dto.DashboardResponse
+import com.stayops.dashboard.application.dto.DashboardSummary
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.model.RoomStatus
@@ -16,15 +16,15 @@ class DashboardApplication(
 
     private val revenueExcludedStatuses = setOf(ReservationStatus.CANCELLED, ReservationStatus.NO_SHOW)
 
-    fun getAggregatedDashboard(propertyIds: List<String>, today: LocalDate): DashboardResponse {
+    fun getAggregatedDashboard(propertyIds: List<String>, today: LocalDate): DashboardSummary {
         if (propertyIds.isEmpty()) {
-            return DashboardResponse(
+            return DashboardSummary(
                 todayCheckInCount = 0, todayCheckOutCount = 0,
                 todayRevenue = 0, todayNewReservations = 0,
                 yesterdayCheckInCount = 0, yesterdayCheckOutCount = 0,
                 yesterdayRevenue = 0, yesterdayNewReservations = 0,
                 pendingReservations = 0,
-                occupancy = DashboardResponse.OccupancyResponse(0, 0, 0, 0.0)
+                occupancy = DashboardSummary.OccupancySummary(0, 0, 0, 0.0)
             )
         }
 
@@ -35,7 +35,7 @@ class DashboardApplication(
         val available = dashboards.sumOf { it.occupancy.available }
         val rate = if (total > 0) occupied.toDouble() / total * 100 else 0.0
 
-        return DashboardResponse(
+        return DashboardSummary(
             todayCheckInCount = dashboards.sumOf { it.todayCheckInCount },
             todayCheckOutCount = dashboards.sumOf { it.todayCheckOutCount },
             todayRevenue = dashboards.sumOf { it.todayRevenue },
@@ -45,14 +45,14 @@ class DashboardApplication(
             yesterdayRevenue = dashboards.sumOf { it.yesterdayRevenue },
             yesterdayNewReservations = dashboards.sumOf { it.yesterdayNewReservations },
             pendingReservations = dashboards.sumOf { it.pendingReservations },
-            occupancy = DashboardResponse.OccupancyResponse(
+            occupancy = DashboardSummary.OccupancySummary(
                 total = total, occupied = occupied, available = available,
                 rate = Math.round(rate * 10) / 10.0
             )
         )
     }
 
-    fun getDashboard(propertyId: String, today: LocalDate): DashboardResponse {
+    fun getDashboard(propertyId: String, today: LocalDate): DashboardSummary {
         val yesterday = today.minusDays(1)
 
         val todayReservations = reservationRepository.findByPropertyIdAndDateRange(propertyId, today, today)
@@ -82,7 +82,7 @@ class DashboardApplication(
         val available = rooms.count { it.status == RoomStatus.AVAILABLE }
         val rate = if (total > 0) occupied.toDouble() / total * 100 else 0.0
 
-        return DashboardResponse(
+        return DashboardSummary(
             todayCheckInCount = todayCheckInCount,
             todayCheckOutCount = todayCheckOutCount,
             todayRevenue = todayRevenue,
@@ -92,7 +92,7 @@ class DashboardApplication(
             yesterdayRevenue = yesterdayRevenue,
             yesterdayNewReservations = yesterdayNewReservations,
             pendingReservations = pendingCount,
-            occupancy = DashboardResponse.OccupancyResponse(
+            occupancy = DashboardSummary.OccupancySummary(
                 total = total,
                 occupied = occupied,
                 available = available,
