@@ -8,7 +8,6 @@ import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
-import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.stereotype.Service
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -96,8 +95,8 @@ class RoomInventoryApplication(
                         }
                     } catch (_: IllegalArgumentException) {
                         // count < 1 등 — 해당 날짜 건너뜀
-                    } catch (_: OptimisticLockingFailureException) {
-                        // 충돌 — 해당 날짜 건너뜀
+                    } catch (_: ConflictException) {
+                        // 버전 충돌 — 해당 날짜 건너뜀
                     }
                 }
             }
@@ -117,15 +116,11 @@ class RoomInventoryApplication(
         count: Int
     ): RoomInventory {
         val inventory = getOrThrow(propertyId, roomTypeId, date)
-        return try {
-            val updated = saveAndEvict(inventory.block(count))
-            channelSyncApplication.createAvailabilitySyncTasks(propertyId, roomTypeId, date, updated.availableCount)
-            channelSyncApplication.processTasksImmediately(propertyId)
-            log.info("재고 차단: propertyId={}, roomTypeId={}, date={}, count={}", propertyId, roomTypeId, date, count)
-            updated
-        } catch (e: OptimisticLockingFailureException) {
-            throw ConflictException("INVENTORY_CONFLICT", "재고 변경 충돌이 발생했습니다. 다시 시도해주세요.")
-        }
+        val updated = saveAndEvict(inventory.block(count))
+        channelSyncApplication.createAvailabilitySyncTasks(propertyId, roomTypeId, date, updated.availableCount)
+        channelSyncApplication.processTasksImmediately(propertyId)
+        log.info("재고 차단: propertyId={}, roomTypeId={}, date={}, count={}", propertyId, roomTypeId, date, count)
+        return updated
     }
 
     fun unblockInventory(
@@ -135,37 +130,25 @@ class RoomInventoryApplication(
         count: Int
     ): RoomInventory {
         val inventory = getOrThrow(propertyId, roomTypeId, date)
-        return try {
-            val updated = saveAndEvict(inventory.unblock(count))
-            channelSyncApplication.createAvailabilitySyncTasks(propertyId, roomTypeId, date, updated.availableCount)
-            channelSyncApplication.processTasksImmediately(propertyId)
-            log.info("재고 차단 해제: propertyId={}, roomTypeId={}, date={}, count={}", propertyId, roomTypeId, date, count)
-            updated
-        } catch (e: OptimisticLockingFailureException) {
-            throw ConflictException("INVENTORY_CONFLICT", "재고 변경 충돌이 발생했습니다. 다시 시도해주세요.")
-        }
+        val updated = saveAndEvict(inventory.unblock(count))
+        channelSyncApplication.createAvailabilitySyncTasks(propertyId, roomTypeId, date, updated.availableCount)
+        channelSyncApplication.processTasksImmediately(propertyId)
+        log.info("재고 차단 해제: propertyId={}, roomTypeId={}, date={}, count={}", propertyId, roomTypeId, date, count)
+        return updated
     }
 
     fun reserve(propertyId: String, roomTypeId: String, date: LocalDate): RoomInventory {
         val inventory = getOrThrow(propertyId, roomTypeId, date)
-        return try {
-            val updated = saveAndEvict(inventory.reserve())
-            log.info("재고 예약: propertyId={}, roomTypeId={}, date={}", propertyId, roomTypeId, date)
-            updated
-        } catch (e: OptimisticLockingFailureException) {
-            throw ConflictException("INVENTORY_CONFLICT", "재고 변경 충돌이 발생했습니다. 다시 시도해주세요.")
-        }
+        val updated = saveAndEvict(inventory.reserve())
+        log.info("재고 예약: propertyId={}, roomTypeId={}, date={}", propertyId, roomTypeId, date)
+        return updated
     }
 
     fun release(propertyId: String, roomTypeId: String, date: LocalDate): RoomInventory {
         val inventory = getOrThrow(propertyId, roomTypeId, date)
-        return try {
-            val updated = saveAndEvict(inventory.release())
-            log.info("재고 해제: propertyId={}, roomTypeId={}, date={}", propertyId, roomTypeId, date)
-            updated
-        } catch (e: OptimisticLockingFailureException) {
-            throw ConflictException("INVENTORY_CONFLICT", "재고 변경 충돌이 발생했습니다. 다시 시도해주세요.")
-        }
+        val updated = saveAndEvict(inventory.release())
+        log.info("재고 해제: propertyId={}, roomTypeId={}, date={}", propertyId, roomTypeId, date)
+        return updated
     }
 
     private fun getOrThrow(propertyId: String, roomTypeId: String, date: LocalDate): RoomInventory =

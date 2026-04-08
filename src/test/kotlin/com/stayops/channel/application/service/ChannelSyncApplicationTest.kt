@@ -156,7 +156,7 @@ class ChannelSyncApplicationTest : BehaviorSpec({
     // -- processPendingTasks: version 충돌 처리 --
 
     given("폴링 중 version 충돌이 발생하면") {
-        `when`("OptimisticLockingFailureException이 발생해도") {
+        `when`("ConflictException이 발생해도") {
             then("에러 없이 다음 태스크를 계속 처리한다") {
                 clearAllMocks()
                 val task1 = sampleTask()
@@ -165,7 +165,7 @@ class ChannelSyncApplicationTest : BehaviorSpec({
 
                 every { syncTaskRepository.findPendingTasksReadyForProcessing(any()) } returns listOf(task1, task2)
                 every { syncTaskRepository.save(match { it.id == "task-1" }) } throws
-                        org.springframework.dao.OptimisticLockingFailureException("version conflict")
+                        com.stayops.shared.exception.ConflictException("SYNC_TASK_CONFLICT", "version conflict")
                 every { syncTaskRepository.save(match { it.id == "task-2" }) } answers { firstArg() }
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "BOOKING") } returns otaChannel("BOOKING")
                 every { adapterProvider.getAdapter("BOOKING") } returns syncAdapter

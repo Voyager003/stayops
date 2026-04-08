@@ -18,7 +18,6 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import com.stayops.channel.application.service.ChannelSyncApplication
-import org.springframework.dao.OptimisticLockingFailureException
 import java.time.Instant
 import java.time.LocalDate
 
@@ -150,12 +149,13 @@ class RoomInventoryApplicationTest : BehaviorSpec({
             }
         }
 
-        `when`("낙관적 락 충돌이 발생하면") {
+        `when`("Repository가 ConflictException을 던지면") {
             val inventory = newInventory(totalCount = 5)
             every { cache.get("prop-1", "rt-1", today) } returns inventory
-            every { inventoryRepository.save(any()) } throws OptimisticLockingFailureException("conflict")
+            every { inventoryRepository.save(any()) } throws
+                ConflictException("INVENTORY_CONFLICT", "재고 변경 충돌이 발생했습니다.")
 
-            then("ConflictException으로 변환된다") {
+            then("그대로 전파된다") {
                 shouldThrow<ConflictException> {
                     inventoryApplication.blockInventory("prop-1", "rt-1", today, 1)
                 }

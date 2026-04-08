@@ -3,6 +3,7 @@ package com.stayops.inventory.infrastructure.persistence
 import com.stayops.TestcontainersConfiguration
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
+import com.stayops.shared.exception.ConflictException
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -11,7 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.dao.DuplicateKeyException
-import org.springframework.dao.OptimisticLockingFailureException
 import java.time.LocalDate
 
 @SpringBootTest
@@ -95,7 +95,7 @@ class MongoRoomInventoryRepositoryTest @Autowired constructor(
     @Nested
     inner class `낙관적 락 충돌 시` {
         @Test
-        fun `같은 버전으로 두 번 저장하면 OptimisticLockingFailureException이 발생한다`() {
+        fun `같은 버전으로 두 번 저장하면 ConflictException이 발생한다`() {
             // 최초 저장 (version = 0 → DB에서 version = 0으로 저장)
             val saved = inventoryRepository.save(newInventory())
 
@@ -107,9 +107,10 @@ class MongoRoomInventoryRepositoryTest @Autowired constructor(
             inventoryRepository.save(firstRead.reserve())
 
             // 두 번째 요청이 동일한 version=0으로 저장 시도 → 충돌
-            org.junit.jupiter.api.assertThrows<OptimisticLockingFailureException> {
+            val exception = org.junit.jupiter.api.assertThrows<ConflictException> {
                 inventoryRepository.save(secondRead.reserve())
             }
+            assertThat(exception.code).isEqualTo("INVENTORY_CONFLICT")
         }
     }
 

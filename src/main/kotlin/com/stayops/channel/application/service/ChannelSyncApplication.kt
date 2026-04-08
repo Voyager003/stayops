@@ -9,9 +9,9 @@ import com.stayops.channel.domain.model.SyncTaskType
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.repository.SyncTaskRepository
 import com.stayops.channel.domain.service.ChannelAdapterProvider
+import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
-import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -93,7 +93,7 @@ class ChannelSyncApplication(
                 syncTaskRepository.save(processing.fail(e.message ?: "Unexpected error"))
                 log.error("ARI push 예외: taskId={}", processing.id, e)
             }
-            } catch (e: OptimisticLockingFailureException) {
+            } catch (e: ConflictException) {
                 log.warn("SyncTask version 충돌, 다음 폴링에서 재시도: taskId={}", task.id)
             }
         }
@@ -126,7 +126,7 @@ class ChannelSyncApplication(
                     log.info("즉시 전송 성공: taskId={}, channelCode={}", task.id, task.channelCode)
                 }
                 // 실패 시 PENDING 유지 → 폴링이 재시도
-            } catch (e: OptimisticLockingFailureException) {
+            } catch (e: ConflictException) {
                 log.warn("즉시 전송 version 충돌 (이미 처리됨): taskId={}", task.id)
             } catch (e: Exception) {
                 log.warn("즉시 전송 실패 (폴링이 재시도 예정): taskId={}, error={}", task.id, e.message)
