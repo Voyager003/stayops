@@ -60,10 +60,9 @@ class ChannelSyncApplication(
 
         tasks.forEach { task ->
             try {
-            val processing = task.startProcessing()
-            syncTaskRepository.save(processing)
+                val processing = task.startProcessing()
+                syncTaskRepository.save(processing)
 
-            try {
                 val channel = channelRepository.findByPropertyIdAndCode(processing.propertyId, processing.channelCode)
                 if (channel == null || channel.connectionInfo == null) {
                     syncTaskRepository.save(processing.skip("채널 또는 connectionInfo 없음"))
@@ -89,10 +88,6 @@ class ChannelSyncApplication(
                     syncTaskRepository.save(processing.fail(result.errorMessage ?: "Unknown error"))
                     log.warn("ARI push 실패: taskId={}, error={}", processing.id, result.errorMessage)
                 }
-            } catch (e: Exception) {
-                syncTaskRepository.save(processing.fail(e.message ?: "Unexpected error"))
-                log.error("ARI push 예외: taskId={}", processing.id, e)
-            }
             } catch (e: ConflictException) {
                 log.warn("SyncTask version 충돌, 다음 폴링에서 재시도: taskId={}", task.id)
             }
@@ -128,8 +123,6 @@ class ChannelSyncApplication(
                 // 실패 시 PENDING 유지 → 폴링이 재시도
             } catch (e: ConflictException) {
                 log.warn("즉시 전송 version 충돌 (이미 처리됨): taskId={}", task.id)
-            } catch (e: Exception) {
-                log.warn("즉시 전송 실패 (폴링이 재시도 예정): taskId={}, error={}", task.id, e.message)
             }
         }
     }
