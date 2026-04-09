@@ -23,7 +23,6 @@ data class ReservationResponse(
     val totalAmount: BigDecimal,
     val commissionAmount: BigDecimal,
     val netAmount: BigDecimal,
-    val memo: String?,
     val createdAt: Instant,
     val updatedAt: Instant
 ) {
@@ -45,7 +44,6 @@ data class ReservationResponse(
             totalAmount = reservation.pricing.totalAmount.amount,
             commissionAmount = reservation.pricing.commissionAmount.amount,
             netAmount = reservation.pricing.netAmount.amount,
-            memo = reservation.memo,
             createdAt = reservation.createdAt,
             updatedAt = reservation.updatedAt
         )
