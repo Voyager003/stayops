@@ -3,6 +3,7 @@ package com.stayops.channel.infrastructure.external
 import com.stayops.channel.domain.service.ChannelSyncAdapter
 import com.stayops.channel.domain.service.SyncResult
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
 import org.springframework.web.client.RestClientException
@@ -16,10 +17,11 @@ import org.springframework.web.client.RestClientException
  * 비즈니스 흐름을 선언적으로 기술할 수 있다.
  */
 @Component
-class HttpChannelSyncAdapter : ChannelSyncAdapter {
+class HttpChannelSyncAdapter(
+    @Qualifier("otaRestClient") private val restClient: RestClient
+) : ChannelSyncAdapter {
 
     private val log = LoggerFactory.getLogger(javaClass)
-    private val restClient = RestClient.create()
 
     override fun pushAvailability(
         endpoint: String,

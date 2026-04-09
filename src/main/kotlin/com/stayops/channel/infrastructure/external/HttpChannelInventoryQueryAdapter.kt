@@ -3,6 +3,7 @@ package com.stayops.channel.infrastructure.external
 import com.stayops.channel.domain.service.ChannelInventoryQueryAdapter
 import com.stayops.channel.domain.service.ExternalInventorySnapshot
 import com.stayops.shared.exception.BusinessException
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.core.ParameterizedTypeReference
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
@@ -10,9 +11,9 @@ import org.springframework.web.client.RestClientException
 import java.time.LocalDate
 
 @Component
-class HttpChannelInventoryQueryAdapter : ChannelInventoryQueryAdapter {
-
-    private val restClient = RestClient.create()
+class HttpChannelInventoryQueryAdapter(
+    @Qualifier("otaRestClient") private val restClient: RestClient
+) : ChannelInventoryQueryAdapter {
 
     override fun fetchInventory(
         apiEndpoint: String,
