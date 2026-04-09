@@ -5,11 +5,13 @@ import com.stayops.reservation.domain.event.ReservationCheckedOut
 import org.slf4j.LoggerFactory
 import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Component
+import java.time.Clock
 import java.time.LocalDate
 
 @Component
 class GuestEventHandler(
-    private val guestRepository: GuestRepository
+    private val guestRepository: GuestRepository,
+    private val clock: Clock
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -25,7 +27,7 @@ class GuestEventHandler(
         val updated = guest.recordVisit(
             spend = event.totalAmount,
             stayNights = event.stayNights.toInt(),
-            visitDate = LocalDate.now()
+            visitDate = LocalDate.now(clock)
         )
         guestRepository.save(updated)
 

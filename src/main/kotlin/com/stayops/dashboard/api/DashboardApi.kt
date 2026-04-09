@@ -9,19 +9,21 @@ import com.stayops.shared.security.PropertyAccessChecker
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.bind.annotation.*
+import java.time.Clock
 import java.time.LocalDate
 
 @RestController
 class DashboardApi(
     private val dashboardApplication: DashboardApplication,
     private val propertyAccessChecker: PropertyAccessChecker,
-    private val propertyRepository: PropertyRepository
+    private val propertyRepository: PropertyRepository,
+    private val clock: Clock
 ) {
 
     @GetMapping("/api/v1/properties/{propertyId}/dashboard")
     fun getDashboard(@PathVariable propertyId: String): ResponseEntity<DashboardSummary> {
         propertyAccessChecker.requireAccess(propertyId)
-        return ResponseEntity.ok(dashboardApplication.getDashboard(propertyId, LocalDate.now()))
+        return ResponseEntity.ok(dashboardApplication.getDashboard(propertyId, LocalDate.now(clock)))
     }
 
     @GetMapping("/api/v1/dashboard")
@@ -32,6 +34,6 @@ class DashboardApi(
         } else {
             member.propertyAccess.map { it.propertyId }
         }
-        return ResponseEntity.ok(dashboardApplication.getAggregatedDashboard(propertyIds, LocalDate.now()))
+        return ResponseEntity.ok(dashboardApplication.getAggregatedDashboard(propertyIds, LocalDate.now(clock)))
     }
 }

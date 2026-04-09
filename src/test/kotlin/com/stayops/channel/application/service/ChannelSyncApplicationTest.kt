@@ -6,10 +6,14 @@ import com.stayops.channel.domain.repository.SyncTaskRepository
 import com.stayops.channel.domain.service.ChannelAdapterProvider
 import com.stayops.channel.domain.service.ChannelSyncAdapter
 import com.stayops.channel.domain.service.SyncResult
+import com.stayops.shared.domain.IdGenerator
 import io.kotest.core.spec.style.BehaviorSpec
 import io.mockk.*
 import java.math.BigDecimal
+import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 class ChannelSyncApplicationTest : BehaviorSpec({
 
@@ -17,11 +21,17 @@ class ChannelSyncApplicationTest : BehaviorSpec({
     val syncTaskRepository = mockk<SyncTaskRepository>()
     val adapterProvider = mockk<ChannelAdapterProvider>()
     val syncAdapter = mockk<ChannelSyncAdapter>()
+    val fixedClock = Clock.fixed(Instant.parse("2026-04-08T10:00:00Z"), ZoneId.of("Asia/Seoul"))
+    val idGenerator = object : IdGenerator {
+        override fun generate() = "task-1"
+    }
 
     val sut = ChannelSyncApplication(
         channelRepository = channelRepository,
         syncTaskRepository = syncTaskRepository,
-        adapterProvider = adapterProvider
+        adapterProvider = adapterProvider,
+        clock = fixedClock,
+        idGenerator = idGenerator
     )
 
     fun otaChannel(code: String = "AGODA") = Channel.createOta(

@@ -5,20 +5,23 @@ import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryCache
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.room.domain.repository.RoomRepository
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import java.time.Clock
 import java.time.DayOfWeek
 import java.time.LocalDate
-import java.util.UUID
 
 @Service
 class RoomInventoryApplication(
     private val inventoryRepository: RoomInventoryRepository,
     private val cache: RoomInventoryCache,
     private val roomRepository: RoomRepository,
-    private val channelSyncApplication: ChannelSyncApplication
+    private val channelSyncApplication: ChannelSyncApplication,
+    private val clock: Clock,
+    private val idGenerator: IdGenerator
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -32,7 +35,7 @@ class RoomInventoryApplication(
             .count { it.propertyId == propertyId }
         if (roomCount < 1) return
 
-        val today = LocalDate.now()
+        val today = LocalDate.now(clock)
         val endDate = today.plusDays(INVENTORY_HORIZON_DAYS)
         val existing = inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(
             propertyId, roomTypeId, today, endDate
@@ -44,7 +47,7 @@ class RoomInventoryApplication(
             if (inv == null) {
                 inventoryRepository.save(
                     RoomInventory.create(
-                        id = UUID.randomUUID().toString(),
+                        id = idGenerator.generate(),
                         propertyId = propertyId,
                         roomTypeId = roomTypeId,
                         date = date,

@@ -21,15 +21,19 @@ import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
+import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 class DashboardApiTest {
 
     private val dashboardApplication = mockk<DashboardApplication>()
     private val propertyAccessChecker = mockk<PropertyAccessChecker>(relaxed = true)
     private val propertyRepository = mockk<PropertyRepository>()
+    private val fixedClock = Clock.fixed(Instant.parse("2026-04-08T10:00:00Z"), ZoneId.of("Asia/Seoul"))
     private val mockMvc: MockMvc = MockMvcBuilders
-        .standaloneSetup(DashboardApi(dashboardApplication, propertyAccessChecker, propertyRepository))
+        .standaloneSetup(DashboardApi(dashboardApplication, propertyAccessChecker, propertyRepository, fixedClock))
         .build()
 
     private fun sampleSummary() = DashboardSummary(

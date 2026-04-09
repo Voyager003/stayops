@@ -18,8 +18,11 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import com.stayops.channel.application.service.ChannelSyncApplication
+import com.stayops.shared.domain.IdGenerator
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 class RoomInventoryApplicationTest : BehaviorSpec({
 
@@ -27,7 +30,13 @@ class RoomInventoryApplicationTest : BehaviorSpec({
     val cache = mockk<RoomInventoryCache>()
     val roomRepository = mockk<RoomRepository>()
     val channelSyncApplication = mockk<ChannelSyncApplication>(relaxed = true)
-    val inventoryApplication = RoomInventoryApplication(inventoryRepository, cache, roomRepository, channelSyncApplication)
+    val fixedClock = Clock.fixed(Instant.parse("2026-03-12T00:00:00Z"), ZoneId.of("Asia/Seoul"))
+    val idGenerator = object : IdGenerator {
+        override fun generate() = "inv-new"
+    }
+    val inventoryApplication = RoomInventoryApplication(
+        inventoryRepository, cache, roomRepository, channelSyncApplication, fixedClock, idGenerator
+    )
 
     val today = LocalDate.of(2026, 3, 12)
 

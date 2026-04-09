@@ -7,15 +7,15 @@ import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.service.ChannelInventoryQueryAdapter
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
-import java.time.Instant
+import java.time.Clock
 import java.time.LocalDate
-import java.util.UUID
 
 @Service
 class ChannelApplication(
@@ -24,6 +24,8 @@ class ChannelApplication(
     private val roomInventoryRepository: RoomInventoryRepository,
     private val channelSyncApplication: ChannelSyncApplication,
     private val inventoryQueryAdapter: ChannelInventoryQueryAdapter,
+    private val clock: Clock,
+    private val idGenerator: IdGenerator,
     @Value("\${mock-ota.endpoint}") private val otaEndpoint: String
 ) {
 
@@ -36,7 +38,7 @@ class ChannelApplication(
         commissionRate: BigDecimal
     ): Channel {
         val channel = Channel.createOta(
-            id = UUID.randomUUID().toString(),
+            id = idGenerator.generate(),
             propertyId = propertyId,
             code = code,
             name = name,
@@ -47,7 +49,7 @@ class ChannelApplication(
 
         // Initial inventory sync for the new channel
         val roomTypes = roomTypeRepository.findByPropertyId(propertyId)
-        val today = LocalDate.now()
+        val today = LocalDate.now(clock)
         val endDate = today.plusDays(90)
         for (roomType in roomTypes) {
             val inventories = roomInventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(
@@ -94,7 +96,7 @@ class ChannelApplication(
             status = channel.status,
             version = channel.version,
             createdAt = channel.createdAt,
-            updatedAt = Instant.now()
+            updatedAt = clock.instant()
         )
         val saved = channelRepository.save(updated)
         log.info("채널 수정: channelId={}, propertyId={}", channelId, propertyId)

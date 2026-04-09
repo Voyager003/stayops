@@ -8,11 +8,15 @@ import com.stayops.shared.domain.Money
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.*
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneId
 
 class GuestEventHandlerTest : BehaviorSpec({
 
     val guestRepository = mockk<GuestRepository>()
-    val sut = GuestEventHandler(guestRepository)
+    val fixedClock = Clock.fixed(Instant.parse("2026-04-08T10:00:00Z"), ZoneId.of("Asia/Seoul"))
+    val sut = GuestEventHandler(guestRepository, fixedClock)
 
     given("ReservationCheckedOut 이벤트 수신 시") {
         `when`("고객이 존재하면") {

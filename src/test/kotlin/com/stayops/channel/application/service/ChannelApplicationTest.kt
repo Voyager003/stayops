@@ -7,6 +7,7 @@ import com.stayops.channel.domain.service.ExternalInventorySnapshot
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.NotFoundException
 import io.kotest.assertions.throwables.shouldThrow
@@ -14,8 +15,10 @@ import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.*
 import java.math.BigDecimal
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 class ChannelApplicationTest : BehaviorSpec({
 
@@ -24,6 +27,11 @@ class ChannelApplicationTest : BehaviorSpec({
     val roomInventoryRepository = mockk<RoomInventoryRepository>()
     val channelSyncApplication = mockk<ChannelSyncApplication>(relaxed = true)
     val inventoryQueryAdapter = mockk<ChannelInventoryQueryAdapter>()
+    val fixedInstant = Instant.parse("2026-04-08T10:00:00Z")
+    val fixedClock = Clock.fixed(fixedInstant, ZoneId.of("Asia/Seoul"))
+    val idGenerator = object : IdGenerator {
+        override fun generate() = "test-id"
+    }
 
     val sut = ChannelApplication(
         channelRepository = channelRepository,
@@ -31,6 +39,8 @@ class ChannelApplicationTest : BehaviorSpec({
         roomInventoryRepository = roomInventoryRepository,
         channelSyncApplication = channelSyncApplication,
         inventoryQueryAdapter = inventoryQueryAdapter,
+        clock = fixedClock,
+        idGenerator = idGenerator,
         otaEndpoint = "https://mock-ota/ari"
     )
 

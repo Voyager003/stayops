@@ -9,20 +9,22 @@ import com.stayops.channel.domain.model.SyncTaskType
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.repository.SyncTaskRepository
 import com.stayops.channel.domain.service.ChannelAdapterProvider
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
-import java.time.Instant
+import java.time.Clock
 import java.time.LocalDate
-import java.util.UUID
 
 @Service
 class ChannelSyncApplication(
     private val channelRepository: ChannelRepository,
     private val syncTaskRepository: SyncTaskRepository,
-    private val adapterProvider: ChannelAdapterProvider
+    private val adapterProvider: ChannelAdapterProvider,
+    private val clock: Clock,
+    private val idGenerator: IdGenerator
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -44,7 +46,7 @@ class ChannelSyncApplication(
 
         otaChannels.forEach { channel ->
             val task = SyncTask.create(
-                id = UUID.randomUUID().toString(),
+                id = idGenerator.generate(),
                 propertyId = propertyId,
                 channelCode = channel.code,
                 type = SyncTaskType.AVAILABILITY_UPDATE,
@@ -56,7 +58,7 @@ class ChannelSyncApplication(
     }
 
     fun processPendingTasks() {
-        val tasks = syncTaskRepository.findPendingTasksReadyForProcessing(Instant.now())
+        val tasks = syncTaskRepository.findPendingTasksReadyForProcessing(clock.instant())
 
         tasks.forEach { task ->
             try {
