@@ -13,6 +13,7 @@ import com.stayops.property.domain.model.ContactInfo
 import com.stayops.property.domain.model.Property
 import com.stayops.property.domain.model.PropertyType
 import com.stayops.property.domain.repository.PropertyRepository
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.NotFoundException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -24,7 +25,11 @@ class PropertyApplicationTest : BehaviorSpec({
     val propertyRepository = mockk<PropertyRepository>()
     val memberRepository = mockk<MemberRepository>()
     val channelRepository = mockk<ChannelRepository>()
-    val propertyApplication = PropertyApplication(propertyRepository, memberRepository, channelRepository)
+    val idGenerator = object : IdGenerator {
+        private var counter = 0
+        override fun generate() = "id-${++counter}"
+    }
+    val propertyApplication = PropertyApplication(propertyRepository, memberRepository, channelRepository, idGenerator)
 
     fun sampleAddress() = Address.of("해운대로 123", "부산", "부산광역시", "48099", "KR")
     fun sampleContactInfo() = ContactInfo.of("051-123-4567", "test@pension.com")

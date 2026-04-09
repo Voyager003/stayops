@@ -4,7 +4,9 @@ import com.stayops.rate.domain.model.RatePlan
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.model.RatePlanType
 import com.stayops.rate.domain.repository.RatePlanRepository
+import com.stayops.rate.domain.service.RateResolver
 import com.stayops.shared.domain.DateRange
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.NotFoundException
 import io.kotest.assertions.throwables.shouldThrow
@@ -19,7 +21,11 @@ import java.time.LocalDate
 class RatePlanApplicationTest : BehaviorSpec({
 
     val ratePlanRepository = mockk<RatePlanRepository>()
-    val ratePlanApplication = RatePlanApplication(ratePlanRepository)
+    val rateResolver = RateResolver()
+    val idGenerator = object : IdGenerator {
+        override fun generate() = "rp-new"
+    }
+    val ratePlanApplication = RatePlanApplication(ratePlanRepository, rateResolver, idGenerator)
 
     fun testRatePlan(
         id: String = "rp-1",

@@ -2,17 +2,18 @@ package com.stayops.room.application.service
 
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomTypeRepository
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
-import java.util.UUID
 
 @Service
 class RoomTypeApplication(
-    private val roomTypeRepository: RoomTypeRepository
+    private val roomTypeRepository: RoomTypeRepository,
+    private val idGenerator: IdGenerator
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -29,7 +30,7 @@ class RoomTypeApplication(
             throw ConflictException("ROOM_TYPE_NAME_DUPLICATE", "해당 숙소에 이미 동일한 이름의 객실타입이 존재합니다: $name")
         }
         val roomType = RoomType.create(
-            id = UUID.randomUUID().toString(),
+            id = idGenerator.generate(),
             propertyId = propertyId,
             name = name,
             description = description,

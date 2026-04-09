@@ -2,6 +2,7 @@ package com.stayops.room.application.service
 
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomTypeRepository
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
@@ -17,7 +18,10 @@ import java.math.BigDecimal
 class RoomTypeApplicationTest : BehaviorSpec({
 
     val roomTypeRepository = mockk<RoomTypeRepository>()
-    val roomTypeApplication = RoomTypeApplication(roomTypeRepository)
+    val idGenerator = object : IdGenerator {
+        override fun generate() = "rt-new"
+    }
+    val roomTypeApplication = RoomTypeApplication(roomTypeRepository, idGenerator)
 
     fun newRoomType(id: String = "rt-1", propertyId: String = "prop-1", name: String = "디럭스") =
         RoomType.create(

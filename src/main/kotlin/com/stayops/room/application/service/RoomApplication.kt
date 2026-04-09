@@ -3,16 +3,17 @@ package com.stayops.room.application.service
 import com.stayops.inventory.application.service.RoomInventoryApplication
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.repository.RoomRepository
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import java.util.UUID
 
 @Service
 class RoomApplication(
     private val roomRepository: RoomRepository,
-    private val inventoryApplication: RoomInventoryApplication
+    private val inventoryApplication: RoomInventoryApplication,
+    private val idGenerator: IdGenerator
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -26,7 +27,7 @@ class RoomApplication(
             throw ConflictException("ROOM_NUMBER_DUPLICATE", "해당 숙소에 이미 동일한 호수의 객실이 존재합니다: $roomNumber")
         }
         val room = Room.create(
-            id = UUID.randomUUID().toString(),
+            id = idGenerator.generate(),
             propertyId = propertyId,
             roomTypeId = roomTypeId,
             roomNumber = roomNumber,

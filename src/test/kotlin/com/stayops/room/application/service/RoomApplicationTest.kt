@@ -4,6 +4,7 @@ import com.stayops.inventory.application.service.RoomInventoryApplication
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomStatus
 import com.stayops.room.domain.repository.RoomRepository
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
 import io.kotest.assertions.throwables.shouldThrow
@@ -18,7 +19,10 @@ class RoomApplicationTest : BehaviorSpec({
 
     val roomRepository = mockk<RoomRepository>()
     val inventoryApplication = mockk<RoomInventoryApplication>()
-    val roomApplication = RoomApplication(roomRepository, inventoryApplication)
+    val idGenerator = object : IdGenerator {
+        override fun generate() = "room-new"
+    }
+    val roomApplication = RoomApplication(roomRepository, inventoryApplication, idGenerator)
 
     fun newRoom(id: String = "room-1", propertyId: String = "prop-1", roomNumber: String = "101") =
         Room.create(
