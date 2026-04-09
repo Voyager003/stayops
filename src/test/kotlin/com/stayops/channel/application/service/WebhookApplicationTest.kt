@@ -12,13 +12,13 @@ import com.stayops.reservation.domain.event.ReservationCreated
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.BusinessException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.*
 import org.springframework.context.ApplicationEventPublisher
-import org.springframework.dao.DuplicateKeyException
 import java.math.BigDecimal
 import java.time.LocalDate
 
@@ -34,6 +34,9 @@ class WebhookApplicationTest : BehaviorSpec({
     val guestRepository = mockk<GuestRepository>()
     val eventPublisher = mockk<ApplicationEventPublisher>()
     val roomTypeRepository = mockk<com.stayops.room.domain.repository.RoomTypeRepository>(relaxed = true)
+    val idGenerator = object : IdGenerator {
+        override fun generate(): String = "test-id"
+    }
 
     val sut = WebhookApplication(
         channelRepository = channelRepository,
@@ -45,7 +48,8 @@ class WebhookApplicationTest : BehaviorSpec({
         roomInventoryApplication = roomInventoryApplication,
         guestRepository = guestRepository,
         eventPublisher = eventPublisher,
-        roomTypeRepository = roomTypeRepository
+        roomTypeRepository = roomTypeRepository,
+        idGenerator = idGenerator
     )
 
     val otaChannel = Channel.createOta(
@@ -63,7 +67,7 @@ class WebhookApplicationTest : BehaviorSpec({
                 clearAllMocks()
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel
                 every { signatureVerifier.verify("AGODA", any(), "sha256=valid") } returns true
-                every { processedEventRepository.save(any()) } answers { firstArg() }
+                every { processedEventRepository.saveIfAbsent(any()) } returns true
                 every { mappingRepository.findByPropertyIdAndChannelCode("prop-1", "AGODA") } returns null
                 every { roomInventoryApplication.reserve("prop-1", "rt-deluxe", any()) } returns mockk()
                 every { guestRepository.findByPropertyIdAndPhone("prop-1", "OTA-book-1") } returns null
@@ -129,7 +133,7 @@ class WebhookApplicationTest : BehaviorSpec({
 
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel
                 every { signatureVerifier.verify("AGODA", any(), "sha256=valid") } returns true
-                every { processedEventRepository.save(any()) } answers { firstArg() }
+                every { processedEventRepository.saveIfAbsent(any()) } returns true
                 every { mappingRepository.findByPropertyIdAndChannelCode("prop-1", "AGODA") } returns mapping
                 every { roomInventoryApplication.reserve("prop-1", "internal-rt-1", any()) } returns mockk()
                 every { guestRepository.findByPropertyIdAndPhone("prop-1", "OTA-book-2") } returns null
@@ -163,7 +167,7 @@ class WebhookApplicationTest : BehaviorSpec({
                 clearAllMocks()
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel
                 every { signatureVerifier.verify("AGODA", any(), "sha256=valid") } returns true
-                every { processedEventRepository.save(any()) } answers { firstArg() }
+                every { processedEventRepository.saveIfAbsent(any()) } returns true
                 every { mappingRepository.findByPropertyIdAndChannelCode("prop-1", "AGODA") } returns null
 
                 val exception = shouldThrow<BusinessException> {
@@ -183,12 +187,12 @@ class WebhookApplicationTest : BehaviorSpec({
     }
 
     given("중복 이벤트 수신 시") {
-        `when`("save에서 DuplicateKeyException이 발생하면") {
+        `when`("saveIfAbsent가 false를 반환하면") {
             then("이벤트 처리를 건너뛴다") {
                 clearAllMocks()
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel
                 every { signatureVerifier.verify(any(), any(), any()) } returns true
-                every { processedEventRepository.save(any()) } throws DuplicateKeyException("duplicate eventId")
+                every { processedEventRepository.saveIfAbsent(any()) } returns false
 
                 sut.handleWebhook(
                     propertyId = "prop-1",

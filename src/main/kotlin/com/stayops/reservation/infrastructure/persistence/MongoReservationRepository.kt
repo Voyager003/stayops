@@ -15,6 +15,7 @@ import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.data.mongodb.repository.MongoRepository
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 import java.time.Instant
 import java.time.LocalDate
@@ -51,7 +52,7 @@ class MongoReservationRepository(
         mongo.save(ReservationDocument.from(reservation)).toDomain()
 
     override fun findById(id: String): Reservation? =
-        mongo.findById(id).orElse(null)?.toDomain()
+        mongo.findByIdOrNull(id)?.toDomain()
 
     override fun findByPropertyId(propertyId: String): List<Reservation> =
         mongo.findByPropertyId(propertyId).map { it.toDomain() }

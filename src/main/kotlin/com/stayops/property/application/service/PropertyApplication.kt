@@ -9,16 +9,17 @@ import com.stayops.property.domain.model.ContactInfo
 import com.stayops.property.domain.model.Property
 import com.stayops.property.domain.model.PropertyType
 import com.stayops.property.domain.repository.PropertyRepository
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import java.util.UUID
 
 @Service
 class PropertyApplication(
     private val propertyRepository: PropertyRepository,
     private val memberRepository: MemberRepository,
-    private val channelRepository: ChannelRepository
+    private val channelRepository: ChannelRepository,
+    private val idGenerator: IdGenerator
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -33,7 +34,7 @@ class PropertyApplication(
         currency: String = "KRW"
     ): Property {
         val property = Property.create(
-            id = UUID.randomUUID().toString(),
+            id = idGenerator.generate(),
             ownerId = ownerId,
             name = name,
             type = type,
@@ -45,7 +46,7 @@ class PropertyApplication(
         )
         val saved = propertyRepository.save(property)
 
-        channelRepository.save(Channel.createDirect(UUID.randomUUID().toString(), saved.id))
+        channelRepository.save(Channel.createDirect(idGenerator.generate(), saved.id))
 
         val member = memberRepository.findById(ownerId)
         if (member != null) {

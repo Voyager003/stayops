@@ -59,7 +59,6 @@ class MongoSettlementQueryRepositoryTest @Autowired constructor(
             commissionAmount = commissionAmount,
             netAmount = netAmount
         ),
-        memo = null,
         memberId = null,
         expiresAt = null,
         version = 0L,

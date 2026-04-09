@@ -24,3 +24,8 @@ toss:
 
 mock-ota:
   endpoint: ${MOCK_OTA_ENDPOINT:http://localhost:8081}
+
+ota:
+  http:
+    connect-timeout: 5s
+    read-timeout: 10s

@@ -4,6 +4,7 @@ import com.stayops.auth.domain.model.Member
 import com.stayops.auth.domain.model.MemberRole
 import com.stayops.auth.domain.model.MemberStatus
 import com.stayops.auth.domain.repository.MemberRepository
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.ConflictException
 import io.kotest.assertions.throwables.shouldThrow
@@ -18,7 +19,10 @@ class CustomerAuthServiceTest : BehaviorSpec({
 
     val memberRepository = mockk<MemberRepository>()
     val passwordEncoder = mockk<PasswordEncoder>()
-    val service = CustomerAuthService(memberRepository, passwordEncoder)
+    val idGenerator = object : IdGenerator {
+        override fun generate() = "member-customer-1"
+    }
+    val service = CustomerAuthService(memberRepository, passwordEncoder, idGenerator)
 
     given("고객 회원가입 시") {
 

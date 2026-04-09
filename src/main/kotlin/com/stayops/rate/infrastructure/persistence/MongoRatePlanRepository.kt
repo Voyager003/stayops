@@ -7,6 +7,7 @@ import jakarta.annotation.PostConstruct
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
 import org.springframework.data.mongodb.repository.MongoRepository
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
 @Repository
@@ -30,7 +31,7 @@ class MongoRatePlanRepository(
         mongo.save(RatePlanDocument.from(ratePlan)).toDomain()
 
     override fun findById(id: String): RatePlan? =
-        mongo.findById(id).orElse(null)?.toDomain()
+        mongo.findByIdOrNull(id)?.toDomain()
 
     override fun findByPropertyIdAndRoomTypeIdAndStatus(
         propertyId: String, roomTypeId: String, status: RatePlanStatus

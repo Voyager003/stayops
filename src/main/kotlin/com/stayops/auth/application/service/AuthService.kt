@@ -4,18 +4,18 @@ import com.stayops.auth.domain.model.Member
 import com.stayops.auth.domain.model.MemberRole
 import com.stayops.auth.domain.repository.MemberRepository
 import com.stayops.auth.domain.model.MemberStatus
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.ConflictException
-import jakarta.servlet.http.HttpSession
 import org.slf4j.LoggerFactory
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
-import java.util.UUID
 
 @Service
 class AuthService(
     private val memberRepository: MemberRepository,
-    private val passwordEncoder: PasswordEncoder
+    private val passwordEncoder: PasswordEncoder,
+    private val idGenerator: IdGenerator
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -26,7 +26,7 @@ class AuthService(
         }
 
         val member = Member.create(
-            id = UUID.randomUUID().toString(),
+            id = idGenerator.generate(),
             email = email,
             passwordHash = passwordEncoder.encode(password)!!,
             name = name,
@@ -53,10 +53,5 @@ class AuthService(
         val saved = memberRepository.save(loggedIn)
         log.info("로그인 성공: memberId={}, email={}", saved.id, email)
         return saved
-    }
-
-    fun logout(session: HttpSession) {
-        log.info("로그아웃 처리")
-        session.invalidate()
     }
 }

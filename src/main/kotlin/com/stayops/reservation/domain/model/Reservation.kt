@@ -17,7 +17,6 @@ data class Reservation private constructor(
     val status: ReservationStatus,
     val channel: BookingChannel,
     val pricing: ReservationPricing,
-    val memo: String?,
     val memberId: String?,
     val expiresAt: Instant?,
     val version: Long,
@@ -71,9 +70,6 @@ data class Reservation private constructor(
         return copy(status = ReservationStatus.NO_SHOW, updatedAt = Instant.now())
     }
 
-    fun updateMemo(memo: String?): Reservation =
-        copy(memo = memo, updatedAt = Instant.now())
-
     companion object {
         fun create(
             id: String,
@@ -104,7 +100,6 @@ data class Reservation private constructor(
                 status = ReservationStatus.PENDING,
                 channel = channel,
                 pricing = pricing,
-                memo = null,
                 memberId = memberId,
                 expiresAt = expiresAt,
                 version = 0L,
@@ -126,7 +121,6 @@ data class Reservation private constructor(
             status: ReservationStatus,
             channel: BookingChannel,
             pricing: ReservationPricing,
-            memo: String?,
             memberId: String? = null,
             expiresAt: Instant? = null,
             version: Long,
@@ -145,7 +139,6 @@ data class Reservation private constructor(
             status = status,
             channel = channel,
             pricing = pricing,
-            memo = memo,
             memberId = memberId,
             expiresAt = expiresAt,
             version = version,

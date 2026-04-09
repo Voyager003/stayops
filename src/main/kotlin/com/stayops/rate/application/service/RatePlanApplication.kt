@@ -7,19 +7,20 @@ import com.stayops.rate.domain.model.RatePlanType
 import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolver
 import com.stayops.shared.domain.DateRange
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.LocalDate
-import java.util.UUID
 
 @Service
 class RatePlanApplication(
-    private val ratePlanRepository: RatePlanRepository
+    private val ratePlanRepository: RatePlanRepository,
+    private val rateResolver: RateResolver,
+    private val idGenerator: IdGenerator
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
-    private val rateResolver = RateResolver()
 
     fun createRatePlan(
         propertyId: String,
@@ -33,7 +34,7 @@ class RatePlanApplication(
         priority: Int
     ): RatePlan {
         val ratePlan = RatePlan.create(
-            id = UUID.randomUUID().toString(),
+            id = idGenerator.generate(),
             propertyId = propertyId,
             roomTypeId = roomTypeId,
             name = name,

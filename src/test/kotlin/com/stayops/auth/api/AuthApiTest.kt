@@ -10,7 +10,6 @@ import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import jakarta.servlet.http.HttpSession
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -117,14 +116,10 @@ class AuthApiTest {
 
         @Test
         fun `로그아웃하면 204를 반환한다`() {
-            every { authService.logout(any<HttpSession>()) } returns Unit
-
             mockMvc.post("/api/v1/auth/logout")
                 .andExpect {
                     status { isNoContent() }
                 }
-
-            verify { authService.logout(any<HttpSession>()) }
         }
     }
 }

@@ -9,20 +9,22 @@ import com.stayops.channel.domain.model.SyncTaskType
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.repository.SyncTaskRepository
 import com.stayops.channel.domain.service.ChannelAdapterProvider
+import com.stayops.shared.domain.IdGenerator
+import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
-import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
-import java.time.Instant
+import java.time.Clock
 import java.time.LocalDate
-import java.util.UUID
 
 @Service
 class ChannelSyncApplication(
     private val channelRepository: ChannelRepository,
     private val syncTaskRepository: SyncTaskRepository,
-    private val adapterProvider: ChannelAdapterProvider
+    private val adapterProvider: ChannelAdapterProvider,
+    private val clock: Clock,
+    private val idGenerator: IdGenerator
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -44,7 +46,7 @@ class ChannelSyncApplication(
 
         otaChannels.forEach { channel ->
             val task = SyncTask.create(
-                id = UUID.randomUUID().toString(),
+                id = idGenerator.generate(),
                 propertyId = propertyId,
                 channelCode = channel.code,
                 type = SyncTaskType.AVAILABILITY_UPDATE,
@@ -56,14 +58,13 @@ class ChannelSyncApplication(
     }
 
     fun processPendingTasks() {
-        val tasks = syncTaskRepository.findPendingTasksReadyForProcessing(Instant.now())
+        val tasks = syncTaskRepository.findPendingTasksReadyForProcessing(clock.instant())
 
         tasks.forEach { task ->
             try {
-            val processing = task.startProcessing()
-            syncTaskRepository.save(processing)
+                val processing = task.startProcessing()
+                syncTaskRepository.save(processing)
 
-            try {
                 val channel = channelRepository.findByPropertyIdAndCode(processing.propertyId, processing.channelCode)
                 if (channel == null || channel.connectionInfo == null) {
                     syncTaskRepository.save(processing.skip("채널 또는 connectionInfo 없음"))
@@ -89,11 +90,7 @@ class ChannelSyncApplication(
                     syncTaskRepository.save(processing.fail(result.errorMessage ?: "Unknown error"))
                     log.warn("ARI push 실패: taskId={}, error={}", processing.id, result.errorMessage)
                 }
-            } catch (e: Exception) {
-                syncTaskRepository.save(processing.fail(e.message ?: "Unexpected error"))
-                log.error("ARI push 예외: taskId={}", processing.id, e)
-            }
-            } catch (e: OptimisticLockingFailureException) {
+            } catch (e: ConflictException) {
                 log.warn("SyncTask version 충돌, 다음 폴링에서 재시도: taskId={}", task.id)
             }
         }
@@ -126,10 +123,8 @@ class ChannelSyncApplication(
                     log.info("즉시 전송 성공: taskId={}, channelCode={}", task.id, task.channelCode)
                 }
                 // 실패 시 PENDING 유지 → 폴링이 재시도
-            } catch (e: OptimisticLockingFailureException) {
+            } catch (e: ConflictException) {
                 log.warn("즉시 전송 version 충돌 (이미 처리됨): taskId={}", task.id)
-            } catch (e: Exception) {
-                log.warn("즉시 전송 실패 (폴링이 재시도 예정): taskId={}, error={}", task.id, e.message)
             }
         }
     }

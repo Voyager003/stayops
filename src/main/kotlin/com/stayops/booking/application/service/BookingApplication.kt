@@ -17,6 +17,7 @@ import com.stayops.reservation.domain.model.*
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.ConflictException
@@ -26,9 +27,8 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
-import java.time.Instant
+import java.time.Clock
 import java.time.LocalDate
-import java.util.UUID
 
 @Service
 class BookingApplication(
@@ -41,7 +41,9 @@ class BookingApplication(
     private val paymentRepository: PaymentRepository,
     private val inventoryApplication: RoomInventoryApplication,
     private val paymentGateway: PaymentGateway,
-    private val rateResolver: RateResolver
+    private val rateResolver: RateResolver,
+    private val clock: Clock,
+    private val idGenerator: IdGenerator
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -85,7 +87,7 @@ class BookingApplication(
         // 3. Channel (DIRECT) 조회 — 없으면 자동 생성 (기존 Property 호환)
         val channel = channelRepository.findByPropertyIdAndCode(propertyId, "DIRECT")
             ?: channelRepository.save(
-                com.stayops.channel.domain.model.Channel.createDirect(UUID.randomUUID().toString(), propertyId)
+                com.stayops.channel.domain.model.Channel.createDirect(idGenerator.generate(), propertyId)
             )
 
         // 4. 요금 계산
@@ -104,7 +106,7 @@ class BookingApplication(
         val guest = guestRepository.findByPropertyIdAndPhone(propertyId, guestPhone)
             ?: guestRepository.save(
                 Guest.create(
-                    id = UUID.randomUUID().toString(),
+                    id = idGenerator.generate(),
                     propertyId = propertyId,
                     name = guestName,
                     phone = guestPhone,
@@ -120,7 +122,7 @@ class BookingApplication(
         )
         val reservation = reservationRepository.save(
             Reservation.create(
-                id = UUID.randomUUID().toString(),
+                id = idGenerator.generate(),
                 propertyId = propertyId,
                 roomTypeId = roomTypeId,
                 guestId = guest.id,
@@ -130,14 +132,14 @@ class BookingApplication(
                 channel = BookingChannel(channelCode = "DIRECT", commissionRate = channel.commissionRate),
                 pricing = pricing,
                 memberId = memberId,
-                expiresAt = Instant.now().plusSeconds(PENDING_TTL_MINUTES * 60)
+                expiresAt = clock.instant().plusSeconds(PENDING_TTL_MINUTES * 60)
             )
         )
 
         // 8. Payment 생성 (PENDING)
         val payment = paymentRepository.save(
             Payment.create(
-                id = UUID.randomUUID().toString(),
+                id = idGenerator.generate(),
                 reservationId = reservation.id,
                 memberId = memberId,
                 amount = pricing.totalAmount
@@ -186,7 +188,7 @@ class BookingApplication(
         }
 
         // 3. 만료 검증 — expiresAt이 지났으면 결제 불가
-        if (reservation.expiresAt != null && Instant.now().isAfter(reservation.expiresAt)) {
+        if (reservation.expiresAt != null && clock.instant().isAfter(reservation.expiresAt)) {
             throw BusinessException("RESERVATION_EXPIRED", "결제 가능 시간이 만료되었습니다")
         }
 
@@ -215,7 +217,7 @@ class BookingApplication(
             val inquiry = paymentGateway.inquire(paymentKey)
             if (inquiry.status == "DONE") {
                 val approvedPayment = paymentRepository.save(
-                    payment.approve(paymentKey = paymentKey, method = "unknown", approvedAt = Instant.now())
+                    payment.approve(paymentKey = paymentKey, method = "unknown", approvedAt = clock.instant())
                 )
                 val confirmedReservation = reservationRepository.save(reservation.confirm())
                 return BookingResult(confirmedReservation, approvedPayment)
@@ -236,7 +238,7 @@ class BookingApplication(
             payment.approve(
                 paymentKey = confirmResult.paymentKey,
                 method = confirmResult.method ?: "unknown",
-                approvedAt = confirmResult.approvedAt ?: Instant.now()
+                approvedAt = confirmResult.approvedAt ?: clock.instant()
             )
         )
 

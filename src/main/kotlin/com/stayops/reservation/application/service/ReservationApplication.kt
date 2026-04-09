@@ -16,14 +16,14 @@ import com.stayops.room.domain.model.RoomStatus
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
-import java.math.BigDecimal
+import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
-import java.util.UUID
 
 @Service
 class ReservationApplication(
@@ -35,11 +35,13 @@ class ReservationApplication(
     private val inventoryApplication: RoomInventoryApplication,
     private val roomRepository: RoomRepository,
     private val eventPublisher: ApplicationEventPublisher,
-    private val rateResolver: RateResolver
+    private val rateResolver: RateResolver,
+    private val idGenerator: IdGenerator
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
 
+    @Transactional
     fun createReservation(
         propertyId: String,
         roomTypeId: String,
@@ -85,7 +87,7 @@ class ReservationApplication(
         )
 
         val reservation = Reservation.create(
-            id = UUID.randomUUID().toString(),
+            id = idGenerator.generate(),
             propertyId = propertyId,
             roomTypeId = roomTypeId,
             guestId = guestId,
@@ -149,6 +151,7 @@ class ReservationApplication(
         return reservationRepository.save(reservation.confirm())
     }
 
+    @Transactional
     fun cancelReservation(propertyId: String, reservationId: String): Reservation {
         val reservation = getReservation(propertyId, reservationId)
         val cancelled = reservation.cancel()
@@ -173,6 +176,7 @@ class ReservationApplication(
         return saved
     }
 
+    @Transactional
     fun checkInReservation(propertyId: String, reservationId: String, roomId: String): Reservation {
         val reservation = getReservation(propertyId, reservationId)
 
@@ -190,6 +194,7 @@ class ReservationApplication(
         return saved
     }
 
+    @Transactional
     fun checkOutReservation(propertyId: String, reservationId: String): Reservation {
         val reservation = getReservation(propertyId, reservationId)
         val checkedOut = reservation.checkOut()

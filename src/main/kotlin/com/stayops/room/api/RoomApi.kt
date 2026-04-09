@@ -2,6 +2,7 @@ package com.stayops.room.api
 
 import com.stayops.room.api.dto.CreateRoomRequest
 import com.stayops.room.api.dto.RoomResponse
+import com.stayops.room.api.dto.RoomStatusAction
 import com.stayops.room.api.dto.UpdateRoomStatusRequest
 import com.stayops.room.application.service.RoomApplication
 import com.stayops.shared.security.PropertyAccessChecker
@@ -72,6 +73,13 @@ class RoomApi(
         @RequestBody @Valid request: UpdateRoomStatusRequest
     ): RoomResponse {
         propertyAccessChecker.requireAccess(pid)
-        return RoomResponse.from(roomApplication.changeStatus(id, request.action))
+        val room = when (request.action) {
+            RoomStatusAction.CHECK_IN -> roomApplication.checkIn(id)
+            RoomStatusAction.CHECK_OUT -> roomApplication.checkOut(id)
+            RoomStatusAction.COMPLETE_CLEANING -> roomApplication.completeCleaning(id)
+            RoomStatusAction.START_MAINTENANCE -> roomApplication.startMaintenance(id)
+            RoomStatusAction.COMPLETE_MAINTENANCE -> roomApplication.completeMaintenance(id)
+        }
+        return RoomResponse.from(room)
     }
 }

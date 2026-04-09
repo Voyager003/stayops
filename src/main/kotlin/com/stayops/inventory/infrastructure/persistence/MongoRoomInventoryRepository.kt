@@ -2,7 +2,9 @@ package com.stayops.inventory.infrastructure.persistence
 
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
+import com.stayops.shared.exception.ConflictException
 import jakarta.annotation.PostConstruct
+import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
 import org.springframework.data.mongodb.repository.MongoRepository
@@ -26,7 +28,14 @@ class MongoRoomInventoryRepository(
     }
 
     override fun save(inventory: RoomInventory): RoomInventory =
-        mongo.save(RoomInventoryDocument.from(inventory)).toDomain()
+        try {
+            mongo.save(RoomInventoryDocument.from(inventory)).toDomain()
+        } catch (e: OptimisticLockingFailureException) {
+            throw ConflictException(
+                code = "INVENTORY_CONFLICT",
+                message = "재고 변경 충돌이 발생했습니다. 다시 시도해주세요."
+            )
+        }
 
     override fun findByPropertyIdAndRoomTypeIdAndDate(
         propertyId: String,

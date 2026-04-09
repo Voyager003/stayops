@@ -3,6 +3,7 @@ package com.stayops.room.infrastructure.persistence
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomTypeRepository
 import org.springframework.data.mongodb.repository.MongoRepository
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
 @Repository
@@ -14,7 +15,7 @@ class MongoRoomTypeRepository(
         mongo.save(RoomTypeDocument.from(roomType)).toDomain()
 
     override fun findById(id: String): RoomType? =
-        mongo.findById(id).orElse(null)?.toDomain()
+        mongo.findByIdOrNull(id)?.toDomain()
 
     override fun findByPropertyId(propertyId: String): List<RoomType> =
         mongo.findByPropertyId(propertyId).map { it.toDomain() }

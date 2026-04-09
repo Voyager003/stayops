@@ -19,6 +19,7 @@ import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
@@ -41,6 +42,9 @@ class ReservationApplicationTest : BehaviorSpec({
     val roomRepository = mockk<RoomRepository>()
     val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
     val rateResolver = RateResolver()
+    val idGenerator = object : IdGenerator {
+        override fun generate(): String = "test-id"
+    }
 
     val sut = ReservationApplication(
         reservationRepository = reservationRepository,
@@ -51,7 +55,8 @@ class ReservationApplicationTest : BehaviorSpec({
         inventoryApplication = inventoryApplication,
         roomRepository = roomRepository,
         eventPublisher = eventPublisher,
-        rateResolver = rateResolver
+        rateResolver = rateResolver,
+        idGenerator = idGenerator
     )
 
     val checkIn = LocalDate.of(2026, 4, 1)

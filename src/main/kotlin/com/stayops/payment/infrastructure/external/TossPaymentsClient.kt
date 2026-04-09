@@ -4,6 +4,7 @@ import com.stayops.payment.domain.service.PaymentCancelResult
 import com.stayops.payment.domain.service.PaymentConfirmResult
 import com.stayops.payment.domain.service.PaymentGateway
 import com.stayops.payment.domain.service.PaymentInquiryResult
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
 import java.math.BigDecimal
@@ -11,7 +12,7 @@ import java.time.OffsetDateTime
 
 @Component
 class TossPaymentsClient(
-    private val restClient: RestClient
+    @Qualifier("tossRestClient") private val restClient: RestClient
 ) : PaymentGateway {
 
     override fun confirm(paymentKey: String, orderId: String, amount: BigDecimal): PaymentConfirmResult {

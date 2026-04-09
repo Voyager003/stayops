@@ -16,14 +16,13 @@ import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationPricing
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.shared.domain.DateRange
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.BusinessException
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
-import org.springframework.dao.DuplicateKeyException
 import org.springframework.stereotype.Service
 import java.time.LocalDate
-import java.util.UUID
 
 @Service
 class WebhookApplication(
@@ -36,7 +35,8 @@ class WebhookApplication(
     private val roomInventoryApplication: RoomInventoryApplication,
     private val guestRepository: GuestRepository,
     private val eventPublisher: ApplicationEventPublisher,
-    private val roomTypeRepository: com.stayops.room.domain.repository.RoomTypeRepository
+    private val roomTypeRepository: com.stayops.room.domain.repository.RoomTypeRepository,
+    private val idGenerator: IdGenerator
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -57,16 +57,15 @@ class WebhookApplication(
             throw BusinessException(code = "INVALID_SIGNATURE", message = "Webhook 서명이 유효하지 않습니다")
         }
 
-        try {
-            processedEventRepository.save(
-                ProcessedWebhookEvent(
-                    id = UUID.randomUUID().toString(),
-                    eventId = eventId,
-                    channelCode = channelCode,
-                    propertyId = propertyId
-                )
+        val saved = processedEventRepository.saveIfAbsent(
+            ProcessedWebhookEvent(
+                id = idGenerator.generate(),
+                eventId = eventId,
+                channelCode = channelCode,
+                propertyId = propertyId
             )
-        } catch (e: DuplicateKeyException) {
+        )
+        if (!saved) {
             log.info("중복 이벤트 (동시 요청): eventId={}", eventId)
             return
         }
@@ -76,8 +75,16 @@ class WebhookApplication(
         when (eventType) {
             "BOOKING" -> handleBookingEvent(propertyId, channelCode, channel.commissionRate, mapping, payload)
             "CANCELLATION" -> {
-                log.info("OTA 취소 수신: channelCode={}, bookingId={}", channelCode, payload["bookingId"])
-                // Phase 8에서 취소 로직 추가 예정
+                // TODO(미구현): OTA 취소 이벤트 수신 시 externalReservationId로 예약을 조회해
+                //   Reservation.cancel() + 재고 복원 + 도메인 이벤트 발행을 수행해야 한다.
+                //   현재는 로그만 남겨 운영 환경에서 OTA 취소가 **무시된다**. 결과적으로
+                //   고객이 OTA에서 취소해도 PMS 예약은 CONFIRMED 상태로 남아 "유령 예약"과
+                //   잘못된 재고 점유가 발생한다.
+                //   우선순위: High. 해결 전까지 OTA 채널 운영 시 수동 취소 필요.
+                log.warn(
+                    "OTA 취소 수신 — 미구현으로 무시됨: channelCode={}, bookingId={}",
+                    channelCode, payload["bookingId"]
+                )
             }
             else -> {
                 log.warn("알 수 없는 이벤트 타입: {}", eventType)
@@ -125,7 +132,7 @@ class WebhookApplication(
         val guest = guestRepository.findByPropertyIdAndPhone(propertyId, "OTA-$bookingId")
             ?: guestRepository.save(
                 Guest.create(
-                    id = UUID.randomUUID().toString(),
+                    id = idGenerator.generate(),
                     propertyId = propertyId,
                     name = guestName,
                     phone = "OTA-$bookingId"
@@ -147,7 +154,7 @@ class WebhookApplication(
             commissionRate = commissionRate
         )
         val reservation = Reservation.create(
-            id = UUID.randomUUID().toString(),
+            id = idGenerator.generate(),
             propertyId = propertyId,
             roomTypeId = roomTypeId,
             guestId = guest.id,

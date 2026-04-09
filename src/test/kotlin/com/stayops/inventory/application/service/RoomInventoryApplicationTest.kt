@@ -1,8 +1,8 @@
 package com.stayops.inventory.application.service
 
 import com.stayops.inventory.domain.model.RoomInventory
+import com.stayops.inventory.domain.repository.RoomInventoryCache
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
-import com.stayops.inventory.infrastructure.cache.RedisRoomInventoryCache
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.shared.exception.ConflictException
@@ -18,17 +18,25 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import com.stayops.channel.application.service.ChannelSyncApplication
-import org.springframework.dao.OptimisticLockingFailureException
+import com.stayops.shared.domain.IdGenerator
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 class RoomInventoryApplicationTest : BehaviorSpec({
 
     val inventoryRepository = mockk<RoomInventoryRepository>()
-    val cache = mockk<RedisRoomInventoryCache>()
+    val cache = mockk<RoomInventoryCache>()
     val roomRepository = mockk<RoomRepository>()
     val channelSyncApplication = mockk<ChannelSyncApplication>(relaxed = true)
-    val inventoryApplication = RoomInventoryApplication(inventoryRepository, cache, roomRepository, channelSyncApplication)
+    val fixedClock = Clock.fixed(Instant.parse("2026-03-12T00:00:00Z"), ZoneId.of("Asia/Seoul"))
+    val idGenerator = object : IdGenerator {
+        override fun generate() = "inv-new"
+    }
+    val inventoryApplication = RoomInventoryApplication(
+        inventoryRepository, cache, roomRepository, channelSyncApplication, fixedClock, idGenerator
+    )
 
     val today = LocalDate.of(2026, 3, 12)
 
@@ -150,12 +158,13 @@ class RoomInventoryApplicationTest : BehaviorSpec({
             }
         }
 
-        `when`("낙관적 락 충돌이 발생하면") {
+        `when`("Repository가 ConflictException을 던지면") {
             val inventory = newInventory(totalCount = 5)
             every { cache.get("prop-1", "rt-1", today) } returns inventory
-            every { inventoryRepository.save(any()) } throws OptimisticLockingFailureException("conflict")
+            every { inventoryRepository.save(any()) } throws
+                ConflictException("INVENTORY_CONFLICT", "재고 변경 충돌이 발생했습니다.")
 
-            then("ConflictException으로 변환된다") {
+            then("그대로 전파된다") {
                 shouldThrow<ConflictException> {
                     inventoryApplication.blockInventory("prop-1", "rt-1", today, 1)
                 }

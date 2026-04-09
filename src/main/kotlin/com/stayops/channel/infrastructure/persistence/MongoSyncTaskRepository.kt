@@ -3,14 +3,17 @@ package com.stayops.channel.infrastructure.persistence
 import com.stayops.channel.domain.model.SyncTask
 import com.stayops.channel.domain.model.SyncTaskStatus
 import com.stayops.channel.domain.repository.SyncTaskRepository
+import com.stayops.shared.exception.ConflictException
 import jakarta.annotation.PostConstruct
 import org.bson.Document
+import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.aggregation.Aggregation
 import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.data.mongodb.repository.MongoRepository
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 import java.time.Instant
 
@@ -33,10 +36,17 @@ class MongoSyncTaskRepository(
     }
 
     override fun save(task: SyncTask): SyncTask =
-        mongo.save(SyncTaskDocument.from(task)).toDomain()
+        try {
+            mongo.save(SyncTaskDocument.from(task)).toDomain()
+        } catch (e: OptimisticLockingFailureException) {
+            throw ConflictException(
+                code = "SYNC_TASK_CONFLICT",
+                message = "SyncTask 버전 충돌이 발생했습니다: ${task.id}"
+            )
+        }
 
     override fun findById(id: String): SyncTask? =
-        mongo.findById(id).orElse(null)?.toDomain()
+        mongo.findByIdOrNull(id)?.toDomain()
 
     override fun findPendingTasksReadyForProcessing(now: Instant): List<SyncTask> {
         val query = Query(
