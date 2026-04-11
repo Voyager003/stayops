@@ -17,7 +17,7 @@ import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
-import com.stayops.rate.domain.service.RateResolver
+import com.stayops.rate.domain.service.RateResolverService
 import com.stayops.reservation.domain.model.*
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.model.RoomType
@@ -51,7 +51,7 @@ class BookingApplicationTest : BehaviorSpec({
     val paymentRepository = mockk<PaymentRepository>()
     val inventoryApplication = mockk<RoomInventoryApplication>()
     val paymentGateway = mockk<PaymentGateway>()
-    val rateResolver = RateResolver()
+    val rateResolverService = RateResolverService()
     val fixedInstant = Instant.parse("2026-04-08T10:00:00Z")
     val clock = Clock.fixed(fixedInstant, ZoneId.of("Asia/Seoul"))
     val idGenerator = object : IdGenerator {
@@ -68,7 +68,7 @@ class BookingApplicationTest : BehaviorSpec({
         paymentRepository = paymentRepository,
         inventoryApplication = inventoryApplication,
         paymentGateway = paymentGateway,
-        rateResolver = rateResolver,
+        rateResolverService = rateResolverService,
         clock = clock,
         idGenerator = idGenerator
     )

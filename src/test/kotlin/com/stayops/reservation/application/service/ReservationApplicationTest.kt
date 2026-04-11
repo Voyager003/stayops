@@ -8,7 +8,7 @@ import com.stayops.inventory.application.service.RoomInventoryApplication
 import com.stayops.rate.domain.model.RatePlan
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
-import com.stayops.rate.domain.service.RateResolver
+import com.stayops.rate.domain.service.RateResolverService
 import com.stayops.reservation.domain.model.DateType
 import com.stayops.reservation.domain.model.ReservationSearchCriteria
 import com.stayops.reservation.domain.model.ReservationStatus
@@ -41,7 +41,7 @@ class ReservationApplicationTest : BehaviorSpec({
     val inventoryApplication = mockk<RoomInventoryApplication>()
     val roomRepository = mockk<RoomRepository>()
     val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
-    val rateResolver = RateResolver()
+    val rateResolverService = RateResolverService()
     val idGenerator = object : IdGenerator {
         override fun generate(): String = "test-id"
     }
@@ -55,7 +55,7 @@ class ReservationApplicationTest : BehaviorSpec({
         inventoryApplication = inventoryApplication,
         roomRepository = roomRepository,
         eventPublisher = eventPublisher,
-        rateResolver = rateResolver,
+        rateResolverService = rateResolverService,
         idGenerator = idGenerator
     )
 

@@ -15,14 +15,14 @@ import io.mockk.mockk
 import io.mockk.slot
 import org.springframework.security.crypto.password.PasswordEncoder
 
-class CustomerAuthServiceTest : BehaviorSpec({
+class CustomerAuthApplicationTest : BehaviorSpec({
 
     val memberRepository = mockk<MemberRepository>()
     val passwordEncoder = mockk<PasswordEncoder>()
     val idGenerator = object : IdGenerator {
         override fun generate() = "member-customer-1"
     }
-    val service = CustomerAuthService(memberRepository, passwordEncoder, idGenerator)
+    val service = CustomerAuthApplication(memberRepository, passwordEncoder, idGenerator)
 
     given("고객 회원가입 시") {
 

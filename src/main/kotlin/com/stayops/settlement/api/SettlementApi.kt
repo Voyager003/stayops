@@ -6,7 +6,7 @@ import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.settlement.api.dto.DailySettlementResponse
 import com.stayops.settlement.api.dto.MonthlySettlementResponse
 import com.stayops.settlement.api.dto.SettlementResponse
-import com.stayops.settlement.application.service.SettlementQueryService
+import com.stayops.settlement.application.service.SettlementQueryApplication
 import com.stayops.shared.security.PropertyAccessChecker
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.context.SecurityContextHolder
@@ -16,7 +16,7 @@ import java.time.YearMonth
 
 @RestController
 class SettlementApi(
-    private val settlementQueryService: SettlementQueryService,
+    private val settlementQueryApplication: SettlementQueryApplication,
     private val propertyAccessChecker: PropertyAccessChecker,
     private val propertyRepository: PropertyRepository
 ) {
@@ -31,7 +31,7 @@ class SettlementApi(
     ): ResponseEntity<SettlementResponse> {
         propertyAccessChecker.requireAccess(propertyId)
         val (resolvedStart, resolvedEnd) = resolveDateRange(year, month, startDate, endDate)
-        val summary = settlementQueryService.getSettlementSummary(propertyId, resolvedStart, resolvedEnd)
+        val summary = settlementQueryApplication.getSettlementSummary(propertyId, resolvedStart, resolvedEnd)
         return ResponseEntity.ok(SettlementResponse.from(summary))
     }
 
@@ -42,7 +42,7 @@ class SettlementApi(
         @RequestParam endDate: LocalDate
     ): ResponseEntity<List<DailySettlementResponse>> {
         propertyAccessChecker.requireAccess(propertyId)
-        val trend = settlementQueryService.getDailyTrend(propertyId, startDate, endDate)
+        val trend = settlementQueryApplication.getDailyTrend(propertyId, startDate, endDate)
         return ResponseEntity.ok(trend.map { DailySettlementResponse.from(it) })
     }
 
@@ -52,7 +52,7 @@ class SettlementApi(
         @RequestParam year: Int
     ): ResponseEntity<List<MonthlySettlementResponse>> {
         propertyAccessChecker.requireAccess(propertyId)
-        val trend = settlementQueryService.getMonthlyTrend(propertyId, year)
+        val trend = settlementQueryApplication.getMonthlyTrend(propertyId, year)
         return ResponseEntity.ok(trend.map { MonthlySettlementResponse.from(it) })
     }
 
@@ -71,7 +71,7 @@ class SettlementApi(
         }
 
         val (resolvedStart, resolvedEnd) = resolveDateRange(year, month, startDate, endDate)
-        val summary = settlementQueryService.getSettlementSummaryByPropertyIds(propertyIds, resolvedStart, resolvedEnd)
+        val summary = settlementQueryApplication.getSettlementSummaryByPropertyIds(propertyIds, resolvedStart, resolvedEnd)
         return ResponseEntity.ok(SettlementResponse.from(summary))
     }
 

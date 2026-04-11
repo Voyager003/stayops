@@ -14,14 +14,14 @@ import io.kotest.matchers.shouldNotBe
 import io.mockk.*
 import org.springframework.security.crypto.password.PasswordEncoder
 
-class AuthServiceTest : BehaviorSpec({
+class AuthApplicationTest : BehaviorSpec({
 
     val memberRepository = mockk<MemberRepository>()
     val passwordEncoder = mockk<PasswordEncoder>()
     val idGenerator = object : IdGenerator {
         override fun generate() = "member-1"
     }
-    val sut = AuthService(memberRepository, passwordEncoder, idGenerator)
+    val sut = AuthApplication(memberRepository, passwordEncoder, idGenerator)
 
     given("회원가입 시") {
 

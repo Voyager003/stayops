@@ -10,10 +10,10 @@ import io.mockk.every
 import io.mockk.mockk
 import java.time.LocalDate
 
-class SettlementQueryServiceTest : BehaviorSpec({
+class SettlementQueryApplicationTest : BehaviorSpec({
 
     val repository = mockk<SettlementQueryRepository>()
-    val sut = SettlementQueryService(repository)
+    val sut = SettlementQueryApplication(repository)
 
     val startDate = LocalDate.of(2026, 4, 1)
     val endDate = LocalDate.of(2026, 4, 30)

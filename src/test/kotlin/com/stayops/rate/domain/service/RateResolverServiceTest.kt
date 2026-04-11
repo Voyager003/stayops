@@ -10,9 +10,9 @@ import io.kotest.matchers.shouldBe
 import java.time.DayOfWeek
 import java.time.LocalDate
 
-class RateResolverTest : BehaviorSpec({
+class RateResolverServiceTest : BehaviorSpec({
 
-    val resolver = RateResolver()
+    val resolver = RateResolverService()
     val basePrice = Money.of(100_000)
 
     fun ratePlan(

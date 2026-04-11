@@ -1,9 +1,9 @@
-package com.stayops.auth.application.service
+package com.stayops.booking.application.service
 
 import com.stayops.auth.domain.model.Member
 import com.stayops.auth.domain.model.MemberRole
-import com.stayops.auth.domain.repository.MemberRepository
 import com.stayops.auth.domain.model.MemberStatus
+import com.stayops.auth.domain.repository.MemberRepository
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.ConflictException
@@ -12,7 +12,7 @@ import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 
 @Service
-class AuthService(
+class CustomerAuthApplication(
     private val memberRepository: MemberRepository,
     private val passwordEncoder: PasswordEncoder,
     private val idGenerator: IdGenerator
@@ -30,11 +30,11 @@ class AuthService(
             email = email,
             passwordHash = passwordEncoder.encode(password)!!,
             name = name,
-            role = MemberRole.OWNER
+            role = MemberRole.CUSTOMER
         )
 
         val saved = memberRepository.save(member)
-        log.info("회원가입 완료: memberId={}, email={}, role=OWNER", saved.id, email)
+        log.info("고객 회원가입 완료: memberId={}, email={}", saved.id, email)
         return saved
     }
 
@@ -45,13 +45,17 @@ class AuthService(
             throw BusinessException("INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다.")
         }
 
+        if (member.role != MemberRole.CUSTOMER) {
+            throw BusinessException("INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다.")
+        }
+
         if (member.status != MemberStatus.ACTIVE) {
             throw BusinessException("INACTIVE_MEMBER", "비활성화된 회원입니다.")
         }
 
         val loggedIn = member.recordLogin()
         val saved = memberRepository.save(loggedIn)
-        log.info("로그인 성공: memberId={}, email={}", saved.id, email)
+        log.info("고객 로그인 성공: memberId={}, email={}", saved.id, email)
         return saved
     }
 }

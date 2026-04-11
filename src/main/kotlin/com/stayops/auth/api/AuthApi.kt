@@ -3,7 +3,7 @@ package com.stayops.auth.api
 import com.stayops.auth.api.dto.AuthResponse
 import com.stayops.auth.api.dto.LoginRequest
 import com.stayops.auth.api.dto.SignupRequest
-import com.stayops.auth.application.service.AuthService
+import com.stayops.auth.application.service.AuthApplication
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import jakarta.servlet.http.HttpSession
@@ -18,14 +18,14 @@ import org.springframework.web.bind.annotation.*
 @RestController
 @RequestMapping("/api/v1/auth")
 class AuthApi(
-    private val authService: AuthService
+    private val authApplication: AuthApplication
 ) {
 
     private val securityContextRepository = HttpSessionSecurityContextRepository()
 
     @PostMapping("/signup")
     fun signup(@Valid @RequestBody request: SignupRequest): ResponseEntity<AuthResponse> {
-        val member = authService.signup(
+        val member = authApplication.signup(
             email = request.email,
             password = request.password,
             name = request.name
@@ -39,7 +39,7 @@ class AuthApi(
         httpRequest: HttpServletRequest,
         httpResponse: HttpServletResponse
     ): ResponseEntity<AuthResponse> {
-        val member = authService.login(request.email, request.password)
+        val member = authApplication.login(request.email, request.password)
 
         val authentication = UsernamePasswordAuthenticationToken(member, null, emptyList())
         val context = SecurityContextHolder.createEmptyContext()

@@ -3,7 +3,7 @@ package com.stayops.booking.api
 import com.stayops.auth.api.dto.AuthResponse
 import com.stayops.booking.api.dto.CustomerLoginRequest
 import com.stayops.booking.api.dto.CustomerSignupRequest
-import com.stayops.booking.application.service.CustomerAuthService
+import com.stayops.booking.application.service.CustomerAuthApplication
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import jakarta.servlet.http.HttpSession
@@ -18,14 +18,14 @@ import org.springframework.web.bind.annotation.*
 @RestController
 @RequestMapping("/api/v1/booking/auth")
 class BookingAuthApi(
-    private val customerAuthService: CustomerAuthService
+    private val customerAuthApplication: CustomerAuthApplication
 ) {
 
     private val securityContextRepository = HttpSessionSecurityContextRepository()
 
     @PostMapping("/signup")
     fun signup(@Valid @RequestBody request: CustomerSignupRequest): ResponseEntity<AuthResponse> {
-        val member = customerAuthService.signup(
+        val member = customerAuthApplication.signup(
             email = request.email,
             password = request.password,
             name = request.name
@@ -39,7 +39,7 @@ class BookingAuthApi(
         httpRequest: HttpServletRequest,
         httpResponse: HttpServletResponse
     ): ResponseEntity<AuthResponse> {
-        val member = customerAuthService.login(request.email, request.password)
+        val member = customerAuthApplication.login(request.email, request.password)
 
         val authentication = UsernamePasswordAuthenticationToken(member, null, emptyList())
         val context = SecurityContextHolder.createEmptyContext()

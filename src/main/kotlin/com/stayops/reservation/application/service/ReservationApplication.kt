@@ -5,7 +5,7 @@ import com.stayops.guest.domain.repository.GuestRepository
 import com.stayops.inventory.application.service.RoomInventoryApplication
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
-import com.stayops.rate.domain.service.RateResolver
+import com.stayops.rate.domain.service.RateResolverService
 import com.stayops.reservation.domain.event.ReservationCancelled
 import com.stayops.reservation.domain.event.ReservationCheckedOut
 import com.stayops.reservation.domain.event.ReservationCreated
@@ -35,7 +35,7 @@ class ReservationApplication(
     private val inventoryApplication: RoomInventoryApplication,
     private val roomRepository: RoomRepository,
     private val eventPublisher: ApplicationEventPublisher,
-    private val rateResolver: RateResolver,
+    private val rateResolverService: RateResolverService,
     private val idGenerator: IdGenerator
 ) {
 
@@ -63,12 +63,12 @@ class ReservationApplication(
         val channel = channelRepository.findByPropertyIdAndCode(propertyId, channelCode)
             ?: throw NotFoundException("CHANNEL_NOT_FOUND", "채널을 찾을 수 없습니다: $channelCode")
 
-        // 3. RateResolver로 날짜별 요금 산출
+        // 3. RateResolverService로 날짜별 요금 산출
         val dateRange = DateRange.of(checkIn, checkOut)
         val ratePlans = ratePlanRepository.findByPropertyIdAndRoomTypeIdAndStatus(
             propertyId, roomTypeId, RatePlanStatus.ACTIVE
         )
-        val roomRate = rateResolver.resolveForDateRange(ratePlans, roomType.basePrice, dateRange, channelCode)
+        val roomRate = rateResolverService.resolveForDateRange(ratePlans, roomType.basePrice, dateRange, channelCode)
 
         // 4. 날짜별 재고 차감
         dateRange.allDates().forEach { date ->

@@ -12,7 +12,7 @@ import com.stayops.payment.domain.service.PaymentGatewayException
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
-import com.stayops.rate.domain.service.RateResolver
+import com.stayops.rate.domain.service.RateResolverService
 import com.stayops.reservation.domain.model.*
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
@@ -41,7 +41,7 @@ class BookingApplication(
     private val paymentRepository: PaymentRepository,
     private val inventoryApplication: RoomInventoryApplication,
     private val paymentGateway: PaymentGateway,
-    private val rateResolver: RateResolver,
+    private val rateResolverService: RateResolverService,
     private val clock: Clock,
     private val idGenerator: IdGenerator
 ) {
@@ -95,7 +95,7 @@ class BookingApplication(
         val ratePlans = ratePlanRepository.findByPropertyIdAndRoomTypeIdAndStatus(
             propertyId, roomTypeId, RatePlanStatus.ACTIVE
         )
-        val roomRate = rateResolver.resolveForDateRange(ratePlans, roomType.basePrice, dateRange, "DIRECT")
+        val roomRate = rateResolverService.resolveForDateRange(ratePlans, roomType.basePrice, dateRange, "DIRECT")
 
         // 5. 재고 차감
         dateRange.allDates().forEach { date ->

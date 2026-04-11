@@ -5,7 +5,7 @@ import com.stayops.rate.domain.model.RatePlan
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.model.RatePlanType
 import com.stayops.rate.domain.repository.RatePlanRepository
-import com.stayops.rate.domain.service.RateResolver
+import com.stayops.rate.domain.service.RateResolverService
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
@@ -17,7 +17,7 @@ import java.time.LocalDate
 @Service
 class RatePlanApplication(
     private val ratePlanRepository: RatePlanRepository,
-    private val rateResolver: RateResolver,
+    private val rateResolverService: RateResolverService,
     private val idGenerator: IdGenerator
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -111,7 +111,7 @@ class RatePlanApplication(
         return dateRange.allDates().map { date ->
             DailyRate(
                 date = date,
-                price = rateResolver.resolve(ratePlans, basePrice, date, channelCode)
+                price = rateResolverService.resolve(ratePlans, basePrice, date, channelCode)
             )
         }
     }

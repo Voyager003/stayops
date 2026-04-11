@@ -3,7 +3,7 @@ package com.stayops.settlement.api
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.settlement.application.dto.ChannelSettlement
 import com.stayops.settlement.application.dto.SettlementSummary
-import com.stayops.settlement.application.service.SettlementQueryService
+import com.stayops.settlement.application.service.SettlementQueryApplication
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.GlobalExceptionHandler
 import com.stayops.shared.security.PropertyAccessChecker
@@ -18,11 +18,11 @@ import java.time.LocalDate
 
 class SettlementApiTest {
 
-    private val settlementQueryService = mockk<SettlementQueryService>()
+    private val settlementQueryApplication = mockk<SettlementQueryApplication>()
     private val propertyAccessChecker = mockk<PropertyAccessChecker>(relaxed = true)
     private val propertyRepository = mockk<PropertyRepository>()
     private val mockMvc: MockMvc = MockMvcBuilders
-        .standaloneSetup(SettlementApi(settlementQueryService, propertyAccessChecker, propertyRepository))
+        .standaloneSetup(SettlementApi(settlementQueryApplication, propertyAccessChecker, propertyRepository))
         .setControllerAdvice(GlobalExceptionHandler())
         .build()
 
@@ -47,7 +47,7 @@ class SettlementApiTest {
                     ChannelSettlement("AGODA", 1, Money.won(200_000), Money.won(30_000), Money.won(170_000))
                 )
             )
-            every { settlementQueryService.getSettlementSummary("prop-1", startDate, endDate) } returns summary
+            every { settlementQueryApplication.getSettlementSummary("prop-1", startDate, endDate) } returns summary
 
             mockMvc.get("/api/v1/properties/prop-1/settlements") {
                 param("startDate", "2026-04-01")
@@ -74,7 +74,7 @@ class SettlementApiTest {
                 documentCount = 0,
                 byChannel = emptyList()
             )
-            every { settlementQueryService.getSettlementSummary("prop-1", startDate, endDate) } returns emptySummary
+            every { settlementQueryApplication.getSettlementSummary("prop-1", startDate, endDate) } returns emptySummary
 
             mockMvc.get("/api/v1/properties/prop-1/settlements") {
                 param("startDate", "2026-04-01")

@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service
 import java.time.LocalDate
 
 @Service
-class SettlementQueryService(
+class SettlementQueryApplication(
     private val settlementQueryRepository: SettlementQueryRepository
 ) {
 

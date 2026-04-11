@@ -1,6 +1,6 @@
 package com.stayops.auth.api
 
-import com.stayops.auth.application.service.AuthService
+import com.stayops.auth.application.service.AuthApplication
 import com.stayops.auth.domain.model.Member
 import com.stayops.auth.domain.model.MemberRole
 import com.stayops.shared.exception.BusinessException
@@ -20,9 +20,9 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 
 class AuthApiTest {
 
-    private val authService = mockk<AuthService>()
+    private val authApplication = mockk<AuthApplication>()
     private val mockMvc: MockMvc = MockMvcBuilders
-        .standaloneSetup(AuthApi(authService))
+        .standaloneSetup(AuthApi(authApplication))
         .setControllerAdvice(GlobalExceptionHandler())
         .build()
 
@@ -44,7 +44,7 @@ class AuthApiTest {
 
         @Test
         fun `유효한 요청이면 201을 반환한다`() {
-            every { authService.signup("new@stayops.com", "password123", "홍길동") } returns sampleMember()
+            every { authApplication.signup("new@stayops.com", "password123", "홍길동") } returns sampleMember()
 
             mockMvc.post("/api/v1/auth/signup") {
                 contentType = MediaType.APPLICATION_JSON
@@ -58,7 +58,7 @@ class AuthApiTest {
 
         @Test
         fun `중복 이메일이면 409를 반환한다`() {
-            every { authService.signup(any(), any(), any()) } throws
+            every { authApplication.signup(any(), any(), any()) } throws
                 ConflictException("DUPLICATE_EMAIL", "이미 사용 중인 이메일입니다")
 
             mockMvc.post("/api/v1/auth/signup") {
@@ -85,7 +85,7 @@ class AuthApiTest {
 
         @Test
         fun `유효한 자격증명이면 200을 반환한다`() {
-            every { authService.login("test@stayops.com", "password123") } returns sampleMember()
+            every { authApplication.login("test@stayops.com", "password123") } returns sampleMember()
 
             mockMvc.post("/api/v1/auth/login") {
                 contentType = MediaType.APPLICATION_JSON
@@ -99,7 +99,7 @@ class AuthApiTest {
 
         @Test
         fun `잘못된 자격증명이면 400을 반환한다`() {
-            every { authService.login(any(), any()) } throws
+            every { authApplication.login(any(), any()) } throws
                 BusinessException("INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다.")
 
             mockMvc.post("/api/v1/auth/login") {

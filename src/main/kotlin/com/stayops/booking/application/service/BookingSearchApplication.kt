@@ -6,7 +6,7 @@ import com.stayops.property.domain.model.Property
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
-import com.stayops.rate.domain.service.RateResolver
+import com.stayops.rate.domain.service.RateResolverService
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
@@ -30,7 +30,7 @@ class BookingSearchApplication(
     private val roomTypeRepository: RoomTypeRepository,
     private val inventoryRepository: RoomInventoryRepository,
     private val ratePlanRepository: RatePlanRepository,
-    private val rateResolver: RateResolver
+    private val rateResolverService: RateResolverService
 ) {
 
     fun searchProperties(): List<Property> {
@@ -77,7 +77,7 @@ class BookingSearchApplication(
                 roomType = roomType,
                 availableCount = availableCount,
                 fitsGuests = roomType.maxOccupancy >= guests,
-                rateQuote = rateResolver.resolveForDateRange(ratePlans, roomType.basePrice, dateRange, "DIRECT"),
+                rateQuote = rateResolverService.resolveForDateRange(ratePlans, roomType.basePrice, dateRange, "DIRECT"),
                 checkIn = checkIn,
                 checkOut = checkOut
             )
@@ -111,6 +111,6 @@ class BookingSearchApplication(
             propertyId, roomTypeId, RatePlanStatus.ACTIVE
         )
 
-        return rateResolver.resolveForDateRange(ratePlans, roomType.basePrice, dateRange, "DIRECT")
+        return rateResolverService.resolveForDateRange(ratePlans, roomType.basePrice, dateRange, "DIRECT")
     }
 }

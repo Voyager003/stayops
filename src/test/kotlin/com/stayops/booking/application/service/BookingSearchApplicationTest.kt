@@ -6,7 +6,7 @@ import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
-import com.stayops.rate.domain.service.RateResolver
+import com.stayops.rate.domain.service.RateResolverService
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
@@ -27,14 +27,14 @@ class BookingSearchApplicationTest : BehaviorSpec({
     val roomTypeRepository = mockk<RoomTypeRepository>()
     val inventoryRepository = mockk<RoomInventoryRepository>()
     val ratePlanRepository = mockk<RatePlanRepository>()
-    val rateResolver = RateResolver()
+    val rateResolverService = RateResolverService()
 
     val service = BookingSearchApplication(
         propertyRepository = propertyRepository,
         roomTypeRepository = roomTypeRepository,
         inventoryRepository = inventoryRepository,
         ratePlanRepository = ratePlanRepository,
-        rateResolver = rateResolver
+        rateResolverService = rateResolverService
     )
 
     fun activeProperty(id: String = "prop-1") = Property.create(

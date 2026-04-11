@@ -5,7 +5,7 @@ import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
 import java.time.LocalDate
 
-class RateResolver {
+class RateResolverService {
 
     fun resolve(
         ratePlans: List<RatePlan>,
