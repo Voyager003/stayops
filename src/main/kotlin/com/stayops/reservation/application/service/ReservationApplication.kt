@@ -2,7 +2,7 @@ package com.stayops.reservation.application.service
 
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.guest.domain.repository.GuestRepository
-import com.stayops.inventory.application.service.RoomInventoryApplication
+import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolverService
@@ -32,7 +32,7 @@ class ReservationApplication(
     private val channelRepository: ChannelRepository,
     private val ratePlanRepository: RatePlanRepository,
     private val guestRepository: GuestRepository,
-    private val inventoryApplication: RoomInventoryApplication,
+    private val inventoryReservationPort: InventoryReservationPort,
     private val roomRepository: RoomRepository,
     private val eventPublisher: ApplicationEventPublisher,
     private val rateResolverService: RateResolverService,
@@ -72,7 +72,7 @@ class ReservationApplication(
 
         // 4. 날짜별 재고 차감
         dateRange.allDates().forEach { date ->
-            inventoryApplication.reserve(propertyId, roomTypeId, date)
+            inventoryReservationPort.reserve(propertyId, roomTypeId, date)
         }
 
         // 5. Guest 조회
@@ -159,7 +159,7 @@ class ReservationApplication(
 
         // 재고 복원
         reservation.dateRange.allDates().forEach { date ->
-            inventoryApplication.release(reservation.propertyId, reservation.roomTypeId, date)
+            inventoryReservationPort.release(reservation.propertyId, reservation.roomTypeId, date)
         }
 
         // 이벤트 발행

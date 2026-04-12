@@ -3,7 +3,7 @@ package com.stayops.booking.application.service
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
-import com.stayops.inventory.application.service.RoomInventoryApplication
+import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.payment.domain.model.Payment
 import com.stayops.payment.domain.repository.PaymentRepository
 import com.stayops.payment.domain.service.PaymentConfirmResult
@@ -39,7 +39,7 @@ class BookingApplication(
     private val ratePlanRepository: RatePlanRepository,
     private val reservationRepository: ReservationRepository,
     private val paymentRepository: PaymentRepository,
-    private val inventoryApplication: RoomInventoryApplication,
+    private val inventoryReservationPort: InventoryReservationPort,
     private val paymentGateway: PaymentGateway,
     private val rateResolverService: RateResolverService,
     private val clock: Clock,
@@ -99,7 +99,7 @@ class BookingApplication(
 
         // 5. 재고 차감
         dateRange.allDates().forEach { date ->
-            inventoryApplication.reserve(propertyId, roomTypeId, date)
+            inventoryReservationPort.reserve(propertyId, roomTypeId, date)
         }
 
         // 6. Guest 조회/생성
@@ -284,7 +284,7 @@ class BookingApplication(
 
         // 4. 재고 복원
         reservation.dateRange.allDates().forEach { date ->
-            inventoryApplication.release(reservation.propertyId, reservation.roomTypeId, date)
+            inventoryReservationPort.release(reservation.propertyId, reservation.roomTypeId, date)
         }
 
         log.info("예약 취소: reservationId={}, 이전상태={}", reservationId, reservation.status)

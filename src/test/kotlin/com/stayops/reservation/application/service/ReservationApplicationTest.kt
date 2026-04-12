@@ -4,7 +4,7 @@ import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
-import com.stayops.inventory.application.service.RoomInventoryApplication
+import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.rate.domain.model.RatePlan
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
@@ -38,7 +38,7 @@ class ReservationApplicationTest : BehaviorSpec({
     val channelRepository = mockk<ChannelRepository>()
     val ratePlanRepository = mockk<RatePlanRepository>()
     val guestRepository = mockk<GuestRepository>()
-    val inventoryApplication = mockk<RoomInventoryApplication>()
+    val inventoryReservationPort = mockk<InventoryReservationPort>()
     val roomRepository = mockk<RoomRepository>()
     val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
     val rateResolverService = RateResolverService()
@@ -52,7 +52,7 @@ class ReservationApplicationTest : BehaviorSpec({
         channelRepository = channelRepository,
         ratePlanRepository = ratePlanRepository,
         guestRepository = guestRepository,
-        inventoryApplication = inventoryApplication,
+        inventoryReservationPort = inventoryReservationPort,
         roomRepository = roomRepository,
         eventPublisher = eventPublisher,
         rateResolverService = rateResolverService,
@@ -99,7 +99,7 @@ class ReservationApplicationTest : BehaviorSpec({
                 every { roomTypeRepository.findById("rt-1") } returns sampleRoomType()
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "DIRECT") } returns directChannel()
                 every { ratePlanRepository.findByPropertyIdAndRoomTypeIdAndStatus("prop-1", "rt-1", RatePlanStatus.ACTIVE) } returns emptyList()
-                every { inventoryApplication.reserve("prop-1", "rt-1", any()) } returns mockk()
+                justRun { inventoryReservationPort.reserve("prop-1", "rt-1", any()) }
                 every { guestRepository.findById("guest-1") } returns sampleGuest()
                 every { reservationRepository.save(any()) } answers { firstArg() }
                 justRun { eventPublisher.publishEvent(any()) }
@@ -121,7 +121,7 @@ class ReservationApplicationTest : BehaviorSpec({
                 result.channel.commissionRate shouldBe BigDecimal.ZERO
                 result.nightCount shouldBe 2
                 result.pricing.totalAmount shouldBe Money.won(200_000)
-                verify(exactly = 2) { inventoryApplication.reserve("prop-1", "rt-1", any()) }
+                verify(exactly = 2) { inventoryReservationPort.reserve("prop-1", "rt-1", any()) }
             }
         }
 
@@ -131,7 +131,7 @@ class ReservationApplicationTest : BehaviorSpec({
                 every { roomTypeRepository.findById("rt-1") } returns sampleRoomType()
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel()
                 every { ratePlanRepository.findByPropertyIdAndRoomTypeIdAndStatus("prop-1", "rt-1", RatePlanStatus.ACTIVE) } returns emptyList()
-                every { inventoryApplication.reserve("prop-1", "rt-1", any()) } returns mockk()
+                justRun { inventoryReservationPort.reserve("prop-1", "rt-1", any()) }
                 every { guestRepository.findById("guest-1") } returns sampleGuest()
                 every { reservationRepository.save(any()) } answers { firstArg() }
                 justRun { eventPublisher.publishEvent(any()) }
@@ -195,13 +195,13 @@ class ReservationApplicationTest : BehaviorSpec({
                 ).confirm()
                 every { reservationRepository.findById("rsv-c2") } returns reservation
                 every { reservationRepository.save(any()) } answers { firstArg() }
-                every { inventoryApplication.release("prop-1", "rt-1", any()) } returns mockk()
+                justRun { inventoryReservationPort.release("prop-1", "rt-1", any()) }
                 justRun { eventPublisher.publishEvent(any()) }
 
                 val result = sut.cancelReservation("prop-1", "rsv-c2")
 
                 result.status shouldBe ReservationStatus.CANCELLED
-                verify(exactly = 2) { inventoryApplication.release("prop-1", "rt-1", any()) }
+                verify(exactly = 2) { inventoryReservationPort.release("prop-1", "rt-1", any()) }
             }
         }
 
@@ -274,7 +274,7 @@ class ReservationApplicationTest : BehaviorSpec({
                 every { roomTypeRepository.findById("rt-1") } returns sampleRoomType()
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "DIRECT") } returns directChannel()
                 every { ratePlanRepository.findByPropertyIdAndRoomTypeIdAndStatus(any(), any(), any()) } returns emptyList()
-                every { inventoryApplication.reserve("prop-1", "rt-1", any()) } throws
+                every { inventoryReservationPort.reserve("prop-1", "rt-1", any()) } throws
                         ConflictException("INVENTORY_CONFLICT", "재고 변경 충돌")
 
                 shouldThrow<ConflictException> {

@@ -264,11 +264,13 @@ graph TB
   Reservation ──event──▶ Channel (ChannelEventHandler)
   Reservation ──event──▶ Guest (GuestEventHandler)
 
-⚠️ Application 레이어 크로스 참조 (문제):
-  booking.BookingApplication       ──▶ inventory.application.RoomInventoryApplication
-  channel.WebhookApplication       ──▶ inventory.application.RoomInventoryApplication
-  reservation.ReservationApplication ──▶ inventory.application.RoomInventoryApplication
-  room.RoomApplication             ──▶ inventory.application.RoomInventoryApplication
+Application 레이어 크로스 참조 상태:
+  booking.BookingApplication         ──▶ inventory.application.port.InventoryReservationPort
+  channel.WebhookApplication         ──▶ inventory.application.port.InventoryReservationPort
+  reservation.ReservationApplication ──▶ inventory.application.port.InventoryReservationPort
+
+남은 blocker:
+  room.RoomApplication               ──▶ inventory.application.RoomInventoryApplication
   inventory.RoomInventoryApplication ──▶ channel.application.ChannelSyncApplication
 ```
 

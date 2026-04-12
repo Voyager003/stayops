@@ -4,7 +4,7 @@ import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
-import com.stayops.inventory.application.service.RoomInventoryApplication
+import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.payment.domain.model.Payment
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentRepository
@@ -49,7 +49,7 @@ class BookingApplicationTest : BehaviorSpec({
     val ratePlanRepository = mockk<RatePlanRepository>()
     val reservationRepository = mockk<ReservationRepository>()
     val paymentRepository = mockk<PaymentRepository>()
-    val inventoryApplication = mockk<RoomInventoryApplication>()
+    val inventoryReservationPort = mockk<InventoryReservationPort>()
     val paymentGateway = mockk<PaymentGateway>()
     val rateResolverService = RateResolverService()
     val fixedInstant = Instant.parse("2026-04-08T10:00:00Z")
@@ -66,7 +66,7 @@ class BookingApplicationTest : BehaviorSpec({
         ratePlanRepository = ratePlanRepository,
         reservationRepository = reservationRepository,
         paymentRepository = paymentRepository,
-        inventoryApplication = inventoryApplication,
+        inventoryReservationPort = inventoryReservationPort,
         paymentGateway = paymentGateway,
         rateResolverService = rateResolverService,
         clock = clock,
@@ -103,7 +103,7 @@ class BookingApplicationTest : BehaviorSpec({
         every { roomTypeRepository.findById("rt-1") } returns activeRoomType()
         every { channelRepository.findByPropertyIdAndCode("prop-1", "DIRECT") } returns directChannel()
         every { ratePlanRepository.findByPropertyIdAndRoomTypeIdAndStatus("prop-1", "rt-1", RatePlanStatus.ACTIVE) } returns emptyList()
-        every { inventoryApplication.reserve(any(), any(), any()) } returns mockk()
+        justRun { inventoryReservationPort.reserve(any(), any(), any()) }
         every { reservationRepository.save(any()) } answers { firstArg() }
         every { paymentRepository.save(any()) } answers { firstArg() }
     }
@@ -159,7 +159,7 @@ class BookingApplicationTest : BehaviorSpec({
                 result.payment.status shouldBe PaymentStatus.PENDING
                 result.payment.memberId shouldBe "member-1"
                 verify { guestRepository.save(any()) }
-                verify(exactly = 2) { inventoryApplication.reserve("prop-1", "rt-1", any()) }
+                verify(exactly = 2) { inventoryReservationPort.reserve("prop-1", "rt-1", any()) }
             }
         }
 
@@ -219,7 +219,7 @@ class BookingApplicationTest : BehaviorSpec({
                     )
                 }
                 ex.code shouldBe "DUPLICATE_BOOKING"
-                verify(exactly = 0) { inventoryApplication.reserve(any(), any(), any()) }
+                verify(exactly = 0) { inventoryReservationPort.reserve(any(), any(), any()) }
                 verify(exactly = 0) { reservationRepository.save(any()) }
             }
         }
@@ -466,7 +466,7 @@ class BookingApplicationTest : BehaviorSpec({
             every { paymentRepository.findByReservationId("rsv-1") } returns payment
             every { reservationRepository.save(any()) } answers { firstArg() }
             every { paymentRepository.save(any()) } answers { firstArg() }
-            every { inventoryApplication.release(any(), any(), any()) } returns mockk()
+            justRun { inventoryReservationPort.release(any(), any(), any()) }
 
             val result = service.cancelBooking(memberId = "member-1", reservationId = "rsv-1")
 
@@ -475,7 +475,7 @@ class BookingApplicationTest : BehaviorSpec({
                 result.payment.status shouldBe PaymentStatus.FAILED
                 result.payment.failReason shouldBe "고객 요청에 의한 취소"
                 verify(exactly = 0) { paymentGateway.cancel(any(), any()) }
-                verify(exactly = 2) { inventoryApplication.release("prop-1", "rt-1", any()) }
+                verify(exactly = 2) { inventoryReservationPort.release("prop-1", "rt-1", any()) }
             }
         }
 
@@ -490,14 +490,14 @@ class BookingApplicationTest : BehaviorSpec({
             every { paymentGateway.cancel("toss_pk_456", any()) } returns PaymentCancelResult("toss_pk_456")
             every { paymentRepository.save(any()) } answers { firstArg() }
             every { reservationRepository.save(any()) } answers { firstArg() }
-            every { inventoryApplication.release(any(), any(), any()) } returns mockk()
+            justRun { inventoryReservationPort.release(any(), any(), any()) }
 
             val result = service.cancelBooking(memberId = "member-1", reservationId = "rsv-1")
 
             then("예약 취소 + 결제 환불 + 재고 복원") {
                 result.reservation.status shouldBe ReservationStatus.CANCELLED
                 result.payment.status shouldBe PaymentStatus.CANCELLED
-                verify(exactly = 2) { inventoryApplication.release("prop-1", "rt-1", any()) }
+                verify(exactly = 2) { inventoryReservationPort.release("prop-1", "rt-1", any()) }
                 verify { paymentGateway.cancel("toss_pk_456", any()) }
             }
         }
@@ -514,7 +514,7 @@ class BookingApplicationTest : BehaviorSpec({
                 PaymentGatewayException.ProviderError("PROVIDER_ERROR", "PG사 장애")
             every { paymentRepository.save(any()) } answers { firstArg() }
             every { reservationRepository.save(any()) } answers { firstArg() }
-            every { inventoryApplication.release(any(), any(), any()) } returns mockk()
+            justRun { inventoryReservationPort.release(any(), any(), any()) }
 
             val result = service.cancelBooking(memberId = "member-1", reservationId = "rsv-1")
 
@@ -522,7 +522,7 @@ class BookingApplicationTest : BehaviorSpec({
                 result.reservation.status shouldBe ReservationStatus.CANCELLED
                 result.payment.status shouldBe PaymentStatus.CANCEL_FAILED
                 result.payment.failReason shouldBe "환불 실패: PG사 시스템 오류 [PROVIDER_ERROR]: PG사 장애"
-                verify(exactly = 2) { inventoryApplication.release("prop-1", "rt-1", any()) }
+                verify(exactly = 2) { inventoryReservationPort.release("prop-1", "rt-1", any()) }
             }
         }
     }

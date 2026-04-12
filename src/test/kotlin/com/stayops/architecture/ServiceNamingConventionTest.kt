@@ -88,4 +88,39 @@ class ServiceNamingConventionTest {
             message = "PropertyAccessChecker is not shared because it depends on Member"
         )
     }
+
+    @Test
+    fun should_use_inventory_reservation_port_for_reserve_release_consumers() {
+        val mainRoot = Path.of("src/main/kotlin")
+
+        assertTrue(
+            actual = Files.exists(mainRoot.resolve("com/stayops/inventory/application/port/InventoryReservationPort.kt")),
+            message = "Inventory reserve/release contract must be exposed as InventoryReservationPort"
+        )
+
+        val directInventoryApplicationReferences = listOf(
+            "com/stayops/booking",
+            "com/stayops/reservation",
+            "com/stayops/channel",
+            "com/stayops/payment"
+        ).flatMap { relativeDir ->
+            val root = mainRoot.resolve(relativeDir)
+            Files.walk(root).use { paths ->
+                paths
+                    .filter { Files.isRegularFile(it) }
+                    .filter { it.fileName.toString().endsWith(".kt") }
+                    .filter { path ->
+                        Files.readString(path)
+                            .contains("import com.stayops.inventory.application.service.RoomInventoryApplication")
+                    }
+                    .map { mainRoot.relativize(it).toString() }
+                    .toList()
+            }
+        }
+
+        assertTrue(
+            actual = directInventoryApplicationReferences.isEmpty(),
+            message = "External reserve/release consumers must depend on InventoryReservationPort, not RoomInventoryApplication: $directInventoryApplicationReferences"
+        )
+    }
 }

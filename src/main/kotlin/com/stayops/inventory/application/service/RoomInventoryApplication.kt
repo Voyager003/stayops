@@ -1,6 +1,7 @@
 package com.stayops.inventory.application.service
 
 import com.stayops.channel.application.service.ChannelSyncApplication
+import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryCache
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
@@ -22,7 +23,7 @@ class RoomInventoryApplication(
     private val channelSyncApplication: ChannelSyncApplication,
     private val clock: Clock,
     private val idGenerator: IdGenerator
-) {
+) : InventoryReservationPort {
 
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -140,18 +141,16 @@ class RoomInventoryApplication(
         return updated
     }
 
-    fun reserve(propertyId: String, roomTypeId: String, date: LocalDate): RoomInventory {
+    override fun reserve(propertyId: String, roomTypeId: String, date: LocalDate) {
         val inventory = getOrThrow(propertyId, roomTypeId, date)
-        val updated = saveAndEvict(inventory.reserve())
+        saveAndEvict(inventory.reserve())
         log.info("재고 예약: propertyId={}, roomTypeId={}, date={}", propertyId, roomTypeId, date)
-        return updated
     }
 
-    fun release(propertyId: String, roomTypeId: String, date: LocalDate): RoomInventory {
+    override fun release(propertyId: String, roomTypeId: String, date: LocalDate) {
         val inventory = getOrThrow(propertyId, roomTypeId, date)
-        val updated = saveAndEvict(inventory.release())
+        saveAndEvict(inventory.release())
         log.info("재고 해제: propertyId={}, roomTypeId={}, date={}", propertyId, roomTypeId, date)
-        return updated
     }
 
     private fun getOrThrow(propertyId: String, roomTypeId: String, date: LocalDate): RoomInventory =
