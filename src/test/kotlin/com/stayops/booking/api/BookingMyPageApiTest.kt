@@ -7,7 +7,7 @@ import com.stayops.reservation.domain.model.*
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.GlobalExceptionHandler
-import com.stayops.shared.security.CustomerAuthChecker
+import com.stayops.member.infrastructure.security.CustomerAuthChecker
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
@@ -36,10 +36,10 @@ class BookingMyPageApiTest {
     }
 
     private fun mockCustomer() {
-        every { customerAuthChecker.requireCustomer() } returns com.stayops.auth.domain.model.Member.create(
+        every { customerAuthChecker.requireCustomer() } returns com.stayops.member.domain.model.Member.create(
             id = "member-1", email = "customer@test.com",
             passwordHash = "hashed", name = "김고객",
-            role = com.stayops.auth.domain.model.MemberRole.CUSTOMER
+            role = com.stayops.member.domain.model.MemberRole.CUSTOMER
         )
     }
 

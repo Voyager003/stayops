@@ -24,7 +24,7 @@ graph TB
         exceptions["Business Exceptions"]
     end
 
-    auth["Auth<br/>AR: Member"]
+    member["Member<br/>AR: Member"]
     property["Property<br/>AR: Property"]
     room["Room<br/>AR: RoomType, Room"]
     inventory["Inventory<br/>AR: RoomInventory"]
@@ -38,7 +38,7 @@ graph TB
     statistics["Statistics<br/>Read Model"]
     dashboard["Dashboard<br/>Read Model"]
 
-    shared -.-> auth
+    shared -.-> member
     shared -.-> property
     shared -.-> room
     shared -.-> inventory
@@ -82,6 +82,7 @@ graph TB
 - `ProcessedWebhookEvent`는 repository로 독립 저장되지만 현재 행위가 거의 없는 멱등성 기록이다. Channel Context 내부 Aggregate Root 후보로 유지하되, 모듈 분리 전에 명확한 소유권과 명명 검토가 필요하다.
 - `Booking`은 고객 예매 플로우의 유스케이스 이름으로는 유효하지만 자체 도메인 모델이 없다. BC로 둘지, Reservation/Payment를 조합하는 application module로 둘지는 모듈 분리 설계 단계에서 재확인한다.
 - `Settlement`, `Statistics`, `Dashboard`는 현재 Aggregate가 없는 read model이다. 별도 BC 모듈로 둘 수 있으나 도메인 모듈 우선 분리 대상은 아니다.
+- `CustomerAuthChecker`, `PropertyAccessChecker`는 `Member` 도메인 모델과 Spring Security에 의존하는 Member infrastructure adapter로 본다. Shared Kernel에 두지 않는다.
 
 ---
 
@@ -221,7 +222,7 @@ graph TB
 │  ┌─────────────────────────────────────────────────────────────────┐   │
 │  │  vo: Money          vo: DateRange       vo: PagedResult         │   │
 │  │  port: IdGenerator  exception: Business/NotFound/Conflict/...   │   │
-│  │  ⚠️ PropertyAccessChecker (비즈니스 로직 — 후순위 이전 대상)     │   │
+│  │  ※ Member 전용 Security Checker 는 포함하지 않음                 │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -241,7 +242,7 @@ graph TB
                                │ Room, Channel 직접 참조
                                ▼
 ┌──────────┐    ┌──────────────────────────┐    ┌──────────┐
-│  Auth    │    │      Reservation         │    │ Payment  │
+│  Member  │    │      Reservation         │    │ Payment  │
 │          │    │  (핵심 도메인)             │    │          │
 └──────────┘    └──────────┬───────────────┘    └──────────┘
                            │
@@ -298,7 +299,7 @@ graph TB
 ## 분석 메모
 
 ### 건전한 Context (독립적, 모듈 분리 용이)
-- **Auth**: shared 만 참조. 자체 Member Aggregate 완결적
+- **Member**: shared 만 참조. 자체 Member Aggregate 완결적
 - **Rate**: shared 만 참조. RateResolver 도메인 서비스도 자체 보유
 - **Guest**: shared + reservation event 만 참조. 거의 독립
 - **Property**: shared 만 참조. 독립적

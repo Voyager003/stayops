@@ -6,7 +6,7 @@ import com.stayops.settlement.application.dto.SettlementSummary
 import com.stayops.settlement.application.service.SettlementQueryApplication
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.GlobalExceptionHandler
-import com.stayops.shared.security.PropertyAccessChecker
+import com.stayops.member.infrastructure.security.PropertyAccessChecker
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.jupiter.api.Nested

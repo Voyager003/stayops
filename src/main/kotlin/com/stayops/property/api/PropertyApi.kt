@@ -1,13 +1,13 @@
 package com.stayops.property.api
 
-import com.stayops.auth.domain.model.Member
-import com.stayops.auth.domain.model.MemberRole
-import com.stayops.auth.domain.repository.MemberRepository
+import com.stayops.member.domain.model.Member
+import com.stayops.member.domain.model.MemberRole
+import com.stayops.member.domain.repository.MemberRepository
 import com.stayops.property.api.dto.CreatePropertyRequest
 import com.stayops.property.api.dto.PropertyResponse
 import com.stayops.property.api.dto.UpdatePropertyRequest
 import com.stayops.property.application.service.PropertyApplication
-import com.stayops.shared.security.PropertyAccessChecker
+import com.stayops.member.infrastructure.security.PropertyAccessChecker
 import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo
 import jakarta.validation.Valid

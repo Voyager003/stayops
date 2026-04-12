@@ -5,8 +5,8 @@ import com.stayops.room.api.dto.CreateRoomRequest
 import com.stayops.room.api.dto.UpdateRoomStatusRequest
 import com.stayops.room.api.dto.RoomStatusAction
 import com.stayops.room.infrastructure.persistence.RoomMongoDataRepository
-import com.stayops.auth.domain.model.Member
-import com.stayops.auth.domain.model.MemberRole
+import com.stayops.member.domain.model.Member
+import com.stayops.member.domain.model.MemberRole
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested

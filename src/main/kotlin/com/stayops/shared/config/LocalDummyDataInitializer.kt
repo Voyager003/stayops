@@ -1,9 +1,9 @@
 package com.stayops.shared.config
 
-import com.stayops.auth.domain.model.Member
-import com.stayops.auth.domain.model.MemberRole
-import com.stayops.auth.domain.model.PropertyRole
-import com.stayops.auth.domain.repository.MemberRepository
+import com.stayops.member.domain.model.Member
+import com.stayops.member.domain.model.MemberRole
+import com.stayops.member.domain.model.PropertyRole
+import com.stayops.member.domain.repository.MemberRepository
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.inventory.application.service.RoomInventoryApplication

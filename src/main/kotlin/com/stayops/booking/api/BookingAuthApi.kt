@@ -1,6 +1,6 @@
 package com.stayops.booking.api
 
-import com.stayops.auth.api.dto.AuthResponse
+import com.stayops.member.api.dto.AuthResponse
 import com.stayops.booking.api.dto.CustomerLoginRequest
 import com.stayops.booking.api.dto.CustomerSignupRequest
 import com.stayops.booking.application.service.CustomerAuthApplication

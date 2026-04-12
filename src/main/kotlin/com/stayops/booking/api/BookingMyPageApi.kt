@@ -3,7 +3,7 @@ package com.stayops.booking.api
 import com.stayops.booking.api.dto.BookingResponse
 import com.stayops.booking.api.dto.MyReservationResponse
 import com.stayops.booking.application.service.BookingApplication
-import com.stayops.shared.security.CustomerAuthChecker
+import com.stayops.member.infrastructure.security.CustomerAuthChecker
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 

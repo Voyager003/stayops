@@ -60,7 +60,7 @@ graph LR
 | Context | Aggregate Root | 내부 Entity/VO | 소유 데이터 | 독점 기능 |
 |---|---|---|---|---|
 | Shared Kernel | 없음 | `Money`, `DateRange`, `PagedResult`, `IdGenerator` | 공통 값, 페이징 결과, ID 생성 포트 | 금액 연산, 날짜 범위 계산, 공통 ID 생성 계약 |
-| Auth | `Member` | `PropertyAccess`, `MemberRole`, `MemberStatus`, `PropertyRole` | 회원 식별자, 이메일, 비밀번호 해시, 시스템 역할, 숙소 접근 권한, 회원 상태 | 숙소 접근권 부여/회수, 로그인 기록, 회원 비활성화 |
+| Member | `Member` | `PropertyAccess`, `MemberRole`, `MemberStatus`, `PropertyRole` | 회원 식별자, 이메일, 비밀번호 해시, 시스템 역할, 숙소 접근 권한, 회원 상태 | 숙소 접근권 부여/회수, 로그인 기록, 회원 비활성화 |
 | Property | `Property` | `Address`, `ContactInfo`, `PropertyType`, `PropertyStatus` | 숙소 기본 정보, 운영 상태, 타임존, 통화, 소유자 | 숙소 활성화/비활성화/정지, 예약 가능 여부 판정, 숙소 정보 수정 |
 | Room | `RoomType`, `Room` | `RoomStatus` | 객실 타입, 기본 요금, 수용 인원, 실물 객실 번호/층/상태 | 객실 타입 정보 수정, 객실 체크인/체크아웃/청소/정비 상태 전이 |
 | Inventory | `RoomInventory` | 없음 | 날짜별 객실 타입 재고, 전체 수, 예약 수, 차단 수, 낙관적 잠금 버전 | 재고 예약 차감, 예약 취소 복원, 판매 차단/해제, 총 재고 수 변경 |
@@ -111,6 +111,6 @@ graph LR
 - 재고 잔여 수 계산, 예약 수 증가/감소, 차단 수 증가/감소는 Inventory 밖에서 직접 구현하지 않는다.
 - 수수료와 순매출 계산은 ReservationPricing 또는 정산 read model의 명시된 계산 정책 외부에서 재구현하지 않는다.
 - 요금 우선순위와 채널별/요일별/기간별 적용 조건은 Rate 밖에서 재구현하지 않는다.
-- 회원의 숙소 접근권 부여/회수는 Auth 밖에서 직접 리스트를 조작하지 않는다.
+- 회원의 숙소 접근권 부여/회수는 Member 밖에서 직접 리스트를 조작하지 않는다.
 - OTA 동기화 재시도와 backoff 정책은 SyncTask 밖에서 재구현하지 않는다.
 - 결제 승인/취소 상태 전이는 Payment 밖에서 status 값을 직접 대입하지 않는다.

@@ -1,14 +1,14 @@
 package com.stayops.dashboard.api
 
-import com.stayops.auth.domain.model.Member
-import com.stayops.auth.domain.model.MemberRole
-import com.stayops.auth.domain.model.PropertyAccess
-import com.stayops.auth.domain.model.PropertyRole
+import com.stayops.member.domain.model.Member
+import com.stayops.member.domain.model.MemberRole
+import com.stayops.member.domain.model.PropertyAccess
+import com.stayops.member.domain.model.PropertyRole
 import com.stayops.dashboard.application.dto.DashboardSummary
 import com.stayops.dashboard.application.service.DashboardApplication
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
-import com.stayops.shared.security.PropertyAccessChecker
+import com.stayops.member.infrastructure.security.PropertyAccessChecker
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify

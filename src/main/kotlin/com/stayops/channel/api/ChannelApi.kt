@@ -2,7 +2,7 @@ package com.stayops.channel.api
 
 import com.stayops.channel.api.dto.*
 import com.stayops.channel.application.service.ChannelApplication
-import com.stayops.shared.security.PropertyAccessChecker
+import com.stayops.member.infrastructure.security.PropertyAccessChecker
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity

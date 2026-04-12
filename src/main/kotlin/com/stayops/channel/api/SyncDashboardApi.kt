@@ -4,7 +4,7 @@ import com.stayops.channel.api.dto.SyncDashboardResponse
 import com.stayops.channel.api.dto.SyncTaskResponse
 import com.stayops.channel.application.service.ChannelSyncApplication
 import com.stayops.channel.application.service.SyncDashboardApplication
-import com.stayops.shared.security.PropertyAccessChecker
+import com.stayops.member.infrastructure.security.PropertyAccessChecker
 import com.stayops.channel.domain.model.SyncTaskStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*

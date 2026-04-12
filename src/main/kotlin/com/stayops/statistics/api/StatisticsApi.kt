@@ -1,6 +1,6 @@
 package com.stayops.statistics.api
 
-import com.stayops.shared.security.PropertyAccessChecker
+import com.stayops.member.infrastructure.security.PropertyAccessChecker
 import com.stayops.statistics.api.dto.MonthlyStatisticsResponse
 import com.stayops.statistics.application.service.StatisticsApplication
 import org.springframework.http.ResponseEntity

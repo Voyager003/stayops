@@ -4,7 +4,7 @@ import com.stayops.room.api.dto.CreateRoomTypeRequest
 import com.stayops.room.api.dto.RoomTypeResponse
 import com.stayops.room.api.dto.UpdateRoomTypeRequest
 import com.stayops.room.application.service.RoomTypeApplication
-import com.stayops.shared.security.PropertyAccessChecker
+import com.stayops.member.infrastructure.security.PropertyAccessChecker
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.DeleteMapping

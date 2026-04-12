@@ -5,7 +5,7 @@ import com.stayops.inventory.api.dto.BulkBlockRequest
 import com.stayops.inventory.api.dto.InventoryUpdateAction
 import com.stayops.inventory.api.dto.UpdateInventoryRequest
 import com.stayops.inventory.application.service.RoomInventoryApplication
-import com.stayops.shared.security.PropertyAccessChecker
+import com.stayops.member.infrastructure.security.PropertyAccessChecker
 import jakarta.validation.Valid
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.web.bind.annotation.GetMapping

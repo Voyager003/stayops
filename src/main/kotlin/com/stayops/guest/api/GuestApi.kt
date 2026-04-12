@@ -3,7 +3,7 @@ package com.stayops.guest.api
 import com.stayops.guest.api.dto.GuestResponse
 import com.stayops.guest.api.dto.UpdateGuestRequest
 import com.stayops.guest.application.service.GuestApplication
-import com.stayops.shared.security.PropertyAccessChecker
+import com.stayops.member.infrastructure.security.PropertyAccessChecker
 import com.stayops.guest.domain.model.GuestTier
 import jakarta.validation.Valid
 import org.springframework.web.bind.annotation.GetMapping

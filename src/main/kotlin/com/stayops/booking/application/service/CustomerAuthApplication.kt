@@ -1,9 +1,9 @@
 package com.stayops.booking.application.service
 
-import com.stayops.auth.domain.model.Member
-import com.stayops.auth.domain.model.MemberRole
-import com.stayops.auth.domain.model.MemberStatus
-import com.stayops.auth.domain.repository.MemberRepository
+import com.stayops.member.domain.model.Member
+import com.stayops.member.domain.model.MemberRole
+import com.stayops.member.domain.model.MemberStatus
+import com.stayops.member.domain.repository.MemberRepository
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.ConflictException

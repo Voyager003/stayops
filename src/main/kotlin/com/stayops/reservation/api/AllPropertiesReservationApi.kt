@@ -1,7 +1,7 @@
 package com.stayops.reservation.api
 
-import com.stayops.auth.domain.model.Member
-import com.stayops.auth.domain.model.MemberRole
+import com.stayops.member.domain.model.Member
+import com.stayops.member.domain.model.MemberRole
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.reservation.api.dto.PagedReservationResponse
 import com.stayops.reservation.api.dto.ReservationResponse

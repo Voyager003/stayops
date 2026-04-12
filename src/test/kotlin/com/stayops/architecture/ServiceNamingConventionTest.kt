@@ -31,4 +31,61 @@ class ServiceNamingConventionTest {
             message = "RateResolver is a domain service and must be named RateResolverService"
         )
     }
+
+    @Test
+    fun should_name_member_bounded_context_as_member_not_auth() {
+        val mainRoot = Path.of("src/main/kotlin")
+        val testRoot = Path.of("src/test/kotlin")
+
+        val authPackageReferences = listOf(mainRoot, testRoot)
+            .flatMap { root ->
+                Files.walk(root).use { paths ->
+                    paths
+                        .filter { Files.isRegularFile(it) }
+                        .filter { it.fileName.toString().endsWith(".kt") }
+                        .filter { path ->
+                            val content = Files.readString(path)
+                            Regex("^\\s*(package|import) com\\.stayops\\.auth(\\.|$)", RegexOption.MULTILINE)
+                                .containsMatchIn(content)
+                        }
+                        .map { root.relativize(it).toString() }
+                        .toList()
+                }
+            }
+
+        assertTrue(
+            actual = authPackageReferences.isEmpty(),
+            message = "Member bounded context must use com.stayops.member packages, not com.stayops.auth: $authPackageReferences"
+        )
+
+        assertTrue(
+            actual = Files.exists(mainRoot.resolve("com/stayops/member/domain/model/Member.kt")),
+            message = "Member aggregate must live under the member bounded context package"
+        )
+    }
+
+    @Test
+    fun should_keep_member_security_checkers_inside_member_infrastructure() {
+        val mainRoot = Path.of("src/main/kotlin")
+
+        val memberSecurityRoot = mainRoot.resolve("com/stayops/member/infrastructure/security")
+        assertTrue(
+            actual = Files.exists(memberSecurityRoot.resolve("CustomerAuthChecker.kt")),
+            message = "CustomerAuthChecker depends on Member and must live under member infrastructure"
+        )
+        assertTrue(
+            actual = Files.exists(memberSecurityRoot.resolve("PropertyAccessChecker.kt")),
+            message = "PropertyAccessChecker depends on Member and must live under member infrastructure"
+        )
+
+        val sharedSecurityRoot = mainRoot.resolve("com/stayops/shared/security")
+        assertTrue(
+            actual = !Files.exists(sharedSecurityRoot.resolve("CustomerAuthChecker.kt")),
+            message = "CustomerAuthChecker is not shared because it depends on Member"
+        )
+        assertTrue(
+            actual = !Files.exists(sharedSecurityRoot.resolve("PropertyAccessChecker.kt")),
+            message = "PropertyAccessChecker is not shared because it depends on Member"
+        )
+    }
 }

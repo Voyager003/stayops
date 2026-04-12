@@ -8,8 +8,8 @@ import com.stayops.inventory.infrastructure.persistence.RoomInventoryMongoDataRe
 import com.stayops.room.infrastructure.persistence.RoomMongoDataRepository
 import com.stayops.room.infrastructure.persistence.RoomDocument
 import com.stayops.room.domain.model.RoomStatus
-import com.stayops.auth.domain.model.Member
-import com.stayops.auth.domain.model.MemberRole
+import com.stayops.member.domain.model.Member
+import com.stayops.member.domain.model.MemberRole
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested

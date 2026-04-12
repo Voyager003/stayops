@@ -1,11 +1,11 @@
 package com.stayops.dashboard.api
 
-import com.stayops.auth.domain.model.Member
-import com.stayops.auth.domain.model.MemberRole
+import com.stayops.member.domain.model.Member
+import com.stayops.member.domain.model.MemberRole
 import com.stayops.dashboard.application.dto.DashboardSummary
 import com.stayops.dashboard.application.service.DashboardApplication
 import com.stayops.property.domain.repository.PropertyRepository
-import com.stayops.shared.security.PropertyAccessChecker
+import com.stayops.member.infrastructure.security.PropertyAccessChecker
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.bind.annotation.*

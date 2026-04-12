@@ -1,7 +1,7 @@
 package com.stayops.property.application.service
 
-import com.stayops.auth.domain.model.PropertyRole
-import com.stayops.auth.domain.repository.MemberRepository
+import com.stayops.member.domain.model.PropertyRole
+import com.stayops.member.domain.repository.MemberRepository
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.property.domain.model.Address

@@ -4,7 +4,7 @@ import com.stayops.booking.api.dto.BookingResponse
 import com.stayops.booking.api.dto.CreateBookingRequest
 import com.stayops.booking.api.dto.PaymentConfirmRequest
 import com.stayops.booking.application.service.BookingApplication
-import com.stayops.shared.security.CustomerAuthChecker
+import com.stayops.member.infrastructure.security.CustomerAuthChecker
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity

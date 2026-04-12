@@ -2,7 +2,7 @@ package com.stayops.channel.api
 
 import com.stayops.channel.application.dto.InventoryCompareResult
 import com.stayops.channel.application.service.ChannelApplication
-import com.stayops.shared.security.PropertyAccessChecker
+import com.stayops.member.infrastructure.security.PropertyAccessChecker
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping

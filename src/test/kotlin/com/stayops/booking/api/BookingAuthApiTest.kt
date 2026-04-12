@@ -1,7 +1,7 @@
 package com.stayops.booking.api
 
-import com.stayops.auth.domain.model.Member
-import com.stayops.auth.domain.model.MemberRole
+import com.stayops.member.domain.model.Member
+import com.stayops.member.domain.model.MemberRole
 import com.stayops.booking.application.service.CustomerAuthApplication
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.ConflictException

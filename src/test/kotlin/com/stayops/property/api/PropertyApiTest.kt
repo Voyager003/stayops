@@ -5,8 +5,8 @@ import com.stayops.property.api.dto.CreatePropertyRequest
 import com.stayops.property.api.dto.UpdatePropertyRequest
 import com.stayops.property.domain.model.PropertyType
 import com.stayops.property.infrastructure.persistence.PropertyMongoDataRepository
-import com.stayops.auth.domain.model.Member
-import com.stayops.auth.domain.model.MemberRole
+import com.stayops.member.domain.model.Member
+import com.stayops.member.domain.model.MemberRole
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -124,7 +124,7 @@ class PropertyApiTest @Autowired constructor(
             val owner = Member.create(
                 id = "test-owner", email = "owner@test.com",
                 passwordHash = "hashed", name = "테스트운영자", role = MemberRole.OWNER
-            ).grantAccess(idA, com.stayops.auth.domain.model.PropertyRole.OWNER)
+            ).grantAccess(idA, com.stayops.member.domain.model.PropertyRole.OWNER)
             SecurityContextHolder.getContext().authentication =
                 UsernamePasswordAuthenticationToken(owner, null, emptyList())
 
