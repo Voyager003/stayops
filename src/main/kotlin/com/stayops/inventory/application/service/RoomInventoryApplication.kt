@@ -2,6 +2,7 @@ package com.stayops.inventory.application.service
 
 import com.stayops.inventory.application.port.AvailabilitySyncPort
 import com.stayops.inventory.application.port.InventoryReservationPort
+import com.stayops.inventory.application.port.RoomInventorySyncPort
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryCache
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
@@ -23,7 +24,7 @@ class RoomInventoryApplication(
     private val availabilitySyncPort: AvailabilitySyncPort,
     private val clock: Clock,
     private val idGenerator: IdGenerator
-) : InventoryReservationPort {
+) : InventoryReservationPort, RoomInventorySyncPort {
 
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -31,7 +32,7 @@ class RoomInventoryApplication(
         const val INVENTORY_HORIZON_DAYS = 90L
     }
 
-    fun syncInventoryForRoomType(propertyId: String, roomTypeId: String) {
+    override fun syncInventoryForRoomType(propertyId: String, roomTypeId: String) {
         val roomCount = roomRepository.findByRoomTypeId(roomTypeId)
             .count { it.propertyId == propertyId }
         if (roomCount < 1) return

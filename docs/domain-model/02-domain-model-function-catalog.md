@@ -95,7 +95,7 @@ graph LR
 |---|---|---|
 | `Member` | private constructor + factory/reconstitute, immutable copy 기반 | `PropertyAccess`는 내부 VO로 다뤄지는 것이 자연스럽다. |
 | `Property` | private constructor + factory/reconstitute, 상태 전이 메서드 제공 | `Instant.now()`가 도메인 내부에 남아 있어 테스트 제어성과 순수성 측면의 후속 진단 대상이다. |
-| `RoomType`, `Room` | private constructor + factory/reconstitute, 상태/정보 변경 메서드 제공 | `RoomApplication -> RoomInventoryApplication` 직접 호출이 모듈 분리 blocker다. |
+| `RoomType`, `Room` | private constructor + factory/reconstitute, 상태/정보 변경 메서드 제공 | 객실 생성 후 재고 동기화는 `RoomInventorySyncPort`로 분리했다. |
 | `RoomInventory` | private constructor + factory/reconstitute, 계산 속성/재고 변경 메서드 제공 | 재고 예약/해제는 `InventoryReservationPort`, 가용 재고 동기화는 `AvailabilitySyncPort`로 외부 구현체 참조를 줄였다. |
 | `RatePlan` | private constructor + factory/reconstitute, 요금 적용 조건과 가격 산출 보유 | 적합. `RateResolver`가 순수 도메인 서비스로 남아 있다. |
 | `Guest` | private constructor + factory/reconstitute, 방문 기록/등급 산정 보유 | 적합. |

@@ -155,4 +155,31 @@ class ServiceNamingConventionTest {
             message = "Inventory must depend on AvailabilitySyncPort, not ChannelSyncApplication: $directChannelApplicationReferences"
         )
     }
+
+    @Test
+    fun should_use_room_inventory_sync_port_for_room_to_inventory_sync() {
+        val mainRoot = Path.of("src/main/kotlin")
+
+        assertTrue(
+            actual = Files.exists(mainRoot.resolve("com/stayops/inventory/application/port/RoomInventorySyncPort.kt")),
+            message = "Room-triggered inventory sync must be exposed as RoomInventorySyncPort"
+        )
+
+        val directInventoryApplicationReferences = Files.walk(mainRoot.resolve("com/stayops/room")).use { paths ->
+            paths
+                .filter { Files.isRegularFile(it) }
+                .filter { it.fileName.toString().endsWith(".kt") }
+                .filter { path ->
+                    Files.readString(path)
+                        .contains("import com.stayops.inventory.application.service.RoomInventoryApplication")
+                }
+                .map { mainRoot.relativize(it).toString() }
+                .toList()
+        }
+
+        assertTrue(
+            actual = directInventoryApplicationReferences.isEmpty(),
+            message = "Room must depend on RoomInventorySyncPort, not RoomInventoryApplication: $directInventoryApplicationReferences"
+        )
+    }
 }
