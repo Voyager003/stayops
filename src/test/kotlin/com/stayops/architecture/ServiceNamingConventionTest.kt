@@ -123,4 +123,36 @@ class ServiceNamingConventionTest {
             message = "External reserve/release consumers must depend on InventoryReservationPort, not RoomInventoryApplication: $directInventoryApplicationReferences"
         )
     }
+
+    @Test
+    fun should_use_availability_sync_port_for_inventory_to_channel_sync() {
+        val mainRoot = Path.of("src/main/kotlin")
+
+        assertTrue(
+            actual = Files.exists(mainRoot.resolve("com/stayops/inventory/application/port/AvailabilitySyncPort.kt")),
+            message = "Inventory availability sync must be exposed as AvailabilitySyncPort"
+        )
+
+        assertTrue(
+            actual = Files.exists(mainRoot.resolve("com/stayops/channel/infrastructure/sync/ChannelAvailabilitySyncAdapter.kt")),
+            message = "Channel must adapt Inventory AvailabilitySyncPort without Inventory depending on ChannelSyncApplication"
+        )
+
+        val directChannelApplicationReferences = Files.walk(mainRoot.resolve("com/stayops/inventory")).use { paths ->
+            paths
+                .filter { Files.isRegularFile(it) }
+                .filter { it.fileName.toString().endsWith(".kt") }
+                .filter { path ->
+                    Files.readString(path)
+                        .contains("import com.stayops.channel.application.service.ChannelSyncApplication")
+                }
+                .map { mainRoot.relativize(it).toString() }
+                .toList()
+        }
+
+        assertTrue(
+            actual = directChannelApplicationReferences.isEmpty(),
+            message = "Inventory must depend on AvailabilitySyncPort, not ChannelSyncApplication: $directChannelApplicationReferences"
+        )
+    }
 }

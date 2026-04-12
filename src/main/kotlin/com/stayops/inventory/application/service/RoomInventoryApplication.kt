@@ -1,6 +1,6 @@
 package com.stayops.inventory.application.service
 
-import com.stayops.channel.application.service.ChannelSyncApplication
+import com.stayops.inventory.application.port.AvailabilitySyncPort
 import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryCache
@@ -20,7 +20,7 @@ class RoomInventoryApplication(
     private val inventoryRepository: RoomInventoryRepository,
     private val cache: RoomInventoryCache,
     private val roomRepository: RoomRepository,
-    private val channelSyncApplication: ChannelSyncApplication,
+    private val availabilitySyncPort: AvailabilitySyncPort,
     private val clock: Clock,
     private val idGenerator: IdGenerator
 ) : InventoryReservationPort {
@@ -92,7 +92,7 @@ class RoomInventoryApplication(
                         val updated = if (action == "BLOCK") inv.block(count) else inv.unblock(count)
                         if (updated !== inv) {
                             saveAndEvict(updated)
-                            channelSyncApplication.createAvailabilitySyncTasks(
+                            availabilitySyncPort.requestAvailabilitySync(
                                 propertyId, roomTypeId, date, updated.availableCount
                             )
                             processed++
@@ -107,7 +107,7 @@ class RoomInventoryApplication(
             date = date.plusDays(1)
         }
         if (processed > 0) {
-            channelSyncApplication.processTasksImmediately(propertyId)
+            availabilitySyncPort.processImmediately(propertyId)
         }
         log.info("재고 일괄 {}: propertyId={}, roomTypeId={}, range={}~{}, processed={}", action, propertyId, roomTypeId, startDate, endDate, processed)
         return processed
@@ -121,8 +121,8 @@ class RoomInventoryApplication(
     ): RoomInventory {
         val inventory = getOrThrow(propertyId, roomTypeId, date)
         val updated = saveAndEvict(inventory.block(count))
-        channelSyncApplication.createAvailabilitySyncTasks(propertyId, roomTypeId, date, updated.availableCount)
-        channelSyncApplication.processTasksImmediately(propertyId)
+        availabilitySyncPort.requestAvailabilitySync(propertyId, roomTypeId, date, updated.availableCount)
+        availabilitySyncPort.processImmediately(propertyId)
         log.info("재고 차단: propertyId={}, roomTypeId={}, date={}, count={}", propertyId, roomTypeId, date, count)
         return updated
     }
@@ -135,8 +135,8 @@ class RoomInventoryApplication(
     ): RoomInventory {
         val inventory = getOrThrow(propertyId, roomTypeId, date)
         val updated = saveAndEvict(inventory.unblock(count))
-        channelSyncApplication.createAvailabilitySyncTasks(propertyId, roomTypeId, date, updated.availableCount)
-        channelSyncApplication.processTasksImmediately(propertyId)
+        availabilitySyncPort.requestAvailabilitySync(propertyId, roomTypeId, date, updated.availableCount)
+        availabilitySyncPort.processImmediately(propertyId)
         log.info("재고 차단 해제: propertyId={}, roomTypeId={}, date={}, count={}", propertyId, roomTypeId, date, count)
         return updated
     }

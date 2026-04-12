@@ -81,7 +81,7 @@ graph LR
 | 숙소 예약 가능 여부 | Property | `Property.isBookable()` | 적합. Booking/Reservation은 결과를 사용만 해야 한다. |
 | 객실 상태 전이 | Room | `Room.checkIn()`, `Room.checkOut()`, `Room.completeCleaning()`, `Room.startMaintenance()`, `Room.completeMaintenance()` | 적합. ReservationApplication은 객실 상태를 직접 바꾸지 않고 Room 메서드를 호출한다. |
 | 날짜별 재고 차감/복원 | Inventory | `RoomInventory.reserve()`, `RoomInventory.release()`, `InventoryReservationPort` | 도메인 기능은 적합하다. 2026-04-12에 Booking/Reservation/Webhook/PendingReservationScheduler의 직접 참조를 `InventoryReservationPort`로 줄였다. |
-| 재고 차단/해제 | Inventory | `RoomInventory.block()`, `RoomInventory.unblock()` | 적합. 단, OTA 동기화 트리거가 Inventory Application 내부에서 Channel Application을 직접 호출한다. |
+| 재고 차단/해제 | Inventory | `RoomInventory.block()`, `RoomInventory.unblock()`, `AvailabilitySyncPort` | 적합. OTA 동기화 트리거는 `AvailabilitySyncPort`로 분리했고 Channel adapter가 기존 동기 처리에 위임한다. |
 | 요금 결정 | Rate | `RatePlan.isApplicableTo()`, `RatePlan.priceForDate()`, `RateResolver.resolve*()` | 적합. 다른 Context가 가격 규칙을 직접 재구현하지 않아야 한다. |
 | 고객 등급 산정 | Guest | `Guest.recordVisit()`, `Guest.calculateTier()` | 적합. Reservation 이벤트 handler가 Guest 기능을 호출하는 구조는 유지 가능하다. |
 | 예약 생명주기 상태 전이 | Reservation | `Reservation.confirm()`, `checkIn()`, `checkOut()`, `cancel()`, `cancelPending()`, `noShow()` | 적합. 재고/결제와의 원자성 계약은 Application orchestration에서 별도 명시가 필요하다. |
@@ -96,7 +96,7 @@ graph LR
 | `Member` | private constructor + factory/reconstitute, immutable copy 기반 | `PropertyAccess`는 내부 VO로 다뤄지는 것이 자연스럽다. |
 | `Property` | private constructor + factory/reconstitute, 상태 전이 메서드 제공 | `Instant.now()`가 도메인 내부에 남아 있어 테스트 제어성과 순수성 측면의 후속 진단 대상이다. |
 | `RoomType`, `Room` | private constructor + factory/reconstitute, 상태/정보 변경 메서드 제공 | `RoomApplication -> RoomInventoryApplication` 직접 호출이 모듈 분리 blocker다. |
-| `RoomInventory` | private constructor + factory/reconstitute, 계산 속성/재고 변경 메서드 제공 | 재고 예약/해제 기능은 Aggregate에 있고 외부 예약 소비자는 `InventoryReservationPort`만 참조한다. 단, Inventory와 Channel 동기화 결합은 남아 있다. |
+| `RoomInventory` | private constructor + factory/reconstitute, 계산 속성/재고 변경 메서드 제공 | 재고 예약/해제는 `InventoryReservationPort`, 가용 재고 동기화는 `AvailabilitySyncPort`로 외부 구현체 참조를 줄였다. |
 | `RatePlan` | private constructor + factory/reconstitute, 요금 적용 조건과 가격 산출 보유 | 적합. `RateResolver`가 순수 도메인 서비스로 남아 있다. |
 | `Guest` | private constructor + factory/reconstitute, 방문 기록/등급 산정 보유 | 적합. |
 | `Reservation` | private constructor + factory/reconstitute, 상태 전이 보유 | 적합. 다만 생성 유스케이스가 Inventory, Rate, Guest, Channel을 직접 조합하므로 Application port 설계가 필요하다. |

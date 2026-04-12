@@ -86,12 +86,19 @@ graph LR
 초기 해결 후보:
 
 - `InventoryReservationPort`: 예약/예매/만료 스케줄러가 필요한 `reserve/release` 계약만 Inventory가 소유한다. 2026-04-12에 Booking/Reservation/Webhook/PendingReservationScheduler에 적용했다.
-- `AvailabilitySyncPort`: Inventory가 Channel Application을 직접 호출하지 않고 OTA 가용 재고 동기화 요청 계약에 의존한다.
+- `AvailabilitySyncPort`: Inventory가 Channel Application을 직접 호출하지 않고 OTA 가용 재고 동기화 요청 계약에 의존한다. 2026-04-12에 적용했다.
 - 대규모 이벤트 전환은 원자성 요구사항을 먼저 검토한 뒤 진행한다.
 
 2026-04-12 변경 후 남은 직접 참조:
 
 - `room/application/service/RoomApplication.kt` -> `inventory/application/service/RoomInventoryApplication.kt`
+
+2026-04-12에 해소한 직접 참조:
+
+- `booking/application/service/BookingApplication.kt` -> `inventory/application/service/RoomInventoryApplication.kt`
+- `reservation/application/service/ReservationApplication.kt` -> `inventory/application/service/RoomInventoryApplication.kt`
+- `payment/infrastructure/scheduler/PendingReservationScheduler.kt` -> `inventory/application/service/RoomInventoryApplication.kt`
+- `channel/application/service/WebhookApplication.kt` -> `inventory/application/service/RoomInventoryApplication.kt`
 - `inventory/application/service/RoomInventoryApplication.kt` -> `channel/application/service/ChannelSyncApplication.kt`
 
 ### P4. Channel Context가 여러 하위 도메인을 포함한다

@@ -268,10 +268,10 @@ Application 레이어 크로스 참조 상태:
   booking.BookingApplication         ──▶ inventory.application.port.InventoryReservationPort
   channel.WebhookApplication         ──▶ inventory.application.port.InventoryReservationPort
   reservation.ReservationApplication ──▶ inventory.application.port.InventoryReservationPort
+  inventory.RoomInventoryApplication ──▶ inventory.application.port.AvailabilitySyncPort
 
 남은 blocker:
   room.RoomApplication               ──▶ inventory.application.RoomInventoryApplication
-  inventory.RoomInventoryApplication ──▶ channel.application.ChannelSyncApplication
 ```
 
 ---
