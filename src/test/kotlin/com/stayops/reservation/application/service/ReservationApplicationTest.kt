@@ -167,7 +167,7 @@ class ReservationApplicationTest : BehaviorSpec({
                     guestId = "guest-1",
                     guestInfo = com.stayops.reservation.domain.model.GuestInfo("홍길동", "010-1234-5678", null),
                     dateRange = DateRange.of(checkIn, checkOut), numberOfGuests = 2,
-                    channel = com.stayops.reservation.domain.model.BookingChannel("DIRECT", null, BigDecimal.ZERO),
+                    channel = com.stayops.reservation.domain.model.ReservationChannel("DIRECT", null, BigDecimal.ZERO),
                     pricing = com.stayops.reservation.domain.model.ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO)
                 )
                 every { reservationRepository.findById("rsv-c1") } returns reservation
@@ -190,7 +190,7 @@ class ReservationApplicationTest : BehaviorSpec({
                     guestId = "guest-1",
                     guestInfo = com.stayops.reservation.domain.model.GuestInfo("홍길동", "010-1234-5678", null),
                     dateRange = DateRange.of(checkIn, checkOut), numberOfGuests = 2,
-                    channel = com.stayops.reservation.domain.model.BookingChannel("DIRECT", null, BigDecimal.ZERO),
+                    channel = com.stayops.reservation.domain.model.ReservationChannel("DIRECT", null, BigDecimal.ZERO),
                     pricing = com.stayops.reservation.domain.model.ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO)
                 ).confirm()
                 every { reservationRepository.findById("rsv-c2") } returns reservation
@@ -213,7 +213,7 @@ class ReservationApplicationTest : BehaviorSpec({
                     guestId = "guest-1",
                     guestInfo = com.stayops.reservation.domain.model.GuestInfo("홍길동", "010-1234-5678", null),
                     dateRange = DateRange.of(checkIn, checkOut), numberOfGuests = 2,
-                    channel = com.stayops.reservation.domain.model.BookingChannel("DIRECT", null, BigDecimal.ZERO),
+                    channel = com.stayops.reservation.domain.model.ReservationChannel("DIRECT", null, BigDecimal.ZERO),
                     pricing = com.stayops.reservation.domain.model.ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO)
                 ).confirm().checkIn("room-101")
                 every { reservationRepository.findById("rsv-c3") } returns reservation
@@ -236,7 +236,7 @@ class ReservationApplicationTest : BehaviorSpec({
                     guestId = "guest-1",
                     guestInfo = com.stayops.reservation.domain.model.GuestInfo("홍길동", "010-1234-5678", null),
                     dateRange = DateRange.of(checkIn, checkOut), numberOfGuests = 2,
-                    channel = com.stayops.reservation.domain.model.BookingChannel("DIRECT", null, BigDecimal.ZERO),
+                    channel = com.stayops.reservation.domain.model.ReservationChannel("DIRECT", null, BigDecimal.ZERO),
                     pricing = com.stayops.reservation.domain.model.ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO)
                 ).confirm()
                 every { reservationRepository.findById("rsv-c4") } returns reservation
@@ -301,7 +301,7 @@ class ReservationApplicationTest : BehaviorSpec({
                     guestId = "guest-1",
                     guestInfo = com.stayops.reservation.domain.model.GuestInfo("홍길동", "010-1234-5678", null),
                     dateRange = DateRange.of(checkIn, checkOut), numberOfGuests = 2,
-                    channel = com.stayops.reservation.domain.model.BookingChannel("DIRECT", null, BigDecimal.ZERO),
+                    channel = com.stayops.reservation.domain.model.ReservationChannel("DIRECT", null, BigDecimal.ZERO),
                     pricing = com.stayops.reservation.domain.model.ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO)
                 ).confirm()
                 val room = Room.create(id = "room-101", propertyId = "prop-1", roomTypeId = "rt-1", roomNumber = "101", floor = 1)
@@ -338,7 +338,7 @@ class ReservationApplicationTest : BehaviorSpec({
                     guestId = "guest-1",
                     guestInfo = com.stayops.reservation.domain.model.GuestInfo("홍길동", "010-1234-5678", null),
                     dateRange = DateRange.of(checkIn, checkOut), numberOfGuests = 2,
-                    channel = com.stayops.reservation.domain.model.BookingChannel("AGODA", null, BigDecimal("0.15")),
+                    channel = com.stayops.reservation.domain.model.ReservationChannel("AGODA", null, BigDecimal("0.15")),
                     pricing = com.stayops.reservation.domain.model.ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal("0.15"))
                 ).confirm()
 
@@ -372,7 +372,7 @@ class ReservationApplicationTest : BehaviorSpec({
                     guestId = "guest-1",
                     guestInfo = com.stayops.reservation.domain.model.GuestInfo("홍길동", "010-1234-5678", null),
                     dateRange = DateRange.of(checkIn, checkOut), numberOfGuests = 2,
-                    channel = com.stayops.reservation.domain.model.BookingChannel("DIRECT", null, BigDecimal.ZERO),
+                    channel = com.stayops.reservation.domain.model.ReservationChannel("DIRECT", null, BigDecimal.ZERO),
                     pricing = com.stayops.reservation.domain.model.ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO)
                 ).confirm().checkIn("room-101")
                 val room = Room.create(id = "room-101", propertyId = "prop-1", roomTypeId = "rt-1", roomNumber = "101", floor = 1).checkIn()

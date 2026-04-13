@@ -40,7 +40,7 @@ class PendingReservationSchedulerTest : BehaviorSpec({
         guestInfo = GuestInfo("김고객", "010-1111-2222", null),
         dateRange = DateRange.of(checkIn, checkOut),
         numberOfGuests = 2,
-        channel = BookingChannel("DIRECT", commissionRate = BigDecimal.ZERO),
+        channel = ReservationChannel("DIRECT", commissionRate = BigDecimal.ZERO),
         pricing = ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO),
         memberId = "member-1",
         expiresAt = Instant.now().minusSeconds(60) // 1분 전 만료

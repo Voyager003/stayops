@@ -15,12 +15,12 @@ class ReservationTest : BehaviorSpec({
     val checkOut = LocalDate.of(2026, 4, 3)
     val dateRange = DateRange.of(checkIn, checkOut)
 
-    fun directChannel() = BookingChannel(
+    fun directChannel() = ReservationChannel(
         channelCode = "DIRECT",
         commissionRate = BigDecimal.ZERO
     )
 
-    fun otaChannel() = BookingChannel(
+    fun otaChannel() = ReservationChannel(
         channelCode = "AGODA",
         externalReservationId = "AGD-12345",
         commissionRate = BigDecimal("0.15")
@@ -169,13 +169,13 @@ class ReservationTest : BehaviorSpec({
         }
     }
 
-    // -- BookingChannel 불변식 --
+    // -- ReservationChannel 불변식 --
 
-    given("BookingChannel 생성 시") {
+    given("ReservationChannel 생성 시") {
         `when`("channelCode가 빈 문자열이면") {
             then("예외가 발생한다") {
                 shouldThrow<IllegalArgumentException> {
-                    BookingChannel(channelCode = "", commissionRate = BigDecimal.ZERO)
+                    ReservationChannel(channelCode = "", commissionRate = BigDecimal.ZERO)
                 }
             }
         }
@@ -183,7 +183,7 @@ class ReservationTest : BehaviorSpec({
         `when`("commissionRate이 음수이면") {
             then("예외가 발생한다") {
                 shouldThrow<IllegalArgumentException> {
-                    BookingChannel(channelCode = "AGODA", commissionRate = BigDecimal("-0.1"))
+                    ReservationChannel(channelCode = "AGODA", commissionRate = BigDecimal("-0.1"))
                 }
             }
         }

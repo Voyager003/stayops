@@ -99,7 +99,6 @@ class ServiceNamingConventionTest {
         )
 
         val directInventoryApplicationReferences = listOf(
-            "com/stayops/booking",
             "com/stayops/reservation",
             "com/stayops/channel",
             "com/stayops/payment"
@@ -180,6 +179,50 @@ class ServiceNamingConventionTest {
         assertTrue(
             actual = directInventoryApplicationReferences.isEmpty(),
             message = "Room must depend on RoomInventorySyncPort, not RoomInventoryApplication: $directInventoryApplicationReferences"
+        )
+    }
+
+    @Test
+    fun should_place_customer_reservation_use_cases_under_reservation_not_booking() {
+        val mainRoot = Path.of("src/main/kotlin")
+        val testRoot = Path.of("src/test/kotlin")
+
+        assertTrue(
+            actual = !Files.exists(mainRoot.resolve("com/stayops/booking")),
+            message = "Booking is not a bounded context; customer reservation use cases must live under reservation"
+        )
+        assertTrue(
+            actual = Files.exists(mainRoot.resolve("com/stayops/reservation/application/service/CustomerReservationApplication.kt")),
+            message = "Customer reservation command use case must live under the reservation context"
+        )
+        assertTrue(
+            actual = Files.exists(mainRoot.resolve("com/stayops/reservation/application/service/ReservationSearchApplication.kt")),
+            message = "Customer reservation search use case must live under the reservation context"
+        )
+        assertTrue(
+            actual = Files.exists(mainRoot.resolve("com/stayops/member/application/service/CustomerAuthApplication.kt")),
+            message = "Customer authentication is a member use case, not a booking context use case"
+        )
+
+        val bookingReferences = listOf(mainRoot, testRoot)
+            .flatMap { root ->
+                Files.walk(root).use { paths ->
+                    paths
+                        .filter { Files.isRegularFile(it) }
+                        .filter { it.fileName.toString().endsWith(".kt") }
+                        .filter { path ->
+                            val content = Files.readString(path)
+                            Regex("^\\s*(package|import) com\\.stayops\\.booking(\\.|$)", RegexOption.MULTILINE)
+                                .containsMatchIn(content) || content.contains("/api/v1/" + "booking")
+                        }
+                        .map { root.relativize(it).toString() }
+                        .toList()
+                }
+            }
+
+        assertTrue(
+            actual = bookingReferences.isEmpty(),
+            message = "Booking package and HTTP path names must be removed from source/test code: $bookingReferences"
         )
     }
 }

@@ -31,10 +31,9 @@ class SecurityConfig {
                 authorize("/actuator/info", permitAll)
                 authorize("/api/v1/auth/**", permitAll)
                 authorize("/api/v1/properties/*/channels/webhook/**", permitAll)
-                authorize("/api/v1/booking/auth/**", permitAll)
-                authorize("/api/v1/booking/properties/**", permitAll)
-                authorize("/api/v1/booking/reservations/**", authenticated)
-                authorize("/api/v1/booking/my/**", authenticated)
+                authorize("/api/v1/customer/auth/**", permitAll)
+                authorize("/api/v1/customer/properties/**", permitAll)
+                authorize("/api/v1/customer/reservations/**", authenticated)
                 authorize(anyRequest, authenticated)
             }
         }

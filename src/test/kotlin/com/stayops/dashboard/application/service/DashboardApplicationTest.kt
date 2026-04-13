@@ -35,7 +35,7 @@ class DashboardApplicationTest : BehaviorSpec({
         guestId = "guest-1",
         guestInfo = GuestInfo("홍길동", "010-1234-5678", null),
         dateRange = DateRange.of(checkIn, checkOut), numberOfGuests = 2,
-        channel = BookingChannel("DIRECT", null, BigDecimal.ZERO),
+        channel = ReservationChannel("DIRECT", null, BigDecimal.ZERO),
         pricing = ReservationPricing.calculate(Money.won(totalAmount), Money.ZERO, BigDecimal.ZERO)
     ).let {
         when (status) {

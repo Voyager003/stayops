@@ -10,7 +10,7 @@ import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
 import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.reservation.domain.event.ReservationCreated
-import com.stayops.reservation.domain.model.BookingChannel
+import com.stayops.reservation.domain.model.ReservationChannel
 import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationPricing
@@ -140,7 +140,7 @@ class WebhookApplication(
             )
 
         // 3. Create reservation (PENDING) then confirm (OTA = pre-paid, no payment needed)
-        val bookingChannel = BookingChannel(
+        val bookingChannel = ReservationChannel(
             channelCode = channelCode,
             externalReservationId = bookingId,
             commissionRate = commissionRate

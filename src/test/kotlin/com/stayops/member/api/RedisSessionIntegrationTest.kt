@@ -151,7 +151,7 @@ class RedisSessionIntegrationTest @Autowired constructor(
 
         private fun customerLoginAndGetCookie(): String {
             val (status, setCookie) = post(
-                "/api/v1/booking/auth/login",
+                "/api/v1/customer/auth/login",
                 """{"email":"customer@test.com","password":"password123"}"""
             )
             assertThat(status).isEqualTo(200)
@@ -163,7 +163,7 @@ class RedisSessionIntegrationTest @Autowired constructor(
         fun `CUSTOMER 로그인 후 세션 쿠키로 마이페이지를 호출할 수 있다`() {
             val cookie = customerLoginAndGetCookie()
 
-            val status = get("/api/v1/booking/my/reservations", cookie)
+            val status = get("/api/v1/customer/reservations", cookie)
             assertThat(status).isEqualTo(200)
         }
 
@@ -175,7 +175,7 @@ class RedisSessionIntegrationTest @Autowired constructor(
             // 세션 강제 삭제 (만료 시뮬레이션)
             redisTemplate.delete("spring:session:sessions:$sessionId")
 
-            val status = get("/api/v1/booking/my/reservations", cookie)
+            val status = get("/api/v1/customer/reservations", cookie)
             assertThat(status).isEqualTo(401)
         }
 
@@ -183,10 +183,10 @@ class RedisSessionIntegrationTest @Autowired constructor(
         fun `CUSTOMER 로그아웃 후 마이페이지를 호출하면 401을 반환한다`() {
             val cookie = customerLoginAndGetCookie()
 
-            val (logoutStatus, _) = post("/api/v1/booking/auth/logout", "", cookie)
+            val (logoutStatus, _) = post("/api/v1/customer/auth/logout", "", cookie)
             assertThat(logoutStatus).isEqualTo(204)
 
-            val status = get("/api/v1/booking/my/reservations", cookie)
+            val status = get("/api/v1/customer/reservations", cookie)
             assertThat(status).isEqualTo(401)
         }
     }

@@ -94,7 +94,7 @@ class ReservationApplication(
             guestInfo = GuestInfo(name = guestName, phone = guestPhone, email = guestEmail),
             dateRange = dateRange,
             numberOfGuests = numberOfGuests,
-            channel = BookingChannel(
+            channel = ReservationChannel(
                 channelCode = channelCode,
                 externalReservationId = externalReservationId,
                 commissionRate = channel.commissionRate

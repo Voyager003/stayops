@@ -44,7 +44,7 @@ class MongoReservationRepositoryTest @Autowired constructor(
         guestInfo = GuestInfo(name = "홍길동", phone = "010-1234-5678", email = "hong@test.com"),
         dateRange = DateRange.of(checkIn, checkOut),
         numberOfGuests = 2,
-        channel = BookingChannel(channelCode = channelCode, commissionRate = commissionRate),
+        channel = ReservationChannel(channelCode = channelCode, commissionRate = commissionRate),
         pricing = ReservationPricing.calculate(
             roomRate = Money.won(200_000),
             additionalCharges = Money.ZERO,

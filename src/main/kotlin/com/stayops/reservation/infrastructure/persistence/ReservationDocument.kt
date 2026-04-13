@@ -22,7 +22,7 @@ data class ReservationDocument(
     val nightCount: Int,
     val numberOfGuests: Int,
     val status: ReservationStatus,
-    val channel: BookingChannelData,
+    val channel: ReservationChannelData,
     val pricing: PricingData,
     val memberId: String?,
     val expiresAt: Instant?,
@@ -33,7 +33,7 @@ data class ReservationDocument(
 
     data class GuestInfoData(val name: String, val phone: String, val email: String?)
     data class DateRangeData(val checkIn: String, val checkOut: String)
-    data class BookingChannelData(
+    data class ReservationChannelData(
         val channelCode: String,
         val externalReservationId: String?,
         val commissionRate: BigDecimal
@@ -65,7 +65,7 @@ data class ReservationDocument(
         nightCount = nightCount,
         numberOfGuests = numberOfGuests,
         status = status,
-        channel = BookingChannel(
+        channel = ReservationChannel(
             channelCode = channel.channelCode,
             externalReservationId = channel.externalReservationId,
             commissionRate = channel.commissionRate
@@ -103,7 +103,7 @@ data class ReservationDocument(
             nightCount = reservation.nightCount,
             numberOfGuests = reservation.numberOfGuests,
             status = reservation.status,
-            channel = BookingChannelData(
+            channel = ReservationChannelData(
                 channelCode = reservation.channel.channelCode,
                 externalReservationId = reservation.channel.externalReservationId,
                 commissionRate = reservation.channel.commissionRate
