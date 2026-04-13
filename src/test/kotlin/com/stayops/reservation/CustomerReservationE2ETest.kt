@@ -8,6 +8,7 @@ import com.stayops.reservation.application.service.CustomerReservationApplicatio
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.inventory.application.service.RoomInventoryApplication
+import com.stayops.payment.application.service.PaymentOutboxProcessor
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentRepository
 import com.stayops.payment.domain.service.PaymentCancelResult
@@ -50,6 +51,7 @@ class CustomerReservationE2ETest @Autowired constructor(
     private val memberRepository: MemberRepository,
     private val reservationRepository: ReservationRepository,
     private val paymentRepository: PaymentRepository,
+    private val paymentOutboxProcessor: PaymentOutboxProcessor,
     private val mongoTemplate: MongoTemplate,
     @MockkBean private val paymentGateway: PaymentGateway
 ) {
@@ -134,7 +136,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             assertThat(reservationResult.reservation.memberId).isEqualTo("customer-e2e")
 
             // 2. 결제 확인
-            every { paymentGateway.confirm(any(), any(), any()) } returns PaymentConfirmResult(
+            every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
                 paymentKey = "toss_pk_e2e",
                 orderId = reservationResult.payment.orderId,
                 method = "카드",
@@ -143,17 +145,24 @@ class CustomerReservationE2ETest @Autowired constructor(
                 receiptUrl = null, cardNumber = null, cardCompany = null
             )
 
-            val confirmed = customerReservationApplication.confirmPayment(
+            val requested = customerReservationApplication.confirmPayment(
                 memberId = "customer-e2e",
                 reservationId = reservationResult.reservation.id,
                 paymentKey = "toss_pk_e2e",
                 orderId = reservationResult.payment.orderId,
                 amount = BigDecimal(200_000)
             )
+            assertThat(requested.reservation.status).isEqualTo(ReservationStatus.PENDING)
+            assertThat(requested.payment.status).isEqualTo(PaymentStatus.CONFIRM_REQUESTED)
 
-            assertThat(confirmed.reservation.status).isEqualTo(ReservationStatus.CONFIRMED)
-            assertThat(confirmed.payment.status).isEqualTo(PaymentStatus.APPROVED)
-            assertThat(confirmed.payment.paymentKey).isEqualTo("toss_pk_e2e")
+            paymentOutboxProcessor.processPendingMessages(workerId = "e2e-worker")
+
+            val confirmedReservation = reservationRepository.findById(reservationResult.reservation.id)!!
+            val confirmedPayment = paymentRepository.findByReservationId(reservationResult.reservation.id)!!
+
+            assertThat(confirmedReservation.status).isEqualTo(ReservationStatus.CONFIRMED)
+            assertThat(confirmedPayment.status).isEqualTo(PaymentStatus.APPROVED)
+            assertThat(confirmedPayment.paymentKey).isEqualTo("toss_pk_e2e")
 
             // 3. 마이페이지 조회
             val myReservations = customerReservationApplication.getMyReservations("customer-e2e")
@@ -161,15 +170,20 @@ class CustomerReservationE2ETest @Autowired constructor(
             assertThat(myReservations[0].id).isEqualTo(reservationResult.reservation.id)
 
             // 4. 예약 취소 + 환불
-            every { paymentGateway.cancel("toss_pk_e2e", any()) } returns PaymentCancelResult("toss_pk_e2e")
+            every { paymentGateway.cancel("toss_pk_e2e", any(), any()) } returns PaymentCancelResult("toss_pk_e2e")
 
-            val cancelled = customerReservationApplication.cancelReservation(
+            val cancelRequested = customerReservationApplication.cancelReservation(
                 memberId = "customer-e2e",
                 reservationId = reservationResult.reservation.id
             )
 
-            assertThat(cancelled.reservation.status).isEqualTo(ReservationStatus.CANCELLED)
-            assertThat(cancelled.payment.status).isEqualTo(PaymentStatus.CANCELLED)
+            assertThat(cancelRequested.reservation.status).isEqualTo(ReservationStatus.CANCELLED)
+            assertThat(cancelRequested.payment.status).isEqualTo(PaymentStatus.CANCEL_REQUESTED)
+
+            paymentOutboxProcessor.processPendingMessages(workerId = "e2e-worker")
+
+            val cancelledPayment = paymentRepository.findByReservationId(reservationResult.reservation.id)!!
+            assertThat(cancelledPayment.status).isEqualTo(PaymentStatus.CANCELLED)
         }
     }
 
@@ -228,7 +242,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             )
 
             // 2. 첫 번째 결제 확인
-            every { paymentGateway.confirm(any(), any(), any()) } returns PaymentConfirmResult(
+            every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
                 paymentKey = "toss_pk_idempotent",
                 orderId = reservationResult.payment.orderId,
                 method = "카드",
@@ -245,8 +259,10 @@ class CustomerReservationE2ETest @Autowired constructor(
                 amount = BigDecimal(200_000)
             )
 
-            assertThat(firstResult.reservation.status).isEqualTo(ReservationStatus.CONFIRMED)
-            assertThat(firstResult.payment.status).isEqualTo(PaymentStatus.APPROVED)
+            assertThat(firstResult.reservation.status).isEqualTo(ReservationStatus.PENDING)
+            assertThat(firstResult.payment.status).isEqualTo(PaymentStatus.CONFIRM_REQUESTED)
+
+            paymentOutboxProcessor.processPendingMessages(workerId = "e2e-worker")
 
             // 3. 두 번째 결제 확인 — Toss 호출 없이 기존 결과 반환
             val secondResult = customerReservationApplication.confirmPayment(
@@ -292,7 +308,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             assertThat(afterReservation[0].availableCount).isEqualTo(initialAvailable - 1)
 
             // 결제 확인
-            every { paymentGateway.confirm(any(), any(), any()) } returns PaymentConfirmResult(
+            every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
                 paymentKey = "toss_pk_inv", orderId = reservationResult.payment.orderId,
                 method = "카드", approvedAt = Instant.now(),
                 totalAmount = BigDecimal(200_000),
@@ -305,10 +321,12 @@ class CustomerReservationE2ETest @Autowired constructor(
                 orderId = reservationResult.payment.orderId,
                 amount = BigDecimal(200_000)
             )
+            paymentOutboxProcessor.processPendingMessages(workerId = "e2e-worker")
 
             // 취소 (재고 복원)
-            every { paymentGateway.cancel("toss_pk_inv", any()) } returns PaymentCancelResult("toss_pk_inv")
+            every { paymentGateway.cancel("toss_pk_inv", any(), any()) } returns PaymentCancelResult("toss_pk_inv")
             customerReservationApplication.cancelReservation("customer-e2e", reservationResult.reservation.id)
+            paymentOutboxProcessor.processPendingMessages(workerId = "e2e-worker")
 
             val afterCancel = inventoryApplication.getAvailability(
                 "prop-e2e", "rt-e2e", checkIn, checkIn.plusDays(1)

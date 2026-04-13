@@ -20,9 +20,35 @@ data class Payment private constructor(
     val updatedAt: Instant
 ) {
 
-    fun approve(paymentKey: String, method: String, approvedAt: Instant): Payment {
+    fun requestConfirm(paymentKey: String): Payment {
+        require(paymentKey.isNotBlank()) { "paymentKey는 필수입니다" }
+
+        if (status == PaymentStatus.CONFIRM_REQUESTED) {
+            check(this.paymentKey == paymentKey) {
+                "이미 다른 paymentKey로 승인 요청되었습니다: ${this.paymentKey}"
+            }
+            return this
+        }
+
         check(status == PaymentStatus.PENDING) {
-            "PENDING 상태에서만 승인할 수 있습니다: $status"
+            "PENDING 상태에서만 승인 요청할 수 있습니다: $status"
+        }
+
+        return copy(
+            status = PaymentStatus.CONFIRM_REQUESTED,
+            paymentKey = paymentKey,
+            failReason = null,
+            updatedAt = Instant.now()
+        )
+    }
+
+    fun approve(paymentKey: String, method: String, approvedAt: Instant): Payment {
+        require(paymentKey.isNotBlank()) { "paymentKey는 필수입니다" }
+        check(status == PaymentStatus.PENDING || status == PaymentStatus.CONFIRM_REQUESTED) {
+            "PENDING 또는 CONFIRM_REQUESTED 상태에서만 승인할 수 있습니다: $status"
+        }
+        check(this.paymentKey == null || this.paymentKey == paymentKey) {
+            "승인 요청 paymentKey와 승인 결과 paymentKey가 다릅니다: ${this.paymentKey}, $paymentKey"
         }
         return copy(
             status = PaymentStatus.APPROVED,
@@ -34,8 +60,8 @@ data class Payment private constructor(
     }
 
     fun fail(reason: String): Payment {
-        check(status == PaymentStatus.PENDING) {
-            "PENDING 상태에서만 실패 처리할 수 있습니다: $status"
+        check(status == PaymentStatus.PENDING || status == PaymentStatus.CONFIRM_REQUESTED) {
+            "PENDING 또는 CONFIRM_REQUESTED 상태에서만 실패 처리할 수 있습니다: $status"
         }
         return copy(
             status = PaymentStatus.FAILED,
@@ -44,9 +70,28 @@ data class Payment private constructor(
         )
     }
 
-    fun cancel(): Payment {
+    fun requestCancel(): Payment {
+        if (status == PaymentStatus.CANCEL_REQUESTED) {
+            return this
+        }
+
         check(status == PaymentStatus.APPROVED) {
-            "APPROVED 상태에서만 취소할 수 있습니다: $status"
+            "APPROVED 상태에서만 취소 요청할 수 있습니다: $status"
+        }
+        check(!paymentKey.isNullOrBlank()) {
+            "paymentKey가 있어야 취소 요청할 수 있습니다"
+        }
+
+        return copy(
+            status = PaymentStatus.CANCEL_REQUESTED,
+            failReason = null,
+            updatedAt = Instant.now()
+        )
+    }
+
+    fun cancel(): Payment {
+        check(status == PaymentStatus.APPROVED || status == PaymentStatus.CANCEL_REQUESTED) {
+            "APPROVED 또는 CANCEL_REQUESTED 상태에서만 취소할 수 있습니다: $status"
         }
         return copy(
             status = PaymentStatus.CANCELLED,
@@ -55,8 +100,8 @@ data class Payment private constructor(
     }
 
     fun failCancel(reason: String): Payment {
-        check(status == PaymentStatus.APPROVED) {
-            "APPROVED 상태에서만 환불 실패 처리할 수 있습니다: $status"
+        check(status == PaymentStatus.APPROVED || status == PaymentStatus.CANCEL_REQUESTED) {
+            "APPROVED 또는 CANCEL_REQUESTED 상태에서만 환불 실패 처리할 수 있습니다: $status"
         }
         return copy(
             status = PaymentStatus.CANCEL_FAILED,

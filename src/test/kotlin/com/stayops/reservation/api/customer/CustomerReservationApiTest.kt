@@ -98,15 +98,12 @@ class CustomerReservationApiTest {
     inner class `결제_확인` {
 
         @Test
-        fun `유효한 요청이면 200을 반환한다`() {
+        fun `유효한 요청이면 202를 반환한다`() {
             mockCustomer()
             val result = sampleCustomerReservationResult()
-            val confirmedReservation = result.reservation.confirm()
-            val approvedPayment = result.payment.approve(
-                paymentKey = "toss_pk_123", method = "카드",
-                approvedAt = java.time.Instant.now()
-            )
-            every { customerReservationApplication.confirmPayment(any(), any(), any(), any(), any()) } returns CustomerReservationResult(confirmedReservation, approvedPayment)
+            val requestedPayment = result.payment.requestConfirm("toss_pk_123")
+            every { customerReservationApplication.confirmPayment(any(), any(), any(), any(), any()) } returns
+                CustomerReservationResult(result.reservation, requestedPayment)
 
             mockMvc.post("/api/v1/customer/reservations/rsv-1/confirm-payment") {
                 contentType = MediaType.APPLICATION_JSON
@@ -118,9 +115,9 @@ class CustomerReservationApiTest {
                     }
                 """.trimIndent()
             }.andExpect {
-                status { isOk() }
-                jsonPath("$.reservationStatus") { value("CONFIRMED") }
-                jsonPath("$.paymentStatus") { value("APPROVED") }
+                status { isAccepted() }
+                jsonPath("$.reservationStatus") { value("PENDING") }
+                jsonPath("$.paymentStatus") { value("CONFIRM_REQUESTED") }
             }
         }
     }

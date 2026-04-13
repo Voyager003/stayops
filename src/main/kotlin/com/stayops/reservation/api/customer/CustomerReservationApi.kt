@@ -47,6 +47,6 @@ class CustomerReservationApi(
             orderId = request.orderId,
             amount = request.amount
         )
-        return ResponseEntity.ok(CustomerReservationResponse.from(result))
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(CustomerReservationResponse.from(result))
     }
 }

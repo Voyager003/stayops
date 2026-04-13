@@ -15,9 +15,15 @@ class TossPaymentsClient(
     @Qualifier("tossRestClient") private val restClient: RestClient
 ) : PaymentGateway {
 
-    override fun confirm(paymentKey: String, orderId: String, amount: BigDecimal): PaymentConfirmResult {
+    override fun confirm(
+        paymentKey: String,
+        orderId: String,
+        amount: BigDecimal,
+        idempotencyKey: String
+    ): PaymentConfirmResult {
         val response = restClient.post()
             .uri("/confirm")
+            .header("Idempotency-Key", idempotencyKey)
             .body(TossConfirmRequest(paymentKey, orderId, amount))
             .retrieve()
             .body(TossConfirmResponse::class.java)
@@ -35,9 +41,10 @@ class TossPaymentsClient(
         )
     }
 
-    override fun cancel(paymentKey: String, cancelReason: String): PaymentCancelResult {
+    override fun cancel(paymentKey: String, cancelReason: String, idempotencyKey: String): PaymentCancelResult {
         val response = restClient.post()
             .uri("/$paymentKey/cancel")
+            .header("Idempotency-Key", idempotencyKey)
             .body(TossCancelRequest(cancelReason))
             .retrieve()
             .body(TossCancelResponse::class.java)

@@ -6,13 +6,12 @@ import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
 import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.payment.domain.model.Payment
+import com.stayops.payment.domain.model.PaymentOutboxStatus
+import com.stayops.payment.domain.model.PaymentOutboxType
 import com.stayops.payment.domain.model.PaymentStatus
+import com.stayops.payment.domain.repository.PaymentOutboxRepository
 import com.stayops.payment.domain.repository.PaymentRepository
-import com.stayops.payment.domain.service.PaymentCancelResult
-import com.stayops.payment.domain.service.PaymentConfirmResult
 import com.stayops.payment.domain.service.PaymentGateway
-import com.stayops.payment.domain.service.PaymentGatewayException
-import com.stayops.payment.domain.service.PaymentInquiryResult
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.rate.domain.model.RatePlanStatus
@@ -49,6 +48,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
     val ratePlanRepository = mockk<RatePlanRepository>()
     val reservationRepository = mockk<ReservationRepository>()
     val paymentRepository = mockk<PaymentRepository>()
+    val paymentOutboxRepository = mockk<PaymentOutboxRepository>()
     val inventoryReservationPort = mockk<InventoryReservationPort>()
     val paymentGateway = mockk<PaymentGateway>()
     val rateResolverService = RateResolverService()
@@ -66,8 +66,8 @@ class CustomerReservationApplicationTest : BehaviorSpec({
         ratePlanRepository = ratePlanRepository,
         reservationRepository = reservationRepository,
         paymentRepository = paymentRepository,
+        paymentOutboxRepository = paymentOutboxRepository,
         inventoryReservationPort = inventoryReservationPort,
-        paymentGateway = paymentGateway,
         rateResolverService = rateResolverService,
         clock = clock,
         idGenerator = idGenerator
@@ -106,6 +106,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
         justRun { inventoryReservationPort.reserve(any(), any(), any()) }
         every { reservationRepository.save(any()) } answers { firstArg() }
         every { paymentRepository.save(any()) } answers { firstArg() }
+        every { paymentOutboxRepository.save(any()) } answers { firstArg() }
     }
 
     fun pendingReservation(memberId: String = "member-1") = Reservation.create(
@@ -229,20 +230,15 @@ class CustomerReservationApplicationTest : BehaviorSpec({
 
     given("결제 확인 시") {
 
-        `when`("정상적으로 결제가 승인되면") {
+        `when`("정상적으로 결제 승인 요청을 접수하면") {
             clearAllMocks()
             val reservation = pendingReservation()
             val payment = pendingPayment()
             every { reservationRepository.findById("rsv-1") } returns reservation
             every { paymentRepository.findByReservationId("rsv-1") } returns payment
-            every { paymentGateway.confirm(any(), any(), any()) } returns PaymentConfirmResult(
-                paymentKey = "toss_pk_123", orderId = payment.orderId,
-                method = "카드", approvedAt = Instant.parse("2026-04-01T12:00:00Z"),
-                totalAmount = BigDecimal(200_000),
-                receiptUrl = null, cardNumber = null, cardCompany = null
-            )
+            every { paymentOutboxRepository.findByPaymentIdAndType("pay-1", PaymentOutboxType.CONFIRM_PAYMENT) } returns null
             every { paymentRepository.save(any()) } answers { firstArg() }
-            every { reservationRepository.save(any()) } answers { firstArg() }
+            every { paymentOutboxRepository.save(any()) } answers { firstArg() }
 
             val result = service.confirmPayment(
                 memberId = "member-1", reservationId = "rsv-1",
@@ -250,10 +246,51 @@ class CustomerReservationApplicationTest : BehaviorSpec({
                 amount = BigDecimal(200_000)
             )
 
-            then("Payment APPROVED + Reservation CONFIRMED") {
-                result.payment.status shouldBe PaymentStatus.APPROVED
+            then("Payment CONFIRM_REQUESTED + Reservation PENDING + Outbox PENDING") {
+                result.payment.status shouldBe PaymentStatus.CONFIRM_REQUESTED
                 result.payment.paymentKey shouldBe "toss_pk_123"
-                result.reservation.status shouldBe ReservationStatus.CONFIRMED
+                result.reservation.status shouldBe ReservationStatus.PENDING
+                verify { paymentRepository.save(match { it.status == PaymentStatus.CONFIRM_REQUESTED }) }
+                verify {
+                    paymentOutboxRepository.save(match {
+                        it.status == PaymentOutboxStatus.PENDING &&
+                            it.type == PaymentOutboxType.CONFIRM_PAYMENT &&
+                            it.idempotencyKey == "payment-confirm:pay-1:${payment.orderId}"
+                    })
+                }
+                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any(), any()) }
+            }
+        }
+
+        `when`("이미 결제 승인 Outbox가 생성된 요청을 다시 보내면") {
+            clearAllMocks()
+            val reservation = pendingReservation()
+            val payment = pendingPayment().requestConfirm("toss_pk_123")
+            val existingOutbox = com.stayops.payment.domain.model.PaymentOutboxMessage.createConfirm(
+                id = "outbox-1",
+                paymentId = "pay-1",
+                reservationId = "rsv-1",
+                memberId = "member-1",
+                paymentKey = "toss_pk_123",
+                orderId = payment.orderId,
+                amount = Money.won(200_000),
+                now = fixedInstant
+            )
+            every { reservationRepository.findById("rsv-1") } returns reservation
+            every { paymentRepository.findByReservationId("rsv-1") } returns payment
+            every { paymentOutboxRepository.findByPaymentIdAndType("pay-1", PaymentOutboxType.CONFIRM_PAYMENT) } returns existingOutbox
+
+            val result = service.confirmPayment(
+                memberId = "member-1", reservationId = "rsv-1",
+                paymentKey = "toss_pk_123", orderId = payment.orderId,
+                amount = BigDecimal(200_000)
+            )
+
+            then("Outbox를 중복 생성하지 않고 기존 요청 상태를 반환한다") {
+                result.payment.status shouldBe PaymentStatus.CONFIRM_REQUESTED
+                result.reservation.status shouldBe ReservationStatus.PENDING
+                verify(exactly = 0) { paymentOutboxRepository.save(any()) }
+                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any(), any()) }
             }
         }
 
@@ -272,7 +309,8 @@ class CustomerReservationApplicationTest : BehaviorSpec({
                         amount = BigDecimal(200_000)
                     )
                 }
-                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any()) }
+                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any(), any()) }
+                verify(exactly = 0) { paymentOutboxRepository.save(any()) }
             }
         }
 
@@ -291,7 +329,8 @@ class CustomerReservationApplicationTest : BehaviorSpec({
                         amount = BigDecimal(1_000)  // 200,000원을 1,000원으로 조작
                     )
                 }
-                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any()) }
+                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any(), any()) }
+                verify(exactly = 0) { paymentOutboxRepository.save(any()) }
             }
         }
 
@@ -310,7 +349,8 @@ class CustomerReservationApplicationTest : BehaviorSpec({
                         amount = BigDecimal(200_000)
                     )
                 }
-                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any()) }
+                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any(), any()) }
+                verify(exactly = 0) { paymentOutboxRepository.save(any()) }
             }
         }
 
@@ -347,109 +387,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
                 result.reservation.status shouldBe ReservationStatus.CONFIRMED
                 result.payment.status shouldBe PaymentStatus.APPROVED
                 result.payment.paymentKey shouldBe "toss_pk_123"
-                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any()) }
-            }
-        }
-    }
-
-    // -- 결제 확인: PG 에러 핸들링 --
-
-    given("결제 확인 시 Toss 에러가 발생하면") {
-
-        `when`("AlreadyProcessed이고 inquire 결과 DONE이면") {
-            clearAllMocks()
-            val reservation = pendingReservation()
-            val payment = pendingPayment()
-            every { reservationRepository.findById("rsv-1") } returns reservation
-            every { paymentRepository.findByReservationId("rsv-1") } returns payment
-            every { paymentGateway.confirm(any(), any(), any()) } throws
-                PaymentGatewayException.AlreadyProcessed("toss_pk_123")
-            every { paymentGateway.inquire("toss_pk_123") } returns PaymentInquiryResult(
-                paymentKey = "toss_pk_123", orderId = payment.orderId,
-                status = "DONE", totalAmount = BigDecimal(200_000)
-            )
-            every { paymentRepository.save(any()) } answers { firstArg() }
-            every { reservationRepository.save(any()) } answers { firstArg() }
-
-            val result = service.confirmPayment(
-                memberId = "member-1", reservationId = "rsv-1",
-                paymentKey = "toss_pk_123", orderId = payment.orderId,
-                amount = BigDecimal(200_000)
-            )
-
-            then("정상 처리된다 (APPROVED + CONFIRMED)") {
-                result.payment.status shouldBe PaymentStatus.APPROVED
-                result.reservation.status shouldBe ReservationStatus.CONFIRMED
-            }
-        }
-
-        `when`("AlreadyProcessed이고 inquire 결과 DONE이 아니면") {
-            clearAllMocks()
-            val reservation = pendingReservation()
-            val payment = pendingPayment()
-            every { reservationRepository.findById("rsv-1") } returns reservation
-            every { paymentRepository.findByReservationId("rsv-1") } returns payment
-            every { paymentGateway.confirm(any(), any(), any()) } throws
-                PaymentGatewayException.AlreadyProcessed("toss_pk_123")
-            every { paymentGateway.inquire("toss_pk_123") } returns PaymentInquiryResult(
-                paymentKey = "toss_pk_123", orderId = payment.orderId,
-                status = "EXPIRED", totalAmount = BigDecimal(200_000)
-            )
-            every { paymentRepository.save(any()) } answers { firstArg() }
-
-            then("Payment가 FAILED 처리되고 BusinessException이 발생한다") {
-                shouldThrow<BusinessException> {
-                    service.confirmPayment(
-                        memberId = "member-1", reservationId = "rsv-1",
-                        paymentKey = "toss_pk_123", orderId = payment.orderId,
-                        amount = BigDecimal(200_000)
-                    )
-                }
-                verify { paymentRepository.save(match { it.status == PaymentStatus.FAILED }) }
-            }
-        }
-
-        `when`("PaymentDeclined 에러가 발생하면") {
-            clearAllMocks()
-            val reservation = pendingReservation()
-            val payment = pendingPayment()
-            every { reservationRepository.findById("rsv-1") } returns reservation
-            every { paymentRepository.findByReservationId("rsv-1") } returns payment
-            every { paymentGateway.confirm(any(), any(), any()) } throws
-                PaymentGatewayException.PaymentDeclined("REJECT_CARD_PAYMENT", "카드 거절")
-            every { paymentRepository.save(any()) } answers { firstArg() }
-
-            then("Payment가 FAILED 처리되고 BusinessException이 발생한다") {
-                val ex = shouldThrow<BusinessException> {
-                    service.confirmPayment(
-                        memberId = "member-1", reservationId = "rsv-1",
-                        paymentKey = "toss_pk_123", orderId = payment.orderId,
-                        amount = BigDecimal(200_000)
-                    )
-                }
-                ex.code shouldBe "PAYMENT_DECLINED"
-                verify { paymentRepository.save(match { it.status == PaymentStatus.FAILED }) }
-            }
-        }
-
-        `when`("ProviderError 에러가 발생하면") {
-            clearAllMocks()
-            val reservation = pendingReservation()
-            val payment = pendingPayment()
-            every { reservationRepository.findById("rsv-1") } returns reservation
-            every { paymentRepository.findByReservationId("rsv-1") } returns payment
-            every { paymentGateway.confirm(any(), any(), any()) } throws
-                PaymentGatewayException.ProviderError("PROVIDER_ERROR", "PG사 장애")
-
-            then("Payment 상태 유지, ProviderError가 전파된다") {
-                shouldThrow<PaymentGatewayException.ProviderError> {
-                    service.confirmPayment(
-                        memberId = "member-1", reservationId = "rsv-1",
-                        paymentKey = "toss_pk_123", orderId = payment.orderId,
-                        amount = BigDecimal(200_000)
-                    )
-                }
-                verify(exactly = 0) { paymentRepository.save(any()) }
+                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any(), any()) }
             }
         }
     }
@@ -474,7 +412,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
                 result.reservation.status shouldBe ReservationStatus.CANCELLED
                 result.payment.status shouldBe PaymentStatus.FAILED
                 result.payment.failReason shouldBe "고객 요청에 의한 취소"
-                verify(exactly = 0) { paymentGateway.cancel(any(), any()) }
+                verify(exactly = 0) { paymentGateway.cancel(any(), any(), any()) }
                 verify(exactly = 2) { inventoryReservationPort.release("prop-1", "rt-1", any()) }
             }
         }
@@ -487,41 +425,59 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             )
             every { reservationRepository.findById("rsv-1") } returns reservation
             every { paymentRepository.findByReservationId("rsv-1") } returns payment
-            every { paymentGateway.cancel("toss_pk_456", any()) } returns PaymentCancelResult("toss_pk_456")
+            every { paymentOutboxRepository.findByPaymentIdAndType("pay-1", PaymentOutboxType.CANCEL_PAYMENT) } returns null
             every { paymentRepository.save(any()) } answers { firstArg() }
             every { reservationRepository.save(any()) } answers { firstArg() }
+            every { paymentOutboxRepository.save(any()) } answers { firstArg() }
             justRun { inventoryReservationPort.release(any(), any(), any()) }
 
             val result = service.cancelReservation(memberId = "member-1", reservationId = "rsv-1")
 
-            then("예약 취소 + 결제 환불 + 재고 복원") {
+            then("예약 취소 + 결제 취소 요청 + Outbox 생성 + 재고 복원") {
                 result.reservation.status shouldBe ReservationStatus.CANCELLED
-                result.payment.status shouldBe PaymentStatus.CANCELLED
+                result.payment.status shouldBe PaymentStatus.CANCEL_REQUESTED
                 verify(exactly = 2) { inventoryReservationPort.release("prop-1", "rt-1", any()) }
-                verify { paymentGateway.cancel("toss_pk_456", any()) }
+                verify(exactly = 0) { paymentGateway.cancel(any(), any(), any()) }
+                verify {
+                    paymentOutboxRepository.save(match {
+                        it.status == PaymentOutboxStatus.PENDING &&
+                            it.type == PaymentOutboxType.CANCEL_PAYMENT &&
+                            it.idempotencyKey == "payment-cancel:pay-1:${payment.orderId}"
+                    })
+                }
             }
         }
 
-        `when`("CONFIRMED 예약 취소 시 Toss 환불이 실패하면") {
+        `when`("CONFIRMED 예약 취소 요청 Outbox가 이미 있으면") {
             clearAllMocks()
             val reservation = pendingReservation().confirm()
             val payment = pendingPayment().approve(
                 paymentKey = "toss_pk_789", method = "카드", approvedAt = Instant.now()
+            ).requestCancel()
+            val existingOutbox = com.stayops.payment.domain.model.PaymentOutboxMessage.createCancel(
+                id = "outbox-cancel-1",
+                paymentId = "pay-1",
+                reservationId = "rsv-1",
+                memberId = "member-1",
+                paymentKey = "toss_pk_789",
+                orderId = payment.orderId,
+                amount = Money.won(200_000),
+                cancelReason = "고객 요청에 의한 취소",
+                now = fixedInstant
             )
             every { reservationRepository.findById("rsv-1") } returns reservation
             every { paymentRepository.findByReservationId("rsv-1") } returns payment
-            every { paymentGateway.cancel("toss_pk_789", any()) } throws
-                PaymentGatewayException.ProviderError("PROVIDER_ERROR", "PG사 장애")
-            every { paymentRepository.save(any()) } answers { firstArg() }
+            every { paymentOutboxRepository.findByPaymentIdAndType("pay-1", PaymentOutboxType.CANCEL_PAYMENT) } returns existingOutbox
             every { reservationRepository.save(any()) } answers { firstArg() }
             justRun { inventoryReservationPort.release(any(), any(), any()) }
 
             val result = service.cancelReservation(memberId = "member-1", reservationId = "rsv-1")
 
-            then("예약은 취소되고 Payment는 CANCEL_FAILED") {
+            then("Outbox를 중복 생성하지 않고 결제 취소 요청 상태를 반환한다") {
                 result.reservation.status shouldBe ReservationStatus.CANCELLED
-                result.payment.status shouldBe PaymentStatus.CANCEL_FAILED
-                result.payment.failReason shouldBe "환불 실패: PG사 시스템 오류 [PROVIDER_ERROR]: PG사 장애"
+                result.payment.status shouldBe PaymentStatus.CANCEL_REQUESTED
+                verify(exactly = 0) { paymentOutboxRepository.save(any()) }
+                verify(exactly = 0) { paymentGateway.cancel(any(), any(), any()) }
                 verify(exactly = 2) { inventoryReservationPort.release("prop-1", "rt-1", any()) }
             }
         }

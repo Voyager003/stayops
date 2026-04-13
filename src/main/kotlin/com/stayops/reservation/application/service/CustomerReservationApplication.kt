@@ -5,10 +5,11 @@ import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
 import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.payment.domain.model.Payment
+import com.stayops.payment.domain.model.PaymentOutboxMessage
+import com.stayops.payment.domain.model.PaymentOutboxType
+import com.stayops.payment.domain.model.PaymentStatus
+import com.stayops.payment.domain.repository.PaymentOutboxRepository
 import com.stayops.payment.domain.repository.PaymentRepository
-import com.stayops.payment.domain.service.PaymentConfirmResult
-import com.stayops.payment.domain.service.PaymentGateway
-import com.stayops.payment.domain.service.PaymentGatewayException
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
@@ -39,8 +40,8 @@ class CustomerReservationApplication(
     private val ratePlanRepository: RatePlanRepository,
     private val reservationRepository: ReservationRepository,
     private val paymentRepository: PaymentRepository,
+    private val paymentOutboxRepository: PaymentOutboxRepository,
     private val inventoryReservationPort: InventoryReservationPort,
-    private val paymentGateway: PaymentGateway,
     private val rateResolverService: RateResolverService,
     private val clock: Clock,
     private val idGenerator: IdGenerator
@@ -208,45 +209,39 @@ class CustomerReservationApplication(
             )
         }
 
-        // 6. Toss Payments 승인
-        val confirmResult: PaymentConfirmResult
-        try {
-            confirmResult = paymentGateway.confirm(paymentKey, orderId, amount)
-        } catch (e: PaymentGatewayException.AlreadyProcessed) {
-            log.warn("이미 처리된 결제, inquire로 상태 확인: paymentKey={}", paymentKey)
-            val inquiry = paymentGateway.inquire(paymentKey)
-            if (inquiry.status == "DONE") {
-                val approvedPayment = paymentRepository.save(
-                    payment.approve(paymentKey = paymentKey, method = "unknown", approvedAt = clock.instant())
-                )
-                val confirmedReservation = reservationRepository.save(reservation.confirm())
-                return CustomerReservationResult(confirmedReservation, approvedPayment)
-            }
-            paymentRepository.save(payment.fail("이미 처리된 결제이나 상태가 DONE이 아님: ${inquiry.status}"))
-            throw BusinessException("PAYMENT_ALREADY_PROCESSED", "결제가 이미 처리되었으나 정상 완료되지 않았습니다: ${inquiry.status}")
-        } catch (e: PaymentGatewayException.PaymentDeclined) {
-            log.warn("결제 거절: paymentKey={}, code={}", paymentKey, e.code)
-            paymentRepository.save(payment.fail(e.reason))
-            throw BusinessException("PAYMENT_DECLINED", "결제가 거절되었습니다: ${e.reason}")
-        } catch (e: PaymentGatewayException.ProviderError) {
-            log.error("PG사 시스템 오류: paymentKey={}, code={}", paymentKey, e.code)
-            throw e // Payment 상태 유지 (PENDING), 재시도 가능
+        if (payment.status == PaymentStatus.FAILED || payment.status == PaymentStatus.CANCELLED) {
+            throw BusinessException("PAYMENT_NOT_CONFIRMABLE", "승인 요청할 수 없는 결제 상태입니다: ${payment.status}")
         }
 
-        // 7. Payment 승인
-        val approvedPayment = paymentRepository.save(
-            payment.approve(
-                paymentKey = confirmResult.paymentKey,
-                method = confirmResult.method ?: "unknown",
-                approvedAt = confirmResult.approvedAt ?: clock.instant()
-            )
+        // 6. Payment 승인 요청 상태 저장 + 결제 승인 Outbox 생성
+        val requestedPayment = payment.requestConfirm(paymentKey)
+        val savedPayment = if (requestedPayment == payment) {
+            payment
+        } else {
+            paymentRepository.save(requestedPayment)
+        }
+
+        val existingOutbox = paymentOutboxRepository.findByPaymentIdAndType(
+            savedPayment.id,
+            PaymentOutboxType.CONFIRM_PAYMENT
         )
+        if (existingOutbox == null) {
+            paymentOutboxRepository.save(
+                PaymentOutboxMessage.createConfirm(
+                    id = idGenerator.generate(),
+                    paymentId = savedPayment.id,
+                    reservationId = reservation.id,
+                    memberId = memberId,
+                    paymentKey = paymentKey,
+                    orderId = savedPayment.orderId,
+                    amount = savedPayment.amount,
+                    now = clock.instant()
+                )
+            )
+        }
 
-        // 8. Reservation 확정
-        val confirmedReservation = reservationRepository.save(reservation.confirm())
-
-        log.info("결제 승인: reservationId={}, paymentKey={}", reservationId, paymentKey)
-        return CustomerReservationResult(confirmedReservation, approvedPayment)
+        log.info("결제 승인 요청 접수: reservationId={}, paymentId={}", reservationId, savedPayment.id)
+        return CustomerReservationResult(reservation, savedPayment)
     }
 
     @Transactional
@@ -271,14 +266,33 @@ class CustomerReservationApplication(
             cancelledReservation = reservationRepository.save(reservation.cancelPending())
             cancelledPayment = paymentRepository.save(payment.fail("고객 요청에 의한 취소"))
         } else {
-            // CONFIRMED: Toss 환불 필요
+            // CONFIRMED: 결제 취소 요청을 Outbox로 남기고 worker가 PG 취소를 처리
             cancelledReservation = reservationRepository.save(reservation.cancel())
-            cancelledPayment = try {
-                paymentGateway.cancel(payment.paymentKey!!, "고객 요청에 의한 취소")
-                paymentRepository.save(payment.cancel())
-            } catch (e: PaymentGatewayException) {
-                log.error("Toss 환불 실패: reservationId={}, paymentKey={}", reservationId, payment.paymentKey, e)
-                paymentRepository.save(payment.failCancel("환불 실패: ${e.message}"))
+            val requestedPayment = payment.requestCancel()
+            cancelledPayment = if (requestedPayment == payment) {
+                payment
+            } else {
+                paymentRepository.save(requestedPayment)
+            }
+
+            val existingOutbox = paymentOutboxRepository.findByPaymentIdAndType(
+                cancelledPayment.id,
+                PaymentOutboxType.CANCEL_PAYMENT
+            )
+            if (existingOutbox == null) {
+                paymentOutboxRepository.save(
+                    PaymentOutboxMessage.createCancel(
+                        id = idGenerator.generate(),
+                        paymentId = cancelledPayment.id,
+                        reservationId = reservation.id,
+                        memberId = memberId,
+                        paymentKey = cancelledPayment.paymentKey!!,
+                        orderId = cancelledPayment.orderId,
+                        amount = cancelledPayment.amount,
+                        cancelReason = "고객 요청에 의한 취소",
+                        now = clock.instant()
+                    )
+                )
             }
         }
 
