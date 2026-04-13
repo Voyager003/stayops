@@ -5,6 +5,7 @@ import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
 import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.payment.domain.model.Payment
+import com.stayops.payment.domain.model.PaymentCancelReason
 import com.stayops.payment.domain.model.PaymentOutboxMessage
 import com.stayops.payment.domain.model.PaymentOutboxType
 import com.stayops.payment.domain.model.PaymentStatus
@@ -98,12 +99,7 @@ class CustomerReservationApplication(
         )
         val roomRate = rateResolverService.resolveForDateRange(ratePlans, roomType.basePrice, dateRange, "DIRECT")
 
-        // 5. 재고 차감
-        dateRange.allDates().forEach { date ->
-            inventoryReservationPort.reserve(propertyId, roomTypeId, date)
-        }
-
-        // 6. Guest 조회/생성
+        // 5. Guest 조회/생성
         val guest = guestRepository.findByPropertyIdAndPhone(propertyId, guestPhone)
             ?: guestRepository.save(
                 Guest.create(
@@ -115,7 +111,7 @@ class CustomerReservationApplication(
                 )
             )
 
-        // 7. Reservation 생성 (PENDING + expiresAt)
+        // 6. Reservation 생성 (PENDING + expiresAt)
         val pricing = ReservationPricing.calculate(
             roomRate = roomRate,
             additionalCharges = Money.ZERO,
@@ -137,7 +133,7 @@ class CustomerReservationApplication(
             )
         )
 
-        // 8. Payment 생성 (PENDING)
+        // 7. Payment 생성 (PENDING)
         val payment = paymentRepository.save(
             Payment.create(
                 id = idGenerator.generate(),
@@ -264,7 +260,7 @@ class CustomerReservationApplication(
         if (reservation.status == ReservationStatus.PENDING) {
             // PENDING: 결제 전이므로 Toss 환불 불필요
             cancelledReservation = reservationRepository.save(reservation.cancelPending())
-            cancelledPayment = paymentRepository.save(payment.fail("고객 요청에 의한 취소"))
+            cancelledPayment = paymentRepository.save(payment.fail(PaymentCancelReason.CUSTOMER_REQUEST.message))
         } else {
             // CONFIRMED: 결제 취소 요청을 Outbox로 남기고 worker가 PG 취소를 처리
             cancelledReservation = reservationRepository.save(reservation.cancel())
@@ -289,16 +285,16 @@ class CustomerReservationApplication(
                         paymentKey = cancelledPayment.paymentKey!!,
                         orderId = cancelledPayment.orderId,
                         amount = cancelledPayment.amount,
-                        cancelReason = "고객 요청에 의한 취소",
+                        cancelReason = PaymentCancelReason.CUSTOMER_REQUEST.message,
                         now = clock.instant()
                     )
                 )
             }
-        }
 
-        // 4. 재고 복원
-        reservation.dateRange.allDates().forEach { date ->
-            inventoryReservationPort.release(reservation.propertyId, reservation.roomTypeId, date)
+            // 4. 확정 예약은 이미 결제 승인 worker에서 재고가 차감되었으므로 취소 시 복원한다.
+            reservation.dateRange.allDates().forEach { date ->
+                inventoryReservationPort.release(reservation.propertyId, reservation.roomTypeId, date)
+            }
         }
 
         log.info("예약 취소: reservationId={}, 이전상태={}", reservationId, reservation.status)

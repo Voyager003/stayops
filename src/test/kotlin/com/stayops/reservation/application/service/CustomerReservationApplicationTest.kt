@@ -153,14 +153,14 @@ class CustomerReservationApplicationTest : BehaviorSpec({
                 guestName = "김고객", guestPhone = "010-1111-2222", guestEmail = "kim@test.com"
             )
 
-            then("PENDING 예약 + 결제가 생성되고 Guest 생성 + 재고 차감") {
+            then("PENDING 예약 + 결제가 생성되고 Guest 생성 + 재고 차감은 하지 않는다") {
                 result.reservation.status shouldBe ReservationStatus.PENDING
                 result.reservation.memberId shouldBe "member-1"
                 result.reservation.expiresAt shouldNotBe null
                 result.payment.status shouldBe PaymentStatus.PENDING
                 result.payment.memberId shouldBe "member-1"
                 verify { guestRepository.save(any()) }
-                verify(exactly = 2) { inventoryReservationPort.reserve("prop-1", "rt-1", any()) }
+                verify(exactly = 0) { inventoryReservationPort.reserve(any(), any(), any()) }
             }
         }
 
@@ -408,12 +408,12 @@ class CustomerReservationApplicationTest : BehaviorSpec({
 
             val result = service.cancelReservation(memberId = "member-1", reservationId = "rsv-1")
 
-            then("Toss 환불 없이 예약 취소 + 재고 복원") {
+            then("Toss 환불 없이 예약 취소하고 재고는 복원하지 않는다") {
                 result.reservation.status shouldBe ReservationStatus.CANCELLED
                 result.payment.status shouldBe PaymentStatus.FAILED
                 result.payment.failReason shouldBe "고객 요청에 의한 취소"
                 verify(exactly = 0) { paymentGateway.cancel(any(), any(), any()) }
-                verify(exactly = 2) { inventoryReservationPort.release("prop-1", "rt-1", any()) }
+                verify(exactly = 0) { inventoryReservationPort.release(any(), any(), any()) }
             }
         }
 

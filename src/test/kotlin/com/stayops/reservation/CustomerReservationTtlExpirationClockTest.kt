@@ -137,7 +137,7 @@ class CustomerReservationTtlExpirationClockTest @Autowired constructor(
     }
 
     @Test
-    fun `Clock을 16분 진행하면 PENDING 예약이 자동 취소되고 재고가 복원된다`() {
+    fun `Clock을 16분 진행하면 PENDING 예약이 자동 취소되고 재고는 변하지 않는다`() {
         val mutableClock = clock as MutableClock
 
         // Given: T0 = 2026-05-15 10:00:00 UTC, 재고 1실 가용
@@ -163,12 +163,12 @@ class CustomerReservationTtlExpirationClockTest @Autowired constructor(
             .withFailMessage("expiresAt이 Clock 기준 + 15분으로 정확히 계산되어야 함")
             .isEqualTo(TestClockConfig.initialInstant.plusSeconds(15 * 60))
 
-        // 예약 직후: 재고 차감 확인
+        // 예약 직후: 재고를 차감하지 않음
         val afterReservation = inventoryApplication.getAvailability(
             propertyId, roomTypeId, checkIn, checkIn
         )[0]
-        assertThat(afterReservation.reservedCount).isEqualTo(1)
-        assertThat(afterReservation.availableCount).isEqualTo(0)
+        assertThat(afterReservation.reservedCount).isEqualTo(0)
+        assertThat(afterReservation.availableCount).isEqualTo(initialAvailable)
 
         // When: 15분 미만 진행 (예: 14분) → 아직 만료 안 됨
         mutableClock.advance(Duration.ofMinutes(14))
@@ -196,7 +196,7 @@ class CustomerReservationTtlExpirationClockTest @Autowired constructor(
             )
             .isEqualTo(ReservationStatus.CANCELLED.name)
 
-        // Then: 재고가 원상 복구됨
+        // Then: 재고는 처음 상태 그대로 유지됨
         val afterExpiry = inventoryApplication.getAvailability(
             propertyId, roomTypeId, checkIn, checkIn
         )[0]

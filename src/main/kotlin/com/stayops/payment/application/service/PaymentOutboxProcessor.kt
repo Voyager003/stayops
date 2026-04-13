@@ -1,7 +1,10 @@
 package com.stayops.payment.application.service
 
+import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.payment.domain.model.Payment
+import com.stayops.payment.domain.model.PaymentCancelReason
 import com.stayops.payment.domain.model.PaymentOutboxMessage
+import com.stayops.payment.domain.model.PaymentOutboxStatus
 import com.stayops.payment.domain.model.PaymentOutboxType
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentOutboxRepository
@@ -13,19 +16,23 @@ import com.stayops.payment.domain.service.PaymentInquiryResult
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.ConflictException
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalDate
 
 @Service
 class PaymentOutboxProcessor(
     private val outboxRepository: PaymentOutboxRepository,
     private val paymentRepository: PaymentRepository,
     private val reservationRepository: ReservationRepository,
+    private val inventoryReservationPort: InventoryReservationPort,
     private val paymentGateway: PaymentGateway,
-    private val clock: Clock
+    private val clock: Clock,
+    private val idGenerator: IdGenerator
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -169,7 +176,9 @@ class PaymentOutboxProcessor(
             return
         }
 
-        if (payment.status != PaymentStatus.APPROVED) {
+        val approvedPayment = if (payment.status == PaymentStatus.APPROVED) {
+            payment
+        } else {
             paymentRepository.save(
                 payment.approve(
                     paymentKey = confirmResult.paymentKey,
@@ -178,10 +187,72 @@ class PaymentOutboxProcessor(
                 )
             )
         }
+
+        val reservedDates = mutableListOf<LocalDate>()
+        try {
+            reservation.dateRange.allDates().forEach { date ->
+                inventoryReservationPort.reserve(reservation.propertyId, reservation.roomTypeId, date)
+                reservedDates += date
+            }
+        } catch (e: IllegalArgumentException) {
+            releaseReservedInventory(reservation, reservedDates)
+            requestPaymentCancelForInventoryUnavailable(message, approvedPayment, reservation, now)
+            return
+        } catch (e: ConflictException) {
+            releaseReservedInventory(reservation, reservedDates)
+            outboxRepository.save(message.fail(e.message ?: "재고 변경 충돌이 발생했습니다", clock.instant()))
+            return
+        }
+
         if (reservation.status == ReservationStatus.PENDING) {
             reservationRepository.save(reservation.confirm())
         }
         outboxRepository.save(message.complete(clock.instant()))
+    }
+
+    private fun requestPaymentCancelForInventoryUnavailable(
+        message: PaymentOutboxMessage,
+        payment: Payment,
+        reservation: Reservation,
+        now: Instant
+    ) {
+        val cancelRequestedPayment = paymentRepository.save(payment.requestCancel())
+
+        if (reservation.status == ReservationStatus.PENDING) {
+            reservationRepository.save(reservation.cancelPending())
+        }
+
+        val existingCancelOutbox = outboxRepository.findByPaymentIdAndType(
+            cancelRequestedPayment.id,
+            PaymentOutboxType.CANCEL_PAYMENT
+        )
+        if (existingCancelOutbox == null) {
+            outboxRepository.save(
+                PaymentOutboxMessage.createCancel(
+                    id = idGenerator.generate(),
+                    paymentId = cancelRequestedPayment.id,
+                    reservationId = reservation.id,
+                    memberId = reservation.memberId ?: message.memberId,
+                    paymentKey = cancelRequestedPayment.paymentKey ?: message.paymentKey,
+                    orderId = cancelRequestedPayment.orderId,
+                    amount = cancelRequestedPayment.amount,
+                    cancelReason = PaymentCancelReason.INVENTORY_UNAVAILABLE.message,
+                    now = now
+                )
+            )
+        }
+
+        outboxRepository.save(message.complete(clock.instant()))
+    }
+
+    private fun releaseReservedInventory(reservation: Reservation, reservedDates: List<LocalDate>) {
+        reservedDates.forEach { date ->
+            try {
+                inventoryReservationPort.release(reservation.propertyId, reservation.roomTypeId, date)
+            } catch (e: Exception) {
+                log.error("결제 승인 중 재고 보상 해제 실패: reservationId={}, date={}", reservation.id, date, e)
+            }
+        }
     }
 
     private fun isDoneForMessage(inquiry: PaymentInquiryResult, message: PaymentOutboxMessage): Boolean =
@@ -212,7 +283,7 @@ class PaymentOutboxProcessor(
         try {
             paymentGateway.cancel(
                 paymentKey = message.paymentKey,
-                cancelReason = message.cancelReason ?: "고객 요청에 의한 취소",
+                cancelReason = message.cancelReason ?: PaymentCancelReason.CUSTOMER_REQUEST.message,
                 idempotencyKey = message.idempotencyKey
             )
             paymentRepository.save(payment.cancel())
@@ -235,7 +306,7 @@ class PaymentOutboxProcessor(
 
     private fun retryOrFailCancel(message: PaymentOutboxMessage, payment: Payment, errorMessage: String) {
         val failedMessage = message.fail(errorMessage, clock.instant())
-        if (failedMessage.status == com.stayops.payment.domain.model.PaymentOutboxStatus.FAILED) {
+        if (failedMessage.status == PaymentOutboxStatus.FAILED) {
             paymentRepository.save(payment.failCancel(errorMessage))
         }
         outboxRepository.save(failedMessage)

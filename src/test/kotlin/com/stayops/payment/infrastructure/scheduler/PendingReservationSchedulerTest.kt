@@ -1,6 +1,5 @@
 package com.stayops.payment.infrastructure.scheduler
 
-import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.payment.domain.model.Payment
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentRepository
@@ -21,13 +20,11 @@ class PendingReservationSchedulerTest : BehaviorSpec({
 
     val reservationRepository = mockk<ReservationRepository>()
     val paymentRepository = mockk<PaymentRepository>()
-    val inventoryReservationPort = mockk<InventoryReservationPort>()
     val clock = Clock.fixed(Instant.parse("2026-04-08T10:00:00Z"), ZoneId.of("Asia/Seoul"))
 
     val scheduler = PendingReservationScheduler(
         reservationRepository = reservationRepository,
         paymentRepository = paymentRepository,
-        inventoryReservationPort = inventoryReservationPort,
         clock = clock
     )
 
@@ -60,15 +57,12 @@ class PendingReservationSchedulerTest : BehaviorSpec({
             every { paymentRepository.findByReservationId("rsv-2") } returns payment2
             every { reservationRepository.save(any()) } answers { firstArg() }
             every { paymentRepository.save(any()) } answers { firstArg() }
-            justRun { inventoryReservationPort.release(any(), any(), any()) }
 
             scheduler.expirePendingReservations()
 
-            then("예약이 CANCELLED되고 결제가 FAILED되고 재고가 복원된다") {
+            then("예약이 CANCELLED되고 결제가 FAILED되며 재고는 복원하지 않는다") {
                 verify(exactly = 2) { reservationRepository.save(match { it.status == ReservationStatus.CANCELLED }) }
                 verify(exactly = 2) { paymentRepository.save(match { it.status == PaymentStatus.FAILED }) }
-                // 2건 × 2박 = 4회 release
-                verify(exactly = 4) { inventoryReservationPort.release("prop-1", "rt-1", any()) }
             }
         }
 

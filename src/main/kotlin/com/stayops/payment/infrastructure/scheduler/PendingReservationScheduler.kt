@@ -1,6 +1,5 @@
 package com.stayops.payment.infrastructure.scheduler
 
-import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.payment.domain.repository.PaymentRepository
 import com.stayops.reservation.domain.repository.ReservationRepository
 import org.slf4j.LoggerFactory
@@ -12,7 +11,6 @@ import java.time.Clock
 class PendingReservationScheduler(
     private val reservationRepository: ReservationRepository,
     private val paymentRepository: PaymentRepository,
-    private val inventoryReservationPort: InventoryReservationPort,
     private val clock: Clock
 ) {
 
@@ -36,11 +34,6 @@ class PendingReservationScheduler(
                 val payment = paymentRepository.findByReservationId(reservation.id)
                 if (payment != null) {
                     paymentRepository.save(payment.fail("결제 시간 초과"))
-                }
-
-                // 3. 재고 복원
-                reservation.dateRange.allDates().forEach { date ->
-                    inventoryReservationPort.release(reservation.propertyId, reservation.roomTypeId, date)
                 }
 
                 log.info("PENDING 예약 만료 처리 완료: reservationId={}", reservation.id)

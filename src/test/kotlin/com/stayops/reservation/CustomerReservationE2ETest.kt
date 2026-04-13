@@ -282,14 +282,14 @@ class CustomerReservationE2ETest @Autowired constructor(
     inner class `재고_정합성` {
 
         @Test
-        fun `예약_후_재고_차감_취소_후_재고_복원`() {
+        fun `예약_생성_후_재고는_유지되고_결제_승인_worker_처리_후_차감된다`() {
             // 예약 전 재고 확인
             val beforeInventory = inventoryApplication.getAvailability(
                 "prop-e2e", "rt-e2e", checkIn, checkIn.plusDays(1)
             )
             val initialAvailable = beforeInventory[0].availableCount
 
-            // 예약 생성 (재고 차감)
+            // 예약 생성 (재고 차감 없음)
             val reservationResult = customerReservationApplication.createReservation(
                 memberId = "customer-e2e",
                 propertyId = "prop-e2e",
@@ -305,7 +305,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             val afterReservation = inventoryApplication.getAvailability(
                 "prop-e2e", "rt-e2e", checkIn, checkIn.plusDays(1)
             )
-            assertThat(afterReservation[0].availableCount).isEqualTo(initialAvailable - 1)
+            assertThat(afterReservation[0].availableCount).isEqualTo(initialAvailable)
 
             // 결제 확인
             every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
@@ -322,6 +322,11 @@ class CustomerReservationE2ETest @Autowired constructor(
                 amount = BigDecimal(200_000)
             )
             paymentOutboxProcessor.processPendingMessages(workerId = "e2e-worker")
+
+            val afterConfirm = inventoryApplication.getAvailability(
+                "prop-e2e", "rt-e2e", checkIn, checkIn.plusDays(1)
+            )
+            assertThat(afterConfirm[0].availableCount).isEqualTo(initialAvailable - 1)
 
             // 취소 (재고 복원)
             every { paymentGateway.cancel("toss_pk_inv", any(), any()) } returns PaymentCancelResult("toss_pk_inv")

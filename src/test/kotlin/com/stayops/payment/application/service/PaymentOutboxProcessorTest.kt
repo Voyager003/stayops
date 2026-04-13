@@ -1,8 +1,11 @@
 package com.stayops.payment.application.service
 
+import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.payment.domain.model.Payment
+import com.stayops.payment.domain.model.PaymentCancelReason
 import com.stayops.payment.domain.model.PaymentOutboxMessage
 import com.stayops.payment.domain.model.PaymentOutboxStatus
+import com.stayops.payment.domain.model.PaymentOutboxType
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentOutboxRepository
 import com.stayops.payment.domain.repository.PaymentRepository
@@ -17,7 +20,9 @@ import com.stayops.reservation.domain.model.ReservationPricing
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.shared.domain.DateRange
+import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
+import com.stayops.shared.exception.ConflictException
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
@@ -35,16 +40,22 @@ class PaymentOutboxProcessorTest : BehaviorSpec({
     val outboxRepository = mockk<PaymentOutboxRepository>()
     val paymentRepository = mockk<PaymentRepository>()
     val reservationRepository = mockk<ReservationRepository>()
+    val inventoryReservationPort = mockk<InventoryReservationPort>()
     val paymentGateway = mockk<PaymentGateway>()
     val fixedInstant = Instant.parse("2026-04-13T10:00:00Z")
     val clock = Clock.fixed(fixedInstant, ZoneId.of("Asia/Seoul"))
+    val idGenerator = object : IdGenerator {
+        override fun generate(): String = "generated-outbox-id"
+    }
 
     val processor = PaymentOutboxProcessor(
         outboxRepository = outboxRepository,
         paymentRepository = paymentRepository,
         reservationRepository = reservationRepository,
+        inventoryReservationPort = inventoryReservationPort,
         paymentGateway = paymentGateway,
-        clock = clock
+        clock = clock,
+        idGenerator = idGenerator
     )
 
     val checkIn = LocalDate.of(2026, 5, 1)
@@ -108,6 +119,9 @@ class PaymentOutboxProcessorTest : BehaviorSpec({
         every { outboxRepository.save(any()) } answers { firstArg() }
         every { paymentRepository.save(any()) } answers { firstArg() }
         every { reservationRepository.save(any()) } answers { firstArg() }
+        every { outboxRepository.findByPaymentIdAndType(any(), any()) } returns null
+        every { inventoryReservationPort.reserve(any(), any(), any()) } returns Unit
+        every { inventoryReservationPort.release(any(), any(), any()) } returns Unit
     }
 
     given("결제 승인 Outbox 처리 시") {
@@ -137,6 +151,7 @@ class PaymentOutboxProcessorTest : BehaviorSpec({
 
                 processor.processPendingMessages(workerId = "worker-1")
 
+                verify(exactly = 2) { inventoryReservationPort.reserve("prop-1", "rt-1", any()) }
                 verify { paymentRepository.save(match { it.status == PaymentStatus.APPROVED }) }
                 verify { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
                 verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
@@ -160,9 +175,95 @@ class PaymentOutboxProcessorTest : BehaviorSpec({
 
                 processor.processPendingMessages(workerId = "worker-1")
 
+                verify(exactly = 2) { inventoryReservationPort.reserve("prop-1", "rt-1", any()) }
                 verify { paymentRepository.save(match { it.status == PaymentStatus.APPROVED }) }
                 verify { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
                 verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
+            }
+        }
+
+        `when`("PG 승인 성공 후 재고가 부족하면") {
+            then("Payment를 CANCEL_REQUESTED로 바꾸고 재고 부족 보상 취소 Outbox를 생성한다") {
+                val message = confirmMessage()
+                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                every { paymentRepository.findById("pay-1") } returns confirmRequestedPayment()
+                every { reservationRepository.findById("rsv-1") } returns pendingReservation()
+                every {
+                    paymentGateway.confirm(
+                        paymentKey = "toss_pk_123",
+                        orderId = message.orderId,
+                        amount = BigDecimal(200_000),
+                        idempotencyKey = message.idempotencyKey
+                    )
+                } returns PaymentConfirmResult(
+                    paymentKey = "toss_pk_123",
+                    orderId = message.orderId,
+                    method = "카드",
+                    approvedAt = fixedInstant,
+                    totalAmount = BigDecimal(200_000),
+                    receiptUrl = null,
+                    cardNumber = null,
+                    cardCompany = null
+                )
+                every { inventoryReservationPort.reserve("prop-1", "rt-1", checkIn) } throws
+                    IllegalArgumentException("가용 객실이 없습니다: available=0")
+
+                processor.processPendingMessages(workerId = "worker-1")
+
+                verify { paymentRepository.save(match { it.status == PaymentStatus.CANCEL_REQUESTED }) }
+                verify { reservationRepository.save(match { it.status == ReservationStatus.CANCELLED }) }
+                verify {
+                    outboxRepository.save(match {
+                        it.id == "generated-outbox-id" &&
+                            it.type == PaymentOutboxType.CANCEL_PAYMENT &&
+                            it.status == PaymentOutboxStatus.PENDING &&
+                            it.cancelReason == PaymentCancelReason.INVENTORY_UNAVAILABLE.message
+                    })
+                }
+                verify { outboxRepository.save(match { it.id == "outbox-1" && it.status == PaymentOutboxStatus.COMPLETED }) }
+                verify(exactly = 0) { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
+            }
+        }
+
+        `when`("PG 승인 성공 후 일부 재고 차감 뒤 재고 변경 충돌이 발생하면") {
+            then("이미 차감한 재고를 복원하고 Outbox를 재시도 대기로 되돌린다") {
+                val message = confirmMessage()
+                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                every { paymentRepository.findById("pay-1") } returns confirmRequestedPayment()
+                every { reservationRepository.findById("rsv-1") } returns pendingReservation()
+                every {
+                    paymentGateway.confirm(
+                        paymentKey = "toss_pk_123",
+                        orderId = message.orderId,
+                        amount = BigDecimal(200_000),
+                        idempotencyKey = message.idempotencyKey
+                    )
+                } returns PaymentConfirmResult(
+                    paymentKey = "toss_pk_123",
+                    orderId = message.orderId,
+                    method = "카드",
+                    approvedAt = fixedInstant,
+                    totalAmount = BigDecimal(200_000),
+                    receiptUrl = null,
+                    cardNumber = null,
+                    cardCompany = null
+                )
+                every { inventoryReservationPort.reserve("prop-1", "rt-1", checkIn) } returns Unit
+                every { inventoryReservationPort.reserve("prop-1", "rt-1", checkIn.plusDays(1)) } throws
+                    ConflictException("INVENTORY_CONFLICT", "재고 변경 충돌이 발생했습니다")
+
+                processor.processPendingMessages(workerId = "worker-1")
+
+                verify(exactly = 1) { inventoryReservationPort.release("prop-1", "rt-1", checkIn) }
+                verify(exactly = 0) { paymentRepository.save(match { it.status == PaymentStatus.CANCEL_REQUESTED }) }
+                verify(exactly = 0) { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
+                verify {
+                    outboxRepository.save(match {
+                        it.id == "outbox-1" &&
+                            it.status == PaymentOutboxStatus.PENDING &&
+                            it.retryCount == 1
+                    })
+                }
             }
         }
 

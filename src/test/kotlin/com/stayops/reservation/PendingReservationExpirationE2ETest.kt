@@ -109,7 +109,7 @@ class PendingExpirationE2ETest @Autowired constructor(
     inner class `PENDING_만료_처리` {
 
         @Test
-        fun `PENDING_만료_시_예약이_취소되고_재고가_복원된다`() {
+        fun `PENDING_만료_시_예약이_취소되고_재고는_변하지_않는다`() {
             // Given: 예약 전 재고 확인
             val beforeInventory = inventoryApplication.getAvailability(
                 "prop-exp", "rt-exp", checkIn, checkIn
@@ -131,12 +131,12 @@ class PendingExpirationE2ETest @Autowired constructor(
             )
             assertThat(reservationResult.reservation.status).isEqualTo(ReservationStatus.PENDING)
 
-            // Verify: reservedCount increased, availableCount decreased
+            // Verify: PENDING 예약 생성은 재고를 차감하지 않는다
             val afterReservation = inventoryApplication.getAvailability(
                 "prop-exp", "rt-exp", checkIn, checkIn
             )
-            assertThat(afterReservation[0].availableCount).isEqualTo(initialAvailable - 1)
-            assertThat(afterReservation[0].reservedCount).isEqualTo(1)
+            assertThat(afterReservation[0].availableCount).isEqualTo(initialAvailable)
+            assertThat(afterReservation[0].reservedCount).isEqualTo(0)
 
             // Manually set expiresAt to past via MongoTemplate
             mongoTemplate.updateFirst(
@@ -157,11 +157,12 @@ class PendingExpirationE2ETest @Autowired constructor(
             assertThat(reservationDoc).isNotNull
             assertThat(reservationDoc!!.getString("status")).isEqualTo(ReservationStatus.CANCELLED.name)
 
-            // Then: inventory should be restored to pre-reservation value
+            // Then: inventory should remain at pre-reservation value
             val afterExpiry = inventoryApplication.getAvailability(
                 "prop-exp", "rt-exp", checkIn, checkIn
             )
             assertThat(afterExpiry[0].availableCount).isEqualTo(initialAvailable)
+            assertThat(afterExpiry[0].reservedCount).isEqualTo(0)
         }
     }
 }

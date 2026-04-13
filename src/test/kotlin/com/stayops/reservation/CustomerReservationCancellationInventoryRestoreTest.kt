@@ -134,7 +134,7 @@ class CustomerReservationCancellationInventoryRestoreTest @Autowired constructor
     inner class `3박 PENDING 예약 취소 시` {
 
         @Test
-        fun `정확히 3일치 재고가 모두 복원되고 인접 날짜는 영향받지 않는다`() {
+        fun `재고가 차감되지 않아 취소해도 재고는 변하지 않고 인접 날짜도 영향받지 않는다`() {
             // Given: 4일 모두 가용 1
             assertThat(availableCount(night1)).isEqualTo(1)
             assertThat(availableCount(night2)).isEqualTo(1)
@@ -155,13 +155,13 @@ class CustomerReservationCancellationInventoryRestoreTest @Autowired constructor
             )
             assertThat(reservationResult.reservation.status).isEqualTo(ReservationStatus.PENDING)
 
-            // 예약 후 night1~3 모두 reserved=1, night4는 그대로 available=1
-            assertThat(reservedCount(night1)).isEqualTo(1)
-            assertThat(reservedCount(night2)).isEqualTo(1)
-            assertThat(reservedCount(night3)).isEqualTo(1)
-            assertThat(availableCount(night1)).isEqualTo(0)
-            assertThat(availableCount(night2)).isEqualTo(0)
-            assertThat(availableCount(night3)).isEqualTo(0)
+            // 예약 생성만으로는 재고를 선점하지 않음
+            assertThat(reservedCount(night1)).isEqualTo(0)
+            assertThat(reservedCount(night2)).isEqualTo(0)
+            assertThat(reservedCount(night3)).isEqualTo(0)
+            assertThat(availableCount(night1)).isEqualTo(1)
+            assertThat(availableCount(night2)).isEqualTo(1)
+            assertThat(availableCount(night3)).isEqualTo(1)
             assertThat(availableCount(night4))
                 .withFailMessage("인접 날짜 night4가 영향받음")
                 .isEqualTo(1)
@@ -175,15 +175,15 @@ class CustomerReservationCancellationInventoryRestoreTest @Autowired constructor
             // Then: Payment 상태 = FAILED (PENDING 취소이므로 Toss 환불 없이 fail 처리)
             assertThat(cancelled.payment.status).isEqualTo(PaymentStatus.FAILED)
 
-            // Then: 정확히 3일치 재고가 모두 복원됨 (부분 복원 버그 방지)
+            // Then: PENDING 예약은 재고를 차감하지 않았으므로 취소 후에도 그대로 유지됨
             assertThat(reservedCount(night1))
-                .withFailMessage("night1 재고가 복원되지 않음. reservedCount=%d", reservedCount(night1))
+                .withFailMessage("night1 재고가 변경됨. reservedCount=%d", reservedCount(night1))
                 .isEqualTo(0)
             assertThat(reservedCount(night2))
-                .withFailMessage("night2 재고가 복원되지 않음. reservedCount=%d", reservedCount(night2))
+                .withFailMessage("night2 재고가 변경됨. reservedCount=%d", reservedCount(night2))
                 .isEqualTo(0)
             assertThat(reservedCount(night3))
-                .withFailMessage("night3 재고가 복원되지 않음. reservedCount=%d", reservedCount(night3))
+                .withFailMessage("night3 재고가 변경됨. reservedCount=%d", reservedCount(night3))
                 .isEqualTo(0)
             assertThat(availableCount(night1)).isEqualTo(1)
             assertThat(availableCount(night2)).isEqualTo(1)
