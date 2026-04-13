@@ -67,9 +67,8 @@ class CustomerReservationApplication(
         guestEmail: String?
     ): CustomerReservationResult {
         // 0. 중복 예약 검증
-        val activeStatuses = listOf(ReservationStatus.PENDING, ReservationStatus.CONFIRMED)
-        val hasDuplicate = reservationRepository.existsByMemberIdAndRoomTypeIdAndCheckInAndCheckOutAndStatusIn(
-            memberId, roomTypeId, checkIn, checkOut, activeStatuses
+        val hasDuplicate = reservationRepository.existsActiveByMemberIdAndRoomTypeIdAndCheckInAndCheckOut(
+            memberId, roomTypeId, checkIn, checkOut, clock.instant()
         )
         if (hasDuplicate) {
             throw ConflictException("DUPLICATE_RESERVATION", "이미 동일 조건의 예약이 존재합니다")

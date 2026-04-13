@@ -9,7 +9,6 @@ import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.inventory.application.service.RoomInventoryApplication
 import com.stayops.payment.domain.service.PaymentGateway
-import com.stayops.payment.infrastructure.scheduler.PendingReservationScheduler
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.reservation.domain.model.ReservationStatus
@@ -43,7 +42,6 @@ class PendingExpirationE2ETest @Autowired constructor(
     private val channelRepository: ChannelRepository,
     private val inventoryApplication: RoomInventoryApplication,
     private val memberRepository: MemberRepository,
-    private val pendingReservationScheduler: PendingReservationScheduler,
     private val mongoTemplate: MongoTemplate,
     @MockkBean private val paymentGateway: PaymentGateway
 ) {
@@ -109,7 +107,7 @@ class PendingExpirationE2ETest @Autowired constructor(
     inner class `PENDING_만료_처리` {
 
         @Test
-        fun `PENDING_만료_시_예약이_취소되고_재고는_변하지_않는다`() {
+        fun `만료된_PENDING은_자동_취소되지_않고_새_예약을_막지_않는다`() {
             // Given: 예약 전 재고 확인
             val beforeInventory = inventoryApplication.getAvailability(
                 "prop-exp", "rt-exp", checkIn, checkIn
@@ -145,17 +143,30 @@ class PendingExpirationE2ETest @Autowired constructor(
                 "reservations"
             )
 
-            // When: run scheduler
-            pendingReservationScheduler.expirePendingReservations()
-
-            // Then: reservation should be CANCELLED
+            // Then: scheduler 없이 기존 만료 예약은 PENDING 상태로 남는다
             val reservationDoc = mongoTemplate.findOne(
                 Query.query(Criteria.where("_id").`is`(reservationResult.reservation.id)),
                 org.bson.Document::class.java,
                 "reservations"
             )
             assertThat(reservationDoc).isNotNull
-            assertThat(reservationDoc!!.getString("status")).isEqualTo(ReservationStatus.CANCELLED.name)
+            assertThat(reservationDoc!!.getString("status")).isEqualTo(ReservationStatus.PENDING.name)
+
+            // When: 같은 조건으로 다시 예약 생성
+            val secondReservation = customerReservationApplication.createReservation(
+                memberId = "customer-exp",
+                propertyId = "prop-exp",
+                roomTypeId = "rt-exp",
+                checkIn = checkIn,
+                checkOut = checkOut,
+                numberOfGuests = 2,
+                guestName = "만료테스트고객",
+                guestPhone = "010-1111-1111",
+                guestEmail = "exp@test.com"
+            )
+
+            // Then: 만료된 PENDING은 새 예약 생성을 막지 않는다
+            assertThat(secondReservation.reservation.status).isEqualTo(ReservationStatus.PENDING)
 
             // Then: inventory should remain at pre-reservation value
             val afterExpiry = inventoryApplication.getAvailability(

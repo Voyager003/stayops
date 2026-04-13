@@ -9,7 +9,6 @@ import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.inventory.application.service.RoomInventoryApplication
 import com.stayops.payment.domain.service.PaymentGateway
-import com.stayops.payment.infrastructure.scheduler.PendingReservationScheduler
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.reservation.domain.model.ReservationStatus
@@ -19,8 +18,10 @@ import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.Money
 import com.stayops.shared.domain.MutableClock
+import com.stayops.shared.exception.BusinessException
 import com.ninjasquad.springmockk.MockkBean
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -30,33 +31,25 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.context.annotation.Primary
 import org.springframework.data.mongodb.core.MongoTemplate
+import java.math.BigDecimal
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 
 /**
- * R-9 #10: PENDING 예약의 TTL 만료를 Clock 추상화로 결정적으로 검증.
+ * PENDING 예약의 결제 가능 시간 만료를 Clock 추상화로 결정적으로 검증.
  *
- * 기존 PendingExpirationE2ETest는 mongoTemplate.updateFirst로 expiresAt을
- * 직접 과거 시각으로 변경하는 우회 방법을 사용했다. 이는 도메인 모델 계약을
- * 우회하고 실제 시간 흐름을 시뮬레이션하지 못하는 한계가 있다.
- *
- * 본 테스트는 R-10-a에서 도입한 Clock 추상화의 첫 실제 활용 사례로:
+ * 본 테스트는 Clock 추상화로:
  * 1) Clock.fixed가 아닌 MutableClock을 @Primary Bean으로 주입
  * 2) 예약 생성 시점의 시각으로 시작 (T0)
  * 3) Clock을 16분 진행 (T0 + 16분) — 실제 시간 흐름 시뮬레이션
- * 4) 스케줄러가 같은 Clock을 사용하므로 expiresAt > now 판단이 정확
- * 5) 만료된 예약이 자동 취소되고 재고가 복원되는지 검증
- *
- * 이 패턴은 mongoTemplate 우회 없이 도메인 객체의 정상 경로를 통해
- * 시간 시나리오를 검증하므로, R-10-a의 마이크로 PSA 가치를 입증한다.
+ * 4) 만료된 예약의 결제 확인이 차단되고 재고가 변하지 않는지 검증한다.
  */
 @SpringBootTest
 @Import(TestcontainersConfiguration::class, CustomerReservationTtlExpirationClockTest.TestClockConfig::class)
 class CustomerReservationTtlExpirationClockTest @Autowired constructor(
     private val customerReservationApplication: CustomerReservationApplication,
-    private val pendingReservationScheduler: PendingReservationScheduler,
     private val propertyRepository: PropertyRepository,
     private val roomTypeRepository: RoomTypeRepository,
     private val roomRepository: RoomRepository,
@@ -70,7 +63,7 @@ class CustomerReservationTtlExpirationClockTest @Autowired constructor(
 
     /**
      * MutableClock을 Spring Primary Bean으로 등록하여 프로덕션의 SystemClock을 교체.
-     * 이 Bean이 CustomerReservationApplication, PendingReservationScheduler에 자동 주입된다.
+     * 이 Bean이 CustomerReservationApplication에 자동 주입된다.
      */
     @TestConfiguration
     class TestClockConfig {
@@ -137,7 +130,7 @@ class CustomerReservationTtlExpirationClockTest @Autowired constructor(
     }
 
     @Test
-    fun `Clock을 16분 진행하면 PENDING 예약이 자동 취소되고 재고는 변하지 않는다`() {
+    fun `Clock을 16분 진행하면 PENDING 예약 결제 확인이 만료로 차단되고 재고는 변하지 않는다`() {
         val mutableClock = clock as MutableClock
 
         // Given: T0 = 2026-05-15 10:00:00 UTC, 재고 1실 가용
@@ -170,31 +163,30 @@ class CustomerReservationTtlExpirationClockTest @Autowired constructor(
         assertThat(afterReservation.reservedCount).isEqualTo(0)
         assertThat(afterReservation.availableCount).isEqualTo(initialAvailable)
 
-        // When: 15분 미만 진행 (예: 14분) → 아직 만료 안 됨
-        mutableClock.advance(Duration.ofMinutes(14))
-        pendingReservationScheduler.expirePendingReservations()
+        // When: 16분 진행 후 결제 확인 시도
+        mutableClock.advance(Duration.ofMinutes(16))
 
-        val reservationBeforeExpiry = mongoTemplate.findById(
-            reservationResult.reservation.id, org.bson.Document::class.java, "reservations"
-        )
-        assertThat(reservationBeforeExpiry!!.getString("status"))
-            .withFailMessage("14분 경과 시점에는 아직 만료되지 않아야 함")
-            .isEqualTo(ReservationStatus.PENDING.name)
-
-        // When: 추가로 2분 진행 (총 16분 경과) → 만료
-        mutableClock.advance(Duration.ofMinutes(2))
-        pendingReservationScheduler.expirePendingReservations()
-
-        // Then: 예약이 CANCELLED로 전환됨
-        val reservationAfterExpiry = mongoTemplate.findById(
-            reservationResult.reservation.id, org.bson.Document::class.java, "reservations"
-        )
-        assertThat(reservationAfterExpiry!!.getString("status"))
-            .withFailMessage(
-                "16분 경과 시점에는 만료되어야 함. 현재 status=%s",
-                reservationAfterExpiry.getString("status")
+        assertThatThrownBy {
+            customerReservationApplication.confirmPayment(
+                memberId = memberId,
+                reservationId = reservationResult.reservation.id,
+                paymentKey = "toss_pk_expired",
+                orderId = reservationResult.payment.orderId,
+                amount = BigDecimal(100_000)
             )
-            .isEqualTo(ReservationStatus.CANCELLED.name)
+        }.isInstanceOf(BusinessException::class.java)
+            .hasMessage("결제 가능 시간이 만료되었습니다")
+
+        // Then: 예약은 자동 취소되지 않고 PENDING 상태로 남는다
+        val reservationAfterExpiredPaymentAttempt = mongoTemplate.findById(
+            reservationResult.reservation.id, org.bson.Document::class.java, "reservations"
+        )
+        assertThat(reservationAfterExpiredPaymentAttempt!!.getString("status"))
+            .withFailMessage(
+                "만료된 결제 확인은 예약을 자동 취소하지 않아야 함. 현재 status=%s",
+                reservationAfterExpiredPaymentAttempt.getString("status")
+            )
+            .isEqualTo(ReservationStatus.PENDING.name)
 
         // Then: 재고는 처음 상태 그대로 유지됨
         val afterExpiry = inventoryApplication.getAvailability(

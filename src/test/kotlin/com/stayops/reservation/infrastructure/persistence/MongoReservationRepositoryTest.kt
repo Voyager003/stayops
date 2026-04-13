@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import java.math.BigDecimal
+import java.time.Instant
 import java.time.LocalDate
 
 @SpringBootTest
@@ -35,7 +36,9 @@ class MongoReservationRepositoryTest @Autowired constructor(
         checkIn: LocalDate = LocalDate.of(2026, 4, 1),
         checkOut: LocalDate = LocalDate.of(2026, 4, 3),
         channelCode: String = "DIRECT",
-        commissionRate: BigDecimal = BigDecimal.ZERO
+        commissionRate: BigDecimal = BigDecimal.ZERO,
+        memberId: String? = null,
+        expiresAt: Instant? = null
     ) = Reservation.create(
         id = id,
         propertyId = propertyId,
@@ -49,7 +52,9 @@ class MongoReservationRepositoryTest @Autowired constructor(
             roomRate = Money.won(200_000),
             additionalCharges = Money.ZERO,
             commissionRate = commissionRate
-        )
+        ),
+        memberId = memberId,
+        expiresAt = expiresAt
     )
 
     @Nested
@@ -160,6 +165,71 @@ class MongoReservationRepositoryTest @Autowired constructor(
 
             assertThat(directResults).hasSize(1)
             assertThat(otaResults).hasSize(1)
+        }
+    }
+
+    @Nested
+    inner class `existsActiveByMemberIdAndRoomTypeIdAndCheckInAndCheckOut` {
+        private val now = Instant.parse("2026-04-13T10:00:00Z")
+
+        @Test
+        fun `만료된 PENDING 예약은 중복 예약으로 보지 않는다`() {
+            reservationRepository.save(
+                newReservation(
+                    memberId = "member-1",
+                    expiresAt = now.minusSeconds(1)
+                )
+            )
+
+            val exists = reservationRepository.existsActiveByMemberIdAndRoomTypeIdAndCheckInAndCheckOut(
+                memberId = "member-1",
+                roomTypeId = "rt-1",
+                checkIn = LocalDate.of(2026, 4, 1),
+                checkOut = LocalDate.of(2026, 4, 3),
+                now = now
+            )
+
+            assertThat(exists).isEqualTo(false)
+        }
+
+        @Test
+        fun `만료되지 않은 PENDING 예약은 중복 예약으로 본다`() {
+            reservationRepository.save(
+                newReservation(
+                    memberId = "member-1",
+                    expiresAt = now.plusSeconds(1)
+                )
+            )
+
+            val exists = reservationRepository.existsActiveByMemberIdAndRoomTypeIdAndCheckInAndCheckOut(
+                memberId = "member-1",
+                roomTypeId = "rt-1",
+                checkIn = LocalDate.of(2026, 4, 1),
+                checkOut = LocalDate.of(2026, 4, 3),
+                now = now
+            )
+
+            assertThat(exists).isEqualTo(true)
+        }
+
+        @Test
+        fun `CONFIRMED 예약은 expiresAt이 지나도 중복 예약으로 본다`() {
+            reservationRepository.save(
+                newReservation(
+                    memberId = "member-1",
+                    expiresAt = now.minusSeconds(1)
+                ).confirm()
+            )
+
+            val exists = reservationRepository.existsActiveByMemberIdAndRoomTypeIdAndCheckInAndCheckOut(
+                memberId = "member-1",
+                roomTypeId = "rt-1",
+                checkIn = LocalDate.of(2026, 4, 1),
+                checkOut = LocalDate.of(2026, 4, 3),
+                now = now
+            )
+
+            assertThat(exists).isEqualTo(true)
         }
     }
 

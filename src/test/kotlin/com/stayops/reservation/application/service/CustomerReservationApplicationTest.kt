@@ -98,7 +98,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
     )
 
     fun setupCommonMocks() {
-        every { reservationRepository.existsByMemberIdAndRoomTypeIdAndCheckInAndCheckOutAndStatusIn(any(), any(), any(), any(), any()) } returns false
+        every { reservationRepository.existsActiveByMemberIdAndRoomTypeIdAndCheckInAndCheckOut(any(), any(), any(), any(), any()) } returns false
         every { propertyRepository.findById("prop-1") } returns activeProperty()
         every { roomTypeRepository.findById("rt-1") } returns activeRoomType()
         every { channelRepository.findByPropertyIdAndCode("prop-1", "DIRECT") } returns directChannel()
@@ -191,7 +191,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
                 description = "비활성", timezone = "Asia/Seoul", currency = "KRW"
             )
             every { propertyRepository.findById("prop-2") } returns inactive
-            every { reservationRepository.existsByMemberIdAndRoomTypeIdAndCheckInAndCheckOutAndStatusIn(any(), any(), any(), any(), any()) } returns false
+            every { reservationRepository.existsActiveByMemberIdAndRoomTypeIdAndCheckInAndCheckOut(any(), any(), any(), any(), any()) } returns false
 
             then("예외가 발생한다") {
                 shouldThrow<BusinessException> {
@@ -206,10 +206,11 @@ class CustomerReservationApplicationTest : BehaviorSpec({
 
         `when`("동일 조건의 PENDING/CONFIRMED 예약이 이미 존재하면") {
             clearAllMocks()
-            every { reservationRepository.existsByMemberIdAndRoomTypeIdAndCheckInAndCheckOutAndStatusIn(
-                "member-1", "rt-1", checkIn, checkOut,
-                listOf(ReservationStatus.PENDING, ReservationStatus.CONFIRMED)
-            ) } returns true
+            every {
+                reservationRepository.existsActiveByMemberIdAndRoomTypeIdAndCheckInAndCheckOut(
+                    "member-1", "rt-1", checkIn, checkOut, fixedInstant
+                )
+            } returns true
 
             then("ConflictException이 발생하고 재고 차감이 호출되지 않는다") {
                 val ex = shouldThrow<ConflictException> {
