@@ -12,6 +12,7 @@ import com.stayops.payment.domain.service.PaymentGateway
 import com.stayops.payment.domain.service.PaymentInquiryResult
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.BusinessException
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -27,19 +28,43 @@ class PaymentWebhookApplication(
     private val idGenerator: IdGenerator
 ) {
 
+    private val log = LoggerFactory.getLogger(javaClass)
+
     @Transactional
     fun handleTossPaymentStatusChanged(command: PaymentStatusChangedWebhookCommand) {
         if (command.eventType != PAYMENT_STATUS_CHANGED) {
+            log.debug(
+                "지원하지 않는 결제 웹훅 이벤트 건너뜀: eventType={}, transmissionId={}, orderId={}",
+                command.eventType,
+                command.transmissionId,
+                command.orderId
+            )
             return
         }
         if (
             command.transmissionId != null &&
             processedWebhookEventRepository.existsByTransmissionId(command.transmissionId)
         ) {
+            log.info(
+                "결제 웹훅 중복 수신 건너뜀: transmissionId={}, eventType={}, orderId={}",
+                command.transmissionId,
+                command.eventType,
+                command.orderId
+            )
             return
         }
 
-        val payment = paymentRepository.findByOrderId(command.orderId) ?: return
+        val payment = paymentRepository.findByOrderId(command.orderId)
+        if (payment == null) {
+            log.warn(
+                "결제 웹훅 내부 결제 미발견: transmissionId={}, eventType={}, orderId={}, paymentKeySuffix={}",
+                command.transmissionId,
+                command.eventType,
+                command.orderId,
+                paymentKeySuffix(command.paymentKey)
+            )
+            return
+        }
         val inquiry = paymentGateway.inquire(command.paymentKey)
         validateInquiry(payment, command.paymentKey, inquiry)
 
@@ -61,6 +86,17 @@ class PaymentWebhookApplication(
             inquiry.orderId != payment.orderId ||
             inquiry.totalAmount.compareTo(payment.amount.amount) != 0
         ) {
+            log.warn(
+                "결제 웹훅 조회 결과 불일치: paymentId={}, orderId={}, inquiryOrderId={}, paymentKeySuffix={}, " +
+                    "inquiryPaymentKeySuffix={}, expectedAmount={}, inquiryAmount={}",
+                payment.id,
+                payment.orderId,
+                inquiry.orderId,
+                paymentKeySuffix(paymentKey),
+                paymentKeySuffix(inquiry.paymentKey),
+                payment.amount.amount,
+                inquiry.totalAmount
+            )
             throw BusinessException(
                 code = "PAYMENT_WEBHOOK_MISMATCH",
                 message = "외부 결제 상태 조회 결과가 내부 결제 정보와 일치하지 않습니다"
@@ -70,6 +106,12 @@ class PaymentWebhookApplication(
 
     private fun requestConfirm(payment: Payment, paymentKey: String) {
         if (payment.status == PaymentStatus.APPROVED || payment.status == PaymentStatus.FAILED) {
+            log.info(
+                "결제 웹훅 승인 요청 건너뜀: paymentId={}, orderId={}, paymentStatus={}",
+                payment.id,
+                payment.orderId,
+                payment.status
+            )
             return
         }
         if (
@@ -77,6 +119,12 @@ class PaymentWebhookApplication(
             payment.status == PaymentStatus.CANCELLED ||
             payment.status == PaymentStatus.CANCEL_FAILED
         ) {
+            log.info(
+                "결제 웹훅 승인 요청 건너뜀: paymentId={}, orderId={}, paymentStatus={}",
+                payment.id,
+                payment.orderId,
+                payment.status
+            )
             return
         }
 
@@ -104,12 +152,40 @@ class PaymentWebhookApplication(
                     now = clock.instant()
                 )
             )
+            log.info(
+                "결제 웹훅 승인 Outbox 생성: paymentId={}, reservationId={}, orderId={}, paymentKeySuffix={}",
+                savedPayment.id,
+                savedPayment.reservationId,
+                savedPayment.orderId,
+                paymentKeySuffix(paymentKey)
+            )
+        } else {
+            log.info(
+                "결제 웹훅 승인 Outbox 중복 생성 건너뜀: paymentId={}, outboxId={}, orderId={}",
+                savedPayment.id,
+                existingOutbox.id,
+                savedPayment.orderId
+            )
         }
     }
 
     private fun failPaymentIfWaiting(payment: Payment, externalStatus: String) {
         if (payment.status == PaymentStatus.PENDING || payment.status == PaymentStatus.CONFIRM_REQUESTED) {
             paymentRepository.save(payment.fail("외부 결제 상태가 실패로 종료되었습니다: $externalStatus"))
+            log.info(
+                "결제 웹훅 실패 상태 반영: paymentId={}, orderId={}, externalStatus={}",
+                payment.id,
+                payment.orderId,
+                externalStatus
+            )
+        } else {
+            log.info(
+                "결제 웹훅 실패 상태 반영 건너뜀: paymentId={}, orderId={}, paymentStatus={}, externalStatus={}",
+                payment.id,
+                payment.orderId,
+                payment.status,
+                externalStatus
+            )
         }
     }
 
@@ -126,6 +202,9 @@ class PaymentWebhookApplication(
             )
         )
     }
+
+    private fun paymentKeySuffix(paymentKey: String): String =
+        paymentKey.takeLast(4)
 
     companion object {
         private const val PAYMENT_STATUS_CHANGED = "PAYMENT_STATUS_CHANGED"

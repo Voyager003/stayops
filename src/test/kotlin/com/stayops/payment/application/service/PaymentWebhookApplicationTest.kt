@@ -1,5 +1,8 @@
 package com.stayops.payment.application.service
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.core.read.ListAppender
 import com.stayops.payment.domain.model.Payment
 import com.stayops.payment.domain.model.PaymentOutboxMessage
 import com.stayops.payment.domain.model.PaymentOutboxStatus
@@ -20,6 +23,7 @@ import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import org.slf4j.LoggerFactory
 import java.math.BigDecimal
 import java.time.Clock
 import java.time.Instant
@@ -115,6 +119,7 @@ class PaymentWebhookApplicationTest : BehaviorSpec({
             then("PG 조회 없이 이벤트를 건너뛴다") {
                 val payment = pendingPayment()
                 every { processedWebhookEventRepository.existsByTransmissionId("tx-processed") } returns true
+                val logAppender = attachLogAppender()
 
                 sut.handleTossPaymentStatusChanged(
                     command(payment, transmissionId = "tx-processed")
@@ -123,6 +128,11 @@ class PaymentWebhookApplicationTest : BehaviorSpec({
                 verify(exactly = 0) { paymentRepository.findByOrderId(any()) }
                 verify(exactly = 0) { paymentGateway.inquire(any()) }
                 verify(exactly = 0) { paymentOutboxRepository.save(any()) }
+                logAppender.list.any {
+                    it.level == Level.INFO &&
+                        it.formattedMessage.contains("결제 웹훅 중복 수신 건너뜀") &&
+                        it.formattedMessage.contains("transmissionId=tx-processed")
+                } shouldBe true
             }
         }
 
@@ -176,6 +186,31 @@ class PaymentWebhookApplicationTest : BehaviorSpec({
             }
         }
 
+        `when`("PG 조회 결과가 내부 결제와 일치하지 않으면") {
+            then("전체 paymentKey를 노출하지 않는 경고 로그를 남긴다") {
+                val payment = pendingPayment()
+                val logAppender = attachLogAppender()
+                every { paymentRepository.findByOrderId(payment.orderId) } returns payment
+                every { paymentGateway.inquire("toss_pk_123") } returns PaymentInquiryResult(
+                    paymentKey = "toss_pk_123",
+                    orderId = payment.orderId,
+                    status = "IN_PROGRESS",
+                    totalAmount = BigDecimal(300_000)
+                )
+
+                shouldThrow<BusinessException> {
+                    sut.handleTossPaymentStatusChanged(command(payment))
+                }
+
+                logAppender.list.any {
+                    it.level == Level.WARN &&
+                        it.formattedMessage.contains("결제 웹훅 조회 결과 불일치") &&
+                        it.formattedMessage.contains("paymentKeySuffix=_123") &&
+                        !it.formattedMessage.contains("toss_pk_123")
+                } shouldBe true
+            }
+        }
+
         `when`("PG 조회 결과가 EXPIRED이면") {
             then("내부 결제를 실패 상태로 전이하고 Outbox를 만들지 않는다") {
                 val payment = pendingPayment()
@@ -207,3 +242,11 @@ class PaymentWebhookApplicationTest : BehaviorSpec({
         }
     }
 })
+
+private fun attachLogAppender(): ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> {
+    val logger = LoggerFactory.getLogger(PaymentWebhookApplication::class.java) as Logger
+    val appender = ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>()
+    appender.start()
+    logger.addAppender(appender)
+    return appender
+}
