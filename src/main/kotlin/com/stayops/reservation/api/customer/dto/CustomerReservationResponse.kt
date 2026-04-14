@@ -1,8 +1,8 @@
 package com.stayops.reservation.api.customer.dto
 
+import com.stayops.reservation.application.service.CustomerReservationReadResult
 import com.stayops.reservation.application.service.CustomerReservationResult
 import com.stayops.payment.domain.model.PaymentStatus
-import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationStatus
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -13,6 +13,7 @@ data class CustomerReservationResponse(
     val orderId: String,
     val amount: BigDecimal,
     val paymentStatus: PaymentStatus,
+    val confirmationStatus: ReservationConfirmationStatus,
     val checkIn: LocalDate,
     val checkOut: LocalDate
 ) {
@@ -23,6 +24,10 @@ data class CustomerReservationResponse(
             orderId = result.payment.orderId,
             amount = result.payment.amount.amount,
             paymentStatus = result.payment.status,
+            confirmationStatus = ReservationConfirmationStatus.from(
+                result.reservation.status,
+                result.payment.status
+            ),
             checkIn = result.reservation.dateRange.checkIn,
             checkOut = result.reservation.dateRange.checkOut
         )
@@ -34,6 +39,8 @@ data class MyReservationResponse(
     val propertyId: String,
     val roomTypeId: String,
     val status: ReservationStatus,
+    val paymentStatus: PaymentStatus?,
+    val confirmationStatus: ReservationConfirmationStatus,
     val checkIn: LocalDate,
     val checkOut: LocalDate,
     val nightCount: Int,
@@ -42,17 +49,22 @@ data class MyReservationResponse(
     val totalAmount: BigDecimal
 ) {
     companion object {
-        fun from(reservation: Reservation) = MyReservationResponse(
-            reservationId = reservation.id,
-            propertyId = reservation.propertyId,
-            roomTypeId = reservation.roomTypeId,
-            status = reservation.status,
-            checkIn = reservation.dateRange.checkIn,
-            checkOut = reservation.dateRange.checkOut,
-            nightCount = reservation.nightCount,
-            numberOfGuests = reservation.numberOfGuests,
-            guestName = reservation.guestInfo.name,
-            totalAmount = reservation.pricing.totalAmount.amount
+        fun from(result: CustomerReservationReadResult) = MyReservationResponse(
+            reservationId = result.reservation.id,
+            propertyId = result.reservation.propertyId,
+            roomTypeId = result.reservation.roomTypeId,
+            status = result.reservation.status,
+            paymentStatus = result.payment?.status,
+            confirmationStatus = ReservationConfirmationStatus.from(
+                result.reservation.status,
+                result.payment?.status
+            ),
+            checkIn = result.reservation.dateRange.checkIn,
+            checkOut = result.reservation.dateRange.checkOut,
+            nightCount = result.reservation.nightCount,
+            numberOfGuests = result.reservation.numberOfGuests,
+            guestName = result.reservation.guestInfo.name,
+            totalAmount = result.reservation.pricing.totalAmount.amount
         )
     }
 }

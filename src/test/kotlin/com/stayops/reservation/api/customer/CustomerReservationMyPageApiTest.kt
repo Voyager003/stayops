@@ -1,6 +1,7 @@
 package com.stayops.reservation.api.customer
 
 import com.stayops.reservation.application.service.CustomerReservationApplication
+import com.stayops.reservation.application.service.CustomerReservationReadResult
 import com.stayops.reservation.application.service.CustomerReservationResult
 import com.stayops.payment.domain.model.Payment
 import com.stayops.reservation.domain.model.*
@@ -54,6 +55,13 @@ class CustomerReservationMyPageApiTest {
         memberId = "member-1"
     )
 
+    private fun samplePayment(reservationId: String = "rsv-1") = Payment.create(
+        id = "pay-$reservationId",
+        reservationId = reservationId,
+        memberId = "member-1",
+        amount = Money.won(200_000)
+    )
+
     @Nested
     inner class `내_예약_목록` {
 
@@ -61,8 +69,11 @@ class CustomerReservationMyPageApiTest {
         fun `예약 목록을 반환한다`() {
             mockCustomer()
             every { customerReservationApplication.getMyReservations("member-1") } returns listOf(
-                sampleReservation("rsv-1"),
-                sampleReservation("rsv-2")
+                CustomerReservationReadResult(sampleReservation("rsv-1"), samplePayment("rsv-1")),
+                CustomerReservationReadResult(
+                    sampleReservation("rsv-2").confirm(),
+                    samplePayment("rsv-2").approve(paymentKey = "pk-2", method = "카드", approvedAt = java.time.Instant.now())
+                )
             )
 
             mockMvc.get("/api/v1/customer/reservations")
@@ -70,6 +81,11 @@ class CustomerReservationMyPageApiTest {
                     status { isOk() }
                     jsonPath("$.length()") { value(2) }
                     jsonPath("$[0].reservationId") { value("rsv-1") }
+                    jsonPath("$[0].paymentStatus") { value("PENDING") }
+                    jsonPath("$[0].confirmationStatus") { value("PAYMENT_WAITING") }
+                    jsonPath("$[1].status") { value("CONFIRMED") }
+                    jsonPath("$[1].paymentStatus") { value("APPROVED") }
+                    jsonPath("$[1].confirmationStatus") { value("CONFIRMED") }
                 }
         }
     }
@@ -80,13 +96,16 @@ class CustomerReservationMyPageApiTest {
         @Test
         fun `예약 상세를 반환한다`() {
             mockCustomer()
-            every { customerReservationApplication.getMyReservation("member-1", "rsv-1") } returns sampleReservation()
+            every { customerReservationApplication.getMyReservation("member-1", "rsv-1") } returns
+                CustomerReservationReadResult(sampleReservation(), samplePayment().requestConfirm("pk-1"))
 
             mockMvc.get("/api/v1/customer/reservations/rsv-1")
                 .andExpect {
                     status { isOk() }
                     jsonPath("$.reservationId") { value("rsv-1") }
                     jsonPath("$.status") { value("PENDING") }
+                    jsonPath("$.paymentStatus") { value("CONFIRM_REQUESTED") }
+                    jsonPath("$.confirmationStatus") { value("CONFIRMING") }
                 }
         }
     }

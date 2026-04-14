@@ -137,6 +137,42 @@ class CustomerReservationApplicationTest : BehaviorSpec({
         amount = Money.won(200_000)
     )
 
+    // -- 내 예약 조회 --
+
+    given("내 예약 조회 시") {
+
+        `when`("예약 목록을 조회하면") {
+            clearAllMocks()
+            val reservation = pendingReservation()
+            val payment = pendingPayment().requestConfirm("pk-1")
+            every { reservationRepository.findByMemberId("member-1") } returns listOf(reservation)
+            every { paymentRepository.findByMemberId("member-1") } returns listOf(payment)
+
+            val result = service.getMyReservations("member-1")
+
+            then("예약과 결제 상태를 함께 반환한다") {
+                result.size shouldBe 1
+                result[0].reservation.id shouldBe "rsv-1"
+                result[0].payment?.status shouldBe PaymentStatus.CONFIRM_REQUESTED
+            }
+        }
+
+        `when`("예약 상세를 조회하면") {
+            clearAllMocks()
+            val reservation = pendingReservation()
+            val payment = pendingPayment().requestConfirm("pk-1")
+            every { reservationRepository.findById("rsv-1") } returns reservation
+            every { paymentRepository.findByReservationId("rsv-1") } returns payment
+
+            val result = service.getMyReservation("member-1", "rsv-1")
+
+            then("예약과 결제 상태를 함께 반환한다") {
+                result.reservation.id shouldBe "rsv-1"
+                result.payment?.status shouldBe PaymentStatus.CONFIRM_REQUESTED
+            }
+        }
+    }
+
     // -- 예약 생성 --
 
     given("예약 생성 시") {

@@ -89,6 +89,7 @@ class CustomerReservationApiTest {
                 status { isCreated() }
                 jsonPath("$.reservationId") { value("rsv-1") }
                 jsonPath("$.paymentStatus") { value("PENDING") }
+                jsonPath("$.confirmationStatus") { value("PAYMENT_WAITING") }
                 jsonPath("$.orderId") { exists() }
             }
         }
@@ -118,6 +119,7 @@ class CustomerReservationApiTest {
                 status { isAccepted() }
                 jsonPath("$.reservationStatus") { value("PENDING") }
                 jsonPath("$.paymentStatus") { value("CONFIRM_REQUESTED") }
+                jsonPath("$.confirmationStatus") { value("CONFIRMING") }
             }
         }
     }
