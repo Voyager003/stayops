@@ -31,6 +31,8 @@ class SecurityConfig {
                 authorize("/actuator/info", permitAll)
                 authorize("/api/v1/auth/**", permitAll)
                 authorize("/api/v1/properties/*/channels/webhook/**", permitAll)
+                authorize("/api/v1/payments/toss/webhooks", permitAll)
+                authorize("/api/v1/payments/toss/webhooks/**", permitAll)
                 authorize("/api/v1/customer/auth/**", permitAll)
                 authorize("/api/v1/customer/properties/**", permitAll)
                 authorize("/api/v1/customer/reservations/**", authenticated)
