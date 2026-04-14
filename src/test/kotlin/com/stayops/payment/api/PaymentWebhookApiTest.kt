@@ -2,6 +2,7 @@ package com.stayops.payment.api
 
 import com.stayops.payment.application.service.PaymentStatusChangedWebhookCommand
 import com.stayops.payment.application.service.PaymentWebhookApplication
+import com.stayops.payment.domain.service.PaymentGatewayException
 import com.stayops.shared.exception.GlobalExceptionHandler
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
@@ -61,5 +62,30 @@ class PaymentWebhookApiTest {
         command.captured.status shouldBe "IN_PROGRESS"
         command.captured.totalAmount shouldBe BigDecimal(200_000)
         verify(exactly = 1) { paymentWebhookApplication.handleTossPaymentStatusChanged(any()) }
+    }
+
+    @Test
+    fun `PG 조회 장애이면 503을 반환해 Toss 재전송을 유도한다`() {
+        every { paymentWebhookApplication.handleTossPaymentStatusChanged(any()) } throws
+            PaymentGatewayException.ProviderError("PROVIDER_ERROR", "PG 조회 장애")
+
+        mockMvc.post("/api/v1/payments/toss/webhooks") {
+            contentType = MediaType.APPLICATION_JSON
+            header("tosspayments-webhook-transmission-id", "tx-api-retry")
+            content = """
+                {
+                    "eventType": "PAYMENT_STATUS_CHANGED",
+                    "createdAt": "2026-04-14T10:00:00.000000",
+                    "data": {
+                        "paymentKey": "toss_pk_123",
+                        "orderId": "STAYOPS-rsv-1-123",
+                        "status": "IN_PROGRESS",
+                        "totalAmount": 200000
+                    }
+                }
+            """.trimIndent()
+        }.andExpect {
+            status { isServiceUnavailable() }
+        }
     }
 }

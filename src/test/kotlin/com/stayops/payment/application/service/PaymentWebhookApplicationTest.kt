@@ -12,6 +12,7 @@ import com.stayops.payment.domain.repository.PaymentOutboxRepository
 import com.stayops.payment.domain.repository.PaymentRepository
 import com.stayops.payment.domain.repository.ProcessedPaymentWebhookEventRepository
 import com.stayops.payment.domain.service.PaymentGateway
+import com.stayops.payment.domain.service.PaymentGatewayException
 import com.stayops.payment.domain.service.PaymentInquiryResult
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
@@ -208,6 +209,23 @@ class PaymentWebhookApplicationTest : BehaviorSpec({
                         it.formattedMessage.contains("paymentKeySuffix=_123") &&
                         !it.formattedMessage.contains("toss_pk_123")
                 } shouldBe true
+            }
+        }
+
+        `when`("PG 조회가 일시 실패하면") {
+            then("처리 이력을 남기지 않고 예외를 올려 재전송을 유도한다") {
+                val payment = pendingPayment()
+                every { paymentRepository.findByOrderId(payment.orderId) } returns payment
+                every { paymentGateway.inquire("toss_pk_123") } throws
+                    PaymentGatewayException.ProviderError("PROVIDER_ERROR", "PG 조회 장애")
+
+                shouldThrow<PaymentGatewayException.ProviderError> {
+                    sut.handleTossPaymentStatusChanged(command(payment))
+                }
+
+                verify(exactly = 0) { processedWebhookEventRepository.saveIfAbsent(any()) }
+                verify(exactly = 0) { paymentOutboxRepository.save(any()) }
+                verify(exactly = 0) { paymentRepository.save(any()) }
             }
         }
 
