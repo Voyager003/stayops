@@ -5,6 +5,7 @@ import com.stayops.payment.application.service.PaymentWebhookApplication
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import java.math.BigDecimal
@@ -16,8 +17,11 @@ class PaymentWebhookApi(
 ) {
 
     @PostMapping
-    fun receiveTossWebhook(@RequestBody request: TossPaymentWebhookRequest): ResponseEntity<Void> {
-        paymentWebhookApplication.handleTossPaymentStatusChanged(request.toCommand())
+    fun receiveTossWebhook(
+        @RequestHeader("tosspayments-webhook-transmission-id", required = false) transmissionId: String?,
+        @RequestBody request: TossPaymentWebhookRequest
+    ): ResponseEntity<Void> {
+        paymentWebhookApplication.handleTossPaymentStatusChanged(request.toCommand(transmissionId))
         return ResponseEntity.ok().build()
     }
 }
@@ -27,8 +31,9 @@ data class TossPaymentWebhookRequest(
     val createdAt: String?,
     val data: TossPaymentWebhookPaymentData
 ) {
-    fun toCommand(): PaymentStatusChangedWebhookCommand = PaymentStatusChangedWebhookCommand(
+    fun toCommand(transmissionId: String?): PaymentStatusChangedWebhookCommand = PaymentStatusChangedWebhookCommand(
         eventType = eventType,
+        transmissionId = transmissionId,
         paymentKey = data.paymentKey,
         orderId = data.orderId,
         status = data.status,

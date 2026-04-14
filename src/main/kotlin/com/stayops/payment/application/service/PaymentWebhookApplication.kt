@@ -4,8 +4,10 @@ import com.stayops.payment.domain.model.Payment
 import com.stayops.payment.domain.model.PaymentOutboxMessage
 import com.stayops.payment.domain.model.PaymentOutboxType
 import com.stayops.payment.domain.model.PaymentStatus
+import com.stayops.payment.domain.model.ProcessedPaymentWebhookEvent
 import com.stayops.payment.domain.repository.PaymentOutboxRepository
 import com.stayops.payment.domain.repository.PaymentRepository
+import com.stayops.payment.domain.repository.ProcessedPaymentWebhookEventRepository
 import com.stayops.payment.domain.service.PaymentGateway
 import com.stayops.payment.domain.service.PaymentInquiryResult
 import com.stayops.shared.domain.IdGenerator
@@ -19,6 +21,7 @@ import java.time.Clock
 class PaymentWebhookApplication(
     private val paymentRepository: PaymentRepository,
     private val paymentOutboxRepository: PaymentOutboxRepository,
+    private val processedWebhookEventRepository: ProcessedPaymentWebhookEventRepository,
     private val paymentGateway: PaymentGateway,
     private val clock: Clock,
     private val idGenerator: IdGenerator
@@ -27,6 +30,12 @@ class PaymentWebhookApplication(
     @Transactional
     fun handleTossPaymentStatusChanged(command: PaymentStatusChangedWebhookCommand) {
         if (command.eventType != PAYMENT_STATUS_CHANGED) {
+            return
+        }
+        if (
+            command.transmissionId != null &&
+            processedWebhookEventRepository.existsByTransmissionId(command.transmissionId)
+        ) {
             return
         }
 
@@ -38,6 +47,8 @@ class PaymentWebhookApplication(
             "IN_PROGRESS", "DONE" -> requestConfirm(payment, command.paymentKey)
             "EXPIRED", "ABORTED" -> failPaymentIfWaiting(payment, inquiry.status)
         }
+
+        recordProcessedEvent(command)
     }
 
     private fun validateInquiry(
@@ -102,6 +113,20 @@ class PaymentWebhookApplication(
         }
     }
 
+    private fun recordProcessedEvent(command: PaymentStatusChangedWebhookCommand) {
+        val transmissionId = command.transmissionId ?: return
+        processedWebhookEventRepository.saveIfAbsent(
+            ProcessedPaymentWebhookEvent(
+                id = idGenerator.generate(),
+                transmissionId = transmissionId,
+                eventType = command.eventType,
+                paymentKey = command.paymentKey,
+                orderId = command.orderId,
+                processedAt = clock.instant()
+            )
+        )
+    }
+
     companion object {
         private const val PAYMENT_STATUS_CHANGED = "PAYMENT_STATUS_CHANGED"
     }
@@ -109,6 +134,7 @@ class PaymentWebhookApplication(
 
 data class PaymentStatusChangedWebhookCommand(
     val eventType: String,
+    val transmissionId: String?,
     val paymentKey: String,
     val orderId: String,
     val status: String,

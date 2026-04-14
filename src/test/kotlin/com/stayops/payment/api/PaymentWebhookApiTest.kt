@@ -37,6 +37,7 @@ class PaymentWebhookApiTest {
 
         mockMvc.post("/api/v1/payments/toss/webhooks") {
             contentType = MediaType.APPLICATION_JSON
+            header("tosspayments-webhook-transmission-id", "tx-api-1")
             content = """
                 {
                     "eventType": "PAYMENT_STATUS_CHANGED",
@@ -54,6 +55,7 @@ class PaymentWebhookApiTest {
         }
 
         command.captured.eventType shouldBe "PAYMENT_STATUS_CHANGED"
+        command.captured.transmissionId shouldBe "tx-api-1"
         command.captured.paymentKey shouldBe "toss_pk_123"
         command.captured.orderId shouldBe "STAYOPS-rsv-1-123"
         command.captured.status shouldBe "IN_PROGRESS"

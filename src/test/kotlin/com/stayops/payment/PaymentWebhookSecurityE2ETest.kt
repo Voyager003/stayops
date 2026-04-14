@@ -12,6 +12,7 @@ import com.stayops.payment.domain.service.PaymentGateway
 import com.stayops.payment.domain.service.PaymentInquiryResult
 import com.stayops.shared.domain.Money
 import io.mockk.every
+import io.mockk.verify
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -70,6 +71,7 @@ class PaymentWebhookSecurityE2ETest @Autowired constructor(
 
         mockMvc.post("/api/v1/payments/toss/webhooks") {
             contentType = MediaType.APPLICATION_JSON
+            header("tosspayments-webhook-transmission-id", "tx-security-1")
             content = """
                 {
                     "eventType": "PAYMENT_STATUS_CHANGED",
@@ -92,6 +94,35 @@ class PaymentWebhookSecurityE2ETest @Autowired constructor(
         assertThat(updatedPayment.status).isEqualTo(PaymentStatus.CONFIRM_REQUESTED)
         assertThat(outbox).isNotNull
         assertThat(outbox!!.status).isEqualTo(PaymentOutboxStatus.PENDING)
+
+        mockMvc.post("/api/v1/payments/toss/webhooks") {
+            contentType = MediaType.APPLICATION_JSON
+            header("tosspayments-webhook-transmission-id", "tx-security-1")
+            content = """
+                {
+                    "eventType": "PAYMENT_STATUS_CHANGED",
+                    "createdAt": "2026-04-14T10:00:00.000000",
+                    "data": {
+                        "paymentKey": "toss_pk_security",
+                        "orderId": "${payment.orderId}",
+                        "status": "IN_PROGRESS",
+                        "totalAmount": 200000
+                    }
+                }
+            """.trimIndent()
+        }.andExpect {
+            status { isOk() }
+        }
+
+        val processedEvents = mongoTemplate.find(
+            org.springframework.data.mongodb.core.query.Query.query(
+                org.springframework.data.mongodb.core.query.Criteria.where("transmissionId").`is`("tx-security-1")
+            ),
+            org.bson.Document::class.java,
+            "processed_payment_webhook_events"
+        )
+        assertThat(processedEvents).hasSize(1)
+        verify(exactly = 1) { paymentGateway.inquire("toss_pk_security") }
     }
 
     @Test

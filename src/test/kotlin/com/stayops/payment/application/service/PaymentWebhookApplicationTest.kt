@@ -7,6 +7,7 @@ import com.stayops.payment.domain.model.PaymentOutboxType
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentOutboxRepository
 import com.stayops.payment.domain.repository.PaymentRepository
+import com.stayops.payment.domain.repository.ProcessedPaymentWebhookEventRepository
 import com.stayops.payment.domain.service.PaymentGateway
 import com.stayops.payment.domain.service.PaymentInquiryResult
 import com.stayops.shared.domain.IdGenerator
@@ -28,6 +29,7 @@ class PaymentWebhookApplicationTest : BehaviorSpec({
 
     val paymentRepository = mockk<PaymentRepository>()
     val paymentOutboxRepository = mockk<PaymentOutboxRepository>()
+    val processedWebhookEventRepository = mockk<ProcessedPaymentWebhookEventRepository>()
     val paymentGateway = mockk<PaymentGateway>()
     val fixedInstant = Instant.parse("2026-04-14T10:00:00Z")
     val clock = Clock.fixed(fixedInstant, ZoneId.of("Asia/Seoul"))
@@ -38,6 +40,7 @@ class PaymentWebhookApplicationTest : BehaviorSpec({
     val sut = PaymentWebhookApplication(
         paymentRepository = paymentRepository,
         paymentOutboxRepository = paymentOutboxRepository,
+        processedWebhookEventRepository = processedWebhookEventRepository,
         paymentGateway = paymentGateway,
         clock = clock,
         idGenerator = idGenerator
@@ -53,9 +56,11 @@ class PaymentWebhookApplicationTest : BehaviorSpec({
     fun command(
         payment: Payment = pendingPayment(),
         externalStatus: String = "IN_PROGRESS",
-        paymentKey: String = "toss_pk_123"
+        paymentKey: String = "toss_pk_123",
+        transmissionId: String? = "tx-webhook-1"
     ) = PaymentStatusChangedWebhookCommand(
         eventType = "PAYMENT_STATUS_CHANGED",
+        transmissionId = transmissionId,
         paymentKey = paymentKey,
         orderId = payment.orderId,
         status = externalStatus,
@@ -67,6 +72,8 @@ class PaymentWebhookApplicationTest : BehaviorSpec({
         every { paymentRepository.save(any()) } answers { firstArg() }
         every { paymentOutboxRepository.save(any()) } answers { firstArg() }
         every { paymentOutboxRepository.findByPaymentIdAndType(any(), any()) } returns null
+        every { processedWebhookEventRepository.existsByTransmissionId(any()) } returns false
+        every { processedWebhookEventRepository.saveIfAbsent(any()) } returns true
     }
 
     given("Toss PAYMENT_STATUS_CHANGED 웹훅 수신 시") {
@@ -93,6 +100,29 @@ class PaymentWebhookApplicationTest : BehaviorSpec({
                             it.paymentKey == "toss_pk_123"
                     })
                 }
+                verify {
+                    processedWebhookEventRepository.saveIfAbsent(match {
+                        it.transmissionId == "tx-webhook-1" &&
+                            it.eventType == "PAYMENT_STATUS_CHANGED" &&
+                            it.paymentKey == "toss_pk_123" &&
+                            it.orderId == payment.orderId
+                    })
+                }
+            }
+        }
+
+        `when`("이미 처리한 transmissionId이면") {
+            then("PG 조회 없이 이벤트를 건너뛴다") {
+                val payment = pendingPayment()
+                every { processedWebhookEventRepository.existsByTransmissionId("tx-processed") } returns true
+
+                sut.handleTossPaymentStatusChanged(
+                    command(payment, transmissionId = "tx-processed")
+                )
+
+                verify(exactly = 0) { paymentRepository.findByOrderId(any()) }
+                verify(exactly = 0) { paymentGateway.inquire(any()) }
+                verify(exactly = 0) { paymentOutboxRepository.save(any()) }
             }
         }
 
