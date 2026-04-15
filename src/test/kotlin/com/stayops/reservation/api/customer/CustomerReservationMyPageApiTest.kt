@@ -3,7 +3,8 @@ package com.stayops.reservation.api.customer
 import com.stayops.reservation.application.service.CustomerReservationApplication
 import com.stayops.reservation.application.service.CustomerReservationReadResult
 import com.stayops.reservation.application.service.CustomerReservationResult
-import com.stayops.payment.domain.model.Payment
+import com.stayops.reservation.application.port.ReservationPaymentSnapshot
+import com.stayops.reservation.application.port.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.*
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
@@ -55,11 +56,15 @@ class CustomerReservationMyPageApiTest {
         memberId = "member-1"
     )
 
-    private fun samplePayment(reservationId: String = "rsv-1") = Payment.create(
+    private fun samplePayment(reservationId: String = "rsv-1") = ReservationPaymentSnapshot(
         id = "pay-$reservationId",
         reservationId = reservationId,
         memberId = "member-1",
-        amount = Money.won(200_000)
+        orderId = "STAYOPS-$reservationId-123",
+        amount = Money.won(200_000),
+        status = ReservationPaymentStatus.PENDING,
+        paymentKey = null,
+        failReason = null
     )
 
     @Nested
@@ -72,7 +77,7 @@ class CustomerReservationMyPageApiTest {
                 CustomerReservationReadResult(sampleReservation("rsv-1"), samplePayment("rsv-1")),
                 CustomerReservationReadResult(
                     sampleReservation("rsv-2").confirm(),
-                    samplePayment("rsv-2").approve(paymentKey = "pk-2", method = "카드", approvedAt = java.time.Instant.now())
+                    samplePayment("rsv-2").copy(status = ReservationPaymentStatus.APPROVED, paymentKey = "pk-2")
                 )
             )
 
@@ -97,7 +102,10 @@ class CustomerReservationMyPageApiTest {
         fun `예약 상세를 반환한다`() {
             mockCustomer()
             every { customerReservationApplication.getMyReservation("member-1", "rsv-1") } returns
-                CustomerReservationReadResult(sampleReservation(), samplePayment().requestConfirm("pk-1"))
+                CustomerReservationReadResult(
+                    sampleReservation(),
+                    samplePayment().copy(status = ReservationPaymentStatus.CONFIRM_REQUESTED, paymentKey = "pk-1")
+                )
 
             mockMvc.get("/api/v1/customer/reservations/rsv-1")
                 .andExpect {
@@ -117,10 +125,7 @@ class CustomerReservationMyPageApiTest {
         fun `취소 후 결과를 반환한다`() {
             mockCustomer()
             val cancelled = sampleReservation().confirm().cancel()
-            val payment = Payment.create(
-                id = "pay-1", reservationId = "rsv-1",
-                memberId = "member-1", amount = Money.won(200_000)
-            ).approve(paymentKey = "pk", method = "카드", approvedAt = java.time.Instant.now()).cancel()
+            val payment = samplePayment().copy(status = ReservationPaymentStatus.CANCELLED, paymentKey = "pk")
 
             every { customerReservationApplication.cancelReservation("member-1", "rsv-1") } returns CustomerReservationResult(cancelled, payment)
 

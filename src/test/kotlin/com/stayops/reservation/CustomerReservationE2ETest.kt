@@ -8,6 +8,7 @@ import com.stayops.reservation.application.service.CustomerReservationApplicatio
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.inventory.application.service.RoomInventoryApplication
+import com.stayops.reservation.application.port.ReservationPaymentStatus
 import com.stayops.reservation.application.service.ReservationPaymentOutboxApplication
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentRepository
@@ -132,7 +133,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             )
 
             assertThat(reservationResult.reservation.status).isEqualTo(ReservationStatus.PENDING)
-            assertThat(reservationResult.payment.status).isEqualTo(PaymentStatus.PENDING)
+            assertThat(reservationResult.payment.status).isEqualTo(ReservationPaymentStatus.PENDING)
             assertThat(reservationResult.reservation.memberId).isEqualTo("customer-e2e")
 
             // 2. 결제 확인
@@ -153,7 +154,7 @@ class CustomerReservationE2ETest @Autowired constructor(
                 amount = BigDecimal(200_000)
             )
             assertThat(requested.reservation.status).isEqualTo(ReservationStatus.PENDING)
-            assertThat(requested.payment.status).isEqualTo(PaymentStatus.CONFIRM_REQUESTED)
+            assertThat(requested.payment.status).isEqualTo(ReservationPaymentStatus.CONFIRM_REQUESTED)
 
             reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
 
@@ -168,7 +169,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             val myReservations = customerReservationApplication.getMyReservations("customer-e2e")
             assertThat(myReservations).hasSize(1)
             assertThat(myReservations[0].reservation.id).isEqualTo(reservationResult.reservation.id)
-            assertThat(myReservations[0].payment?.status).isEqualTo(PaymentStatus.APPROVED)
+            assertThat(myReservations[0].payment?.status).isEqualTo(ReservationPaymentStatus.APPROVED)
 
             // 4. 예약 취소 + 환불
             every { paymentGateway.cancel("toss_pk_e2e", any(), any()) } returns PaymentCancelResult("toss_pk_e2e")
@@ -179,7 +180,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             )
 
             assertThat(cancelRequested.reservation.status).isEqualTo(ReservationStatus.CANCELLED)
-            assertThat(cancelRequested.payment.status).isEqualTo(PaymentStatus.CANCEL_REQUESTED)
+            assertThat(cancelRequested.payment.status).isEqualTo(ReservationPaymentStatus.CANCEL_REQUESTED)
 
             reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
 
@@ -261,7 +262,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             )
 
             assertThat(firstResult.reservation.status).isEqualTo(ReservationStatus.PENDING)
-            assertThat(firstResult.payment.status).isEqualTo(PaymentStatus.CONFIRM_REQUESTED)
+            assertThat(firstResult.payment.status).isEqualTo(ReservationPaymentStatus.CONFIRM_REQUESTED)
 
             reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
 
@@ -275,7 +276,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             )
 
             assertThat(secondResult.reservation.status).isEqualTo(ReservationStatus.CONFIRMED)
-            assertThat(secondResult.payment.status).isEqualTo(PaymentStatus.APPROVED)
+            assertThat(secondResult.payment.status).isEqualTo(ReservationPaymentStatus.APPROVED)
         }
     }
 

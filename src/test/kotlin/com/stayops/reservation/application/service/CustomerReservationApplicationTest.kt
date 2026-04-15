@@ -5,18 +5,14 @@ import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
 import com.stayops.inventory.application.port.InventoryReservationPort
-import com.stayops.payment.domain.model.Payment
-import com.stayops.payment.domain.model.PaymentOutboxStatus
-import com.stayops.payment.domain.model.PaymentOutboxType
-import com.stayops.payment.domain.model.PaymentStatus
-import com.stayops.payment.domain.repository.PaymentOutboxRepository
-import com.stayops.payment.domain.repository.PaymentRepository
-import com.stayops.payment.domain.service.PaymentGateway
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolverService
+import com.stayops.reservation.application.port.ReservationPaymentPort
+import com.stayops.reservation.application.port.ReservationPaymentSnapshot
+import com.stayops.reservation.application.port.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.*
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.model.RoomType
@@ -47,10 +43,8 @@ class CustomerReservationApplicationTest : BehaviorSpec({
     val channelRepository = mockk<ChannelRepository>()
     val ratePlanRepository = mockk<RatePlanRepository>()
     val reservationRepository = mockk<ReservationRepository>()
-    val paymentRepository = mockk<PaymentRepository>()
-    val paymentOutboxRepository = mockk<PaymentOutboxRepository>()
+    val reservationPaymentPort = mockk<ReservationPaymentPort>()
     val inventoryReservationPort = mockk<InventoryReservationPort>()
-    val paymentGateway = mockk<PaymentGateway>()
     val rateResolverService = RateResolverService()
     val fixedInstant = Instant.parse("2026-04-08T10:00:00Z")
     val clock = Clock.fixed(fixedInstant, ZoneId.of("Asia/Seoul"))
@@ -65,8 +59,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
         channelRepository = channelRepository,
         ratePlanRepository = ratePlanRepository,
         reservationRepository = reservationRepository,
-        paymentRepository = paymentRepository,
-        paymentOutboxRepository = paymentOutboxRepository,
+        reservationPaymentPort = reservationPaymentPort,
         inventoryReservationPort = inventoryReservationPort,
         rateResolverService = rateResolverService,
         clock = clock,
@@ -97,18 +90,6 @@ class CustomerReservationApplicationTest : BehaviorSpec({
         name = "김고객", phone = "010-1111-2222", email = "kim@test.com"
     )
 
-    fun setupCommonMocks() {
-        every { reservationRepository.existsActiveByMemberIdAndRoomTypeIdAndCheckInAndCheckOut(any(), any(), any(), any(), any()) } returns false
-        every { propertyRepository.findById("prop-1") } returns activeProperty()
-        every { roomTypeRepository.findById("rt-1") } returns activeRoomType()
-        every { channelRepository.findByPropertyIdAndCode("prop-1", "DIRECT") } returns directChannel()
-        every { ratePlanRepository.findByPropertyIdAndRoomTypeIdAndStatus("prop-1", "rt-1", RatePlanStatus.ACTIVE) } returns emptyList()
-        justRun { inventoryReservationPort.reserve(any(), any(), any()) }
-        every { reservationRepository.save(any()) } answers { firstArg() }
-        every { paymentRepository.save(any()) } answers { firstArg() }
-        every { paymentOutboxRepository.save(any()) } answers { firstArg() }
-    }
-
     fun pendingReservation(memberId: String = "member-1") = Reservation.create(
         id = "rsv-1", propertyId = "prop-1", roomTypeId = "rt-1",
         guestId = "guest-1",
@@ -132,10 +113,49 @@ class CustomerReservationApplicationTest : BehaviorSpec({
         expiresAt = fixedInstant.minusSeconds(60)  // fixed clock 기준 1분 전 만료
     )
 
-    fun pendingPayment(reservationId: String = "rsv-1", memberId: String = "member-1") = Payment.create(
-        id = "pay-1", reservationId = reservationId, memberId = memberId,
-        amount = Money.won(200_000)
+    fun pendingPayment(reservationId: String = "rsv-1", memberId: String = "member-1") = ReservationPaymentSnapshot(
+        id = "pay-1",
+        reservationId = reservationId,
+        memberId = memberId,
+        orderId = "STAYOPS-$reservationId-test",
+        amount = Money.won(200_000),
+        status = ReservationPaymentStatus.PENDING,
+        paymentKey = null,
+        failReason = null
     )
+
+    fun ReservationPaymentSnapshot.requestConfirm(paymentKey: String) = copy(
+        status = ReservationPaymentStatus.CONFIRM_REQUESTED,
+        paymentKey = paymentKey,
+        failReason = null
+    )
+
+    fun ReservationPaymentSnapshot.approve(paymentKey: String) = copy(
+        status = ReservationPaymentStatus.APPROVED,
+        paymentKey = paymentKey,
+        failReason = null
+    )
+
+    fun ReservationPaymentSnapshot.fail(reason: String) = copy(
+        status = ReservationPaymentStatus.FAILED,
+        failReason = reason
+    )
+
+    fun ReservationPaymentSnapshot.requestCancel() = copy(
+        status = ReservationPaymentStatus.CANCEL_REQUESTED,
+        failReason = null
+    )
+
+    fun setupCommonMocks() {
+        every { reservationRepository.existsActiveByMemberIdAndRoomTypeIdAndCheckInAndCheckOut(any(), any(), any(), any(), any()) } returns false
+        every { propertyRepository.findById("prop-1") } returns activeProperty()
+        every { roomTypeRepository.findById("rt-1") } returns activeRoomType()
+        every { channelRepository.findByPropertyIdAndCode("prop-1", "DIRECT") } returns directChannel()
+        every { ratePlanRepository.findByPropertyIdAndRoomTypeIdAndStatus("prop-1", "rt-1", RatePlanStatus.ACTIVE) } returns emptyList()
+        justRun { inventoryReservationPort.reserve(any(), any(), any()) }
+        every { reservationRepository.save(any()) } answers { firstArg() }
+        every { reservationPaymentPort.createPendingPayment(any(), any(), any()) } returns pendingPayment()
+    }
 
     // -- 내 예약 조회 --
 
@@ -146,14 +166,14 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             val reservation = pendingReservation()
             val payment = pendingPayment().requestConfirm("pk-1")
             every { reservationRepository.findByMemberId("member-1") } returns listOf(reservation)
-            every { paymentRepository.findByMemberId("member-1") } returns listOf(payment)
+            every { reservationPaymentPort.findByMemberId("member-1") } returns listOf(payment)
 
             val result = service.getMyReservations("member-1")
 
             then("예약과 결제 상태를 함께 반환한다") {
                 result.size shouldBe 1
                 result[0].reservation.id shouldBe "rsv-1"
-                result[0].payment?.status shouldBe PaymentStatus.CONFIRM_REQUESTED
+                result[0].payment?.status shouldBe ReservationPaymentStatus.CONFIRM_REQUESTED
             }
         }
 
@@ -162,13 +182,13 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             val reservation = pendingReservation()
             val payment = pendingPayment().requestConfirm("pk-1")
             every { reservationRepository.findById("rsv-1") } returns reservation
-            every { paymentRepository.findByReservationId("rsv-1") } returns payment
+            every { reservationPaymentPort.findByReservationId("rsv-1") } returns payment
 
             val result = service.getMyReservation("member-1", "rsv-1")
 
             then("예약과 결제 상태를 함께 반환한다") {
                 result.reservation.id shouldBe "rsv-1"
-                result.payment?.status shouldBe PaymentStatus.CONFIRM_REQUESTED
+                result.payment?.status shouldBe ReservationPaymentStatus.CONFIRM_REQUESTED
             }
         }
     }
@@ -193,7 +213,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
                 result.reservation.status shouldBe ReservationStatus.PENDING
                 result.reservation.memberId shouldBe "member-1"
                 result.reservation.expiresAt shouldNotBe null
-                result.payment.status shouldBe PaymentStatus.PENDING
+                result.payment.status shouldBe ReservationPaymentStatus.PENDING
                 result.payment.memberId shouldBe "member-1"
                 verify { guestRepository.save(any()) }
                 verify(exactly = 0) { inventoryReservationPort.reserve(any(), any(), any()) }
@@ -272,10 +292,16 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             val reservation = pendingReservation()
             val payment = pendingPayment()
             every { reservationRepository.findById("rsv-1") } returns reservation
-            every { paymentRepository.findByReservationId("rsv-1") } returns payment
-            every { paymentOutboxRepository.findByPaymentIdAndType("pay-1", PaymentOutboxType.CONFIRM_PAYMENT) } returns null
-            every { paymentRepository.save(any()) } answers { firstArg() }
-            every { paymentOutboxRepository.save(any()) } answers { firstArg() }
+            every { reservationPaymentPort.findByReservationId("rsv-1") } returns payment
+            every {
+                reservationPaymentPort.requestConfirm(
+                    reservationId = "rsv-1",
+                    memberId = "member-1",
+                    paymentKey = "toss_pk_123",
+                    orderId = payment.orderId,
+                    amount = BigDecimal(200_000)
+                )
+            } returns payment.requestConfirm("toss_pk_123")
 
             val result = service.confirmPayment(
                 memberId = "member-1", reservationId = "rsv-1",
@@ -284,18 +310,18 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             )
 
             then("Payment CONFIRM_REQUESTED + Reservation PENDING + Outbox PENDING") {
-                result.payment.status shouldBe PaymentStatus.CONFIRM_REQUESTED
+                result.payment.status shouldBe ReservationPaymentStatus.CONFIRM_REQUESTED
                 result.payment.paymentKey shouldBe "toss_pk_123"
                 result.reservation.status shouldBe ReservationStatus.PENDING
-                verify { paymentRepository.save(match { it.status == PaymentStatus.CONFIRM_REQUESTED }) }
                 verify {
-                    paymentOutboxRepository.save(match {
-                        it.status == PaymentOutboxStatus.PENDING &&
-                            it.type == PaymentOutboxType.CONFIRM_PAYMENT &&
-                            it.idempotencyKey == "payment-confirm:pay-1:${payment.orderId}"
-                    })
+                    reservationPaymentPort.requestConfirm(
+                        reservationId = "rsv-1",
+                        memberId = "member-1",
+                        paymentKey = "toss_pk_123",
+                        orderId = payment.orderId,
+                        amount = BigDecimal(200_000)
+                    )
                 }
-                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any(), any()) }
             }
         }
 
@@ -303,19 +329,11 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             clearAllMocks()
             val reservation = pendingReservation()
             val payment = pendingPayment().requestConfirm("toss_pk_123")
-            val existingOutbox = com.stayops.payment.domain.model.PaymentOutboxMessage.createConfirm(
-                id = "outbox-1",
-                paymentId = "pay-1",
-                reservationId = "rsv-1",
-                memberId = "member-1",
-                paymentKey = "toss_pk_123",
-                orderId = payment.orderId,
-                amount = Money.won(200_000),
-                now = fixedInstant
-            )
             every { reservationRepository.findById("rsv-1") } returns reservation
-            every { paymentRepository.findByReservationId("rsv-1") } returns payment
-            every { paymentOutboxRepository.findByPaymentIdAndType("pay-1", PaymentOutboxType.CONFIRM_PAYMENT) } returns existingOutbox
+            every { reservationPaymentPort.findByReservationId("rsv-1") } returns payment
+            every {
+                reservationPaymentPort.requestConfirm("rsv-1", "member-1", "toss_pk_123", payment.orderId, BigDecimal(200_000))
+            } returns payment
 
             val result = service.confirmPayment(
                 memberId = "member-1", reservationId = "rsv-1",
@@ -324,10 +342,11 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             )
 
             then("Outbox를 중복 생성하지 않고 기존 요청 상태를 반환한다") {
-                result.payment.status shouldBe PaymentStatus.CONFIRM_REQUESTED
+                result.payment.status shouldBe ReservationPaymentStatus.CONFIRM_REQUESTED
                 result.reservation.status shouldBe ReservationStatus.PENDING
-                verify(exactly = 0) { paymentOutboxRepository.save(any()) }
-                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any(), any()) }
+                verify(exactly = 1) {
+                    reservationPaymentPort.requestConfirm("rsv-1", "member-1", "toss_pk_123", payment.orderId, BigDecimal(200_000))
+                }
             }
         }
 
@@ -336,7 +355,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             val reservation = expiredReservation()
             val payment = pendingPayment()
             every { reservationRepository.findById("rsv-1") } returns reservation
-            every { paymentRepository.findByReservationId("rsv-1") } returns payment
+            every { reservationPaymentPort.findByReservationId("rsv-1") } returns payment
 
             then("예외가 발생하고 Toss 승인이 호출되지 않는다") {
                 shouldThrow<BusinessException> {
@@ -346,8 +365,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
                         amount = BigDecimal(200_000)
                     )
                 }
-                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any(), any()) }
-                verify(exactly = 0) { paymentOutboxRepository.save(any()) }
+                verify(exactly = 0) { reservationPaymentPort.requestConfirm(any(), any(), any(), any(), any()) }
             }
         }
 
@@ -356,7 +374,10 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             val reservation = pendingReservation()
             val payment = pendingPayment()  // amount = 200,000원
             every { reservationRepository.findById("rsv-1") } returns reservation
-            every { paymentRepository.findByReservationId("rsv-1") } returns payment
+            every { reservationPaymentPort.findByReservationId("rsv-1") } returns payment
+            every {
+                reservationPaymentPort.requestConfirm("rsv-1", "member-1", "toss_pk_123", payment.orderId, BigDecimal(1_000))
+            } throws BusinessException("AMOUNT_MISMATCH", "결제 금액이 일치하지 않습니다")
 
             then("예외가 발생하고 Toss 승인이 호출되지 않는다") {
                 shouldThrow<BusinessException> {
@@ -366,8 +387,9 @@ class CustomerReservationApplicationTest : BehaviorSpec({
                         amount = BigDecimal(1_000)  // 200,000원을 1,000원으로 조작
                     )
                 }
-                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any(), any()) }
-                verify(exactly = 0) { paymentOutboxRepository.save(any()) }
+                verify(exactly = 1) {
+                    reservationPaymentPort.requestConfirm("rsv-1", "member-1", "toss_pk_123", payment.orderId, BigDecimal(1_000))
+                }
             }
         }
 
@@ -376,7 +398,10 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             val reservation = pendingReservation()
             val payment = pendingPayment()
             every { reservationRepository.findById("rsv-1") } returns reservation
-            every { paymentRepository.findByReservationId("rsv-1") } returns payment
+            every { reservationPaymentPort.findByReservationId("rsv-1") } returns payment
+            every {
+                reservationPaymentPort.requestConfirm("rsv-1", "member-1", "toss_pk_123", "TAMPERED-ORDER-ID", BigDecimal(200_000))
+            } throws BusinessException("ORDER_ID_MISMATCH", "주문 ID가 일치하지 않습니다")
 
             then("예외가 발생하고 Toss 승인이 호출되지 않는다") {
                 shouldThrow<BusinessException> {
@@ -386,8 +411,9 @@ class CustomerReservationApplicationTest : BehaviorSpec({
                         amount = BigDecimal(200_000)
                     )
                 }
-                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any(), any()) }
-                verify(exactly = 0) { paymentOutboxRepository.save(any()) }
+                verify(exactly = 1) {
+                    reservationPaymentPort.requestConfirm("rsv-1", "member-1", "toss_pk_123", "TAMPERED-ORDER-ID", BigDecimal(200_000))
+                }
             }
         }
 
@@ -408,11 +434,9 @@ class CustomerReservationApplicationTest : BehaviorSpec({
         `when`("이미 CONFIRMED 상태인 예약에 결제를 다시 요청하면") {
             clearAllMocks()
             val confirmedReservation = pendingReservation().confirm()
-            val approvedPayment = pendingPayment().approve(
-                paymentKey = "toss_pk_123", method = "카드", approvedAt = Instant.now()
-            )
+            val approvedPayment = pendingPayment().approve(paymentKey = "toss_pk_123")
             every { reservationRepository.findById("rsv-1") } returns confirmedReservation
-            every { paymentRepository.findByReservationId("rsv-1") } returns approvedPayment
+            every { reservationPaymentPort.findByReservationId("rsv-1") } returns approvedPayment
 
             val result = service.confirmPayment(
                 memberId = "member-1", reservationId = "rsv-1",
@@ -422,9 +446,9 @@ class CustomerReservationApplicationTest : BehaviorSpec({
 
             then("Toss 승인 없이 기존 결과를 반환한다 (멱등성)") {
                 result.reservation.status shouldBe ReservationStatus.CONFIRMED
-                result.payment.status shouldBe PaymentStatus.APPROVED
+                result.payment.status shouldBe ReservationPaymentStatus.APPROVED
                 result.payment.paymentKey shouldBe "toss_pk_123"
-                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any(), any()) }
+                verify(exactly = 0) { reservationPaymentPort.requestConfirm(any(), any(), any(), any(), any()) }
             }
         }
     }
@@ -438,18 +462,18 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             val reservation = pendingReservation()
             val payment = pendingPayment()
             every { reservationRepository.findById("rsv-1") } returns reservation
-            every { paymentRepository.findByReservationId("rsv-1") } returns payment
             every { reservationRepository.save(any()) } answers { firstArg() }
-            every { paymentRepository.save(any()) } answers { firstArg() }
+            every { reservationPaymentPort.cancelPendingByCustomerRequest("rsv-1") } returns
+                payment.fail("고객 요청에 의한 취소")
             justRun { inventoryReservationPort.release(any(), any(), any()) }
 
             val result = service.cancelReservation(memberId = "member-1", reservationId = "rsv-1")
 
             then("Toss 환불 없이 예약 취소하고 재고는 복원하지 않는다") {
                 result.reservation.status shouldBe ReservationStatus.CANCELLED
-                result.payment.status shouldBe PaymentStatus.FAILED
+                result.payment.status shouldBe ReservationPaymentStatus.FAILED
                 result.payment.failReason shouldBe "고객 요청에 의한 취소"
-                verify(exactly = 0) { paymentGateway.cancel(any(), any(), any()) }
+                verify(exactly = 1) { reservationPaymentPort.cancelPendingByCustomerRequest("rsv-1") }
                 verify(exactly = 0) { inventoryReservationPort.release(any(), any(), any()) }
             }
         }
@@ -457,64 +481,37 @@ class CustomerReservationApplicationTest : BehaviorSpec({
         `when`("CONFIRMED 예약을 취소하면") {
             clearAllMocks()
             val reservation = pendingReservation().confirm()
-            val payment = pendingPayment().approve(
-                paymentKey = "toss_pk_456", method = "카드", approvedAt = Instant.now()
-            )
+            val payment = pendingPayment().approve(paymentKey = "toss_pk_456")
             every { reservationRepository.findById("rsv-1") } returns reservation
-            every { paymentRepository.findByReservationId("rsv-1") } returns payment
-            every { paymentOutboxRepository.findByPaymentIdAndType("pay-1", PaymentOutboxType.CANCEL_PAYMENT) } returns null
-            every { paymentRepository.save(any()) } answers { firstArg() }
             every { reservationRepository.save(any()) } answers { firstArg() }
-            every { paymentOutboxRepository.save(any()) } answers { firstArg() }
+            every { reservationPaymentPort.requestCancelByCustomerRequest("rsv-1", "member-1") } returns payment.requestCancel()
             justRun { inventoryReservationPort.release(any(), any(), any()) }
 
             val result = service.cancelReservation(memberId = "member-1", reservationId = "rsv-1")
 
             then("예약 취소 + 결제 취소 요청 + Outbox 생성 + 재고 복원") {
                 result.reservation.status shouldBe ReservationStatus.CANCELLED
-                result.payment.status shouldBe PaymentStatus.CANCEL_REQUESTED
+                result.payment.status shouldBe ReservationPaymentStatus.CANCEL_REQUESTED
                 verify(exactly = 2) { inventoryReservationPort.release("prop-1", "rt-1", any()) }
-                verify(exactly = 0) { paymentGateway.cancel(any(), any(), any()) }
-                verify {
-                    paymentOutboxRepository.save(match {
-                        it.status == PaymentOutboxStatus.PENDING &&
-                            it.type == PaymentOutboxType.CANCEL_PAYMENT &&
-                            it.idempotencyKey == "payment-cancel:pay-1:${payment.orderId}"
-                    })
-                }
+                verify(exactly = 1) { reservationPaymentPort.requestCancelByCustomerRequest("rsv-1", "member-1") }
             }
         }
 
         `when`("CONFIRMED 예약 취소 요청 Outbox가 이미 있으면") {
             clearAllMocks()
             val reservation = pendingReservation().confirm()
-            val payment = pendingPayment().approve(
-                paymentKey = "toss_pk_789", method = "카드", approvedAt = Instant.now()
-            ).requestCancel()
-            val existingOutbox = com.stayops.payment.domain.model.PaymentOutboxMessage.createCancel(
-                id = "outbox-cancel-1",
-                paymentId = "pay-1",
-                reservationId = "rsv-1",
-                memberId = "member-1",
-                paymentKey = "toss_pk_789",
-                orderId = payment.orderId,
-                amount = Money.won(200_000),
-                cancelReason = "고객 요청에 의한 취소",
-                now = fixedInstant
-            )
+            val payment = pendingPayment().approve(paymentKey = "toss_pk_789").requestCancel()
             every { reservationRepository.findById("rsv-1") } returns reservation
-            every { paymentRepository.findByReservationId("rsv-1") } returns payment
-            every { paymentOutboxRepository.findByPaymentIdAndType("pay-1", PaymentOutboxType.CANCEL_PAYMENT) } returns existingOutbox
             every { reservationRepository.save(any()) } answers { firstArg() }
+            every { reservationPaymentPort.requestCancelByCustomerRequest("rsv-1", "member-1") } returns payment
             justRun { inventoryReservationPort.release(any(), any(), any()) }
 
             val result = service.cancelReservation(memberId = "member-1", reservationId = "rsv-1")
 
             then("Outbox를 중복 생성하지 않고 결제 취소 요청 상태를 반환한다") {
                 result.reservation.status shouldBe ReservationStatus.CANCELLED
-                result.payment.status shouldBe PaymentStatus.CANCEL_REQUESTED
-                verify(exactly = 0) { paymentOutboxRepository.save(any()) }
-                verify(exactly = 0) { paymentGateway.cancel(any(), any(), any()) }
+                result.payment.status shouldBe ReservationPaymentStatus.CANCEL_REQUESTED
+                verify(exactly = 1) { reservationPaymentPort.requestCancelByCustomerRequest("rsv-1", "member-1") }
                 verify(exactly = 2) { inventoryReservationPort.release("prop-1", "rt-1", any()) }
             }
         }

@@ -19,6 +19,7 @@ import com.stayops.payment.domain.service.PaymentConfirmResult
 import com.stayops.payment.domain.service.PaymentGateway
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
+import com.stayops.reservation.application.port.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.model.Room
@@ -156,7 +157,7 @@ class CustomerReservationTransactionRollbackTest @Autowired constructor(
 
             // Then: PENDING 예약과 결제는 저장되지만 재고는 변하지 않는다.
             assertThat(result.reservation.status).isEqualTo(ReservationStatus.PENDING)
-            assertThat(result.payment.status).isEqualTo(PaymentStatus.PENDING)
+            assertThat(result.payment.status).isEqualTo(ReservationPaymentStatus.PENDING)
             val night1After = inventoryApplication.getAvailability(propertyId, roomTypeId, night1, night1)[0]
             assertThat(night1After.reservedCount).isEqualTo(0)
             assertThat(night1After.availableCount).isEqualTo(1)

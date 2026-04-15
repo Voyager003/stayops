@@ -183,6 +183,55 @@ class ServiceNamingConventionTest {
     }
 
     @Test
+    fun should_use_reservation_payment_port_for_customer_reservation_payment_collaboration() {
+        val mainRoot = Path.of("src/main/kotlin")
+
+        assertTrue(
+            actual = Files.exists(mainRoot.resolve("com/stayops/reservation/application/port/ReservationPaymentPort.kt")),
+            message = "Customer reservation payment collaboration must be exposed as ReservationPaymentPort"
+        )
+        assertTrue(
+            actual = Files.exists(mainRoot.resolve("com/stayops/payment/infrastructure/reservation/PaymentReservationAdapter.kt")),
+            message = "Payment must adapt ReservationPaymentPort without CustomerReservationApplication depending on Payment internals"
+        )
+
+        val checkedRoots = listOf(
+            mainRoot.resolve("com/stayops/reservation/application/service/CustomerReservationApplication.kt"),
+            mainRoot.resolve("com/stayops/reservation/api/customer")
+        )
+        val forbiddenImports = listOf(
+            "import com.stayops.payment.domain.model.Payment",
+            "import com.stayops.payment.domain.model.PaymentCancelReason",
+            "import com.stayops.payment.domain.model.PaymentOutboxMessage",
+            "import com.stayops.payment.domain.model.PaymentOutboxType",
+            "import com.stayops.payment.domain.model.PaymentStatus",
+            "import com.stayops.payment.domain.repository.PaymentOutboxRepository",
+            "import com.stayops.payment.domain.repository.PaymentRepository"
+        )
+
+        val directPaymentReferences = checkedRoots.flatMap { root ->
+            if (Files.isRegularFile(root)) {
+                listOf(root)
+            } else {
+                Files.walk(root).use { paths ->
+                    paths
+                        .filter { Files.isRegularFile(it) }
+                        .filter { it.fileName.toString().endsWith(".kt") }
+                        .toList()
+                }
+            }
+        }.filter { path ->
+            val content = Files.readString(path)
+            forbiddenImports.any { content.contains(it) }
+        }.map { mainRoot.relativize(it).toString() }
+
+        assertTrue(
+            actual = directPaymentReferences.isEmpty(),
+            message = "Customer reservation use cases and API DTOs must depend on ReservationPaymentPort, not Payment internals: $directPaymentReferences"
+        )
+    }
+
+    @Test
     fun should_place_customer_reservation_use_cases_under_reservation_not_booking() {
         val mainRoot = Path.of("src/main/kotlin")
         val testRoot = Path.of("src/test/kotlin")

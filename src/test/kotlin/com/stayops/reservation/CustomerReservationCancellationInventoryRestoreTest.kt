@@ -13,6 +13,7 @@ import com.stayops.payment.domain.repository.PaymentRepository
 import com.stayops.payment.domain.service.PaymentGateway
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
+import com.stayops.reservation.application.port.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.model.Room
@@ -173,7 +174,7 @@ class CustomerReservationCancellationInventoryRestoreTest @Autowired constructor
             assertThat(cancelled.reservation.status).isEqualTo(ReservationStatus.CANCELLED)
 
             // Then: Payment 상태 = FAILED (PENDING 취소이므로 Toss 환불 없이 fail 처리)
-            assertThat(cancelled.payment.status).isEqualTo(PaymentStatus.FAILED)
+            assertThat(cancelled.payment.status).isEqualTo(ReservationPaymentStatus.FAILED)
 
             // Then: PENDING 예약은 재고를 차감하지 않았으므로 취소 후에도 그대로 유지됨
             assertThat(reservedCount(night1))

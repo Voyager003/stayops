@@ -2,7 +2,7 @@ package com.stayops.reservation.api.customer.dto
 
 import com.stayops.reservation.application.service.CustomerReservationReadResult
 import com.stayops.reservation.application.service.CustomerReservationResult
-import com.stayops.payment.domain.model.PaymentStatus
+import com.stayops.reservation.application.port.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.ReservationStatus
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -12,7 +12,7 @@ data class CustomerReservationResponse(
     val reservationStatus: ReservationStatus,
     val orderId: String,
     val amount: BigDecimal,
-    val paymentStatus: PaymentStatus,
+    val paymentStatus: ReservationPaymentStatus,
     val confirmationStatus: ReservationConfirmationStatus,
     val checkIn: LocalDate,
     val checkOut: LocalDate
@@ -39,7 +39,7 @@ data class MyReservationResponse(
     val propertyId: String,
     val roomTypeId: String,
     val status: ReservationStatus,
-    val paymentStatus: PaymentStatus?,
+    val paymentStatus: ReservationPaymentStatus?,
     val confirmationStatus: ReservationConfirmationStatus,
     val checkIn: LocalDate,
     val checkOut: LocalDate,

@@ -2,8 +2,8 @@ package com.stayops.reservation.api.customer
 
 import com.stayops.reservation.application.service.CustomerReservationApplication
 import com.stayops.reservation.application.service.CustomerReservationResult
-import com.stayops.payment.domain.model.Payment
-import com.stayops.payment.domain.model.PaymentStatus
+import com.stayops.reservation.application.port.ReservationPaymentSnapshot
+import com.stayops.reservation.application.port.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.*
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
@@ -48,9 +48,15 @@ class CustomerReservationApiTest {
             pricing = ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO),
             memberId = "member-1"
         )
-        val payment = Payment.create(
-            id = "pay-1", reservationId = "rsv-1",
-            memberId = "member-1", amount = Money.won(200_000)
+        val payment = ReservationPaymentSnapshot(
+            id = "pay-1",
+            reservationId = "rsv-1",
+            memberId = "member-1",
+            orderId = "STAYOPS-rsv-1-123",
+            amount = Money.won(200_000),
+            status = ReservationPaymentStatus.PENDING,
+            paymentKey = null,
+            failReason = null
         )
         return CustomerReservationResult(reservation, payment)
     }
@@ -102,7 +108,10 @@ class CustomerReservationApiTest {
         fun `유효한 요청이면 202를 반환한다`() {
             mockCustomer()
             val result = sampleCustomerReservationResult()
-            val requestedPayment = result.payment.requestConfirm("toss_pk_123")
+            val requestedPayment = result.payment.copy(
+                status = ReservationPaymentStatus.CONFIRM_REQUESTED,
+                paymentKey = "toss_pk_123"
+            )
             every { customerReservationApplication.confirmPayment(any(), any(), any(), any(), any()) } returns
                 CustomerReservationResult(result.reservation, requestedPayment)
 

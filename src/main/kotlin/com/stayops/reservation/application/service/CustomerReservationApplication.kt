@@ -4,17 +4,12 @@ import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
 import com.stayops.inventory.application.port.InventoryReservationPort
-import com.stayops.payment.domain.model.Payment
-import com.stayops.payment.domain.model.PaymentCancelReason
-import com.stayops.payment.domain.model.PaymentOutboxMessage
-import com.stayops.payment.domain.model.PaymentOutboxType
-import com.stayops.payment.domain.model.PaymentStatus
-import com.stayops.payment.domain.repository.PaymentOutboxRepository
-import com.stayops.payment.domain.repository.PaymentRepository
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolverService
+import com.stayops.reservation.application.port.ReservationPaymentPort
+import com.stayops.reservation.application.port.ReservationPaymentSnapshot
 import com.stayops.reservation.domain.model.*
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
@@ -40,8 +35,7 @@ class CustomerReservationApplication(
     private val channelRepository: ChannelRepository,
     private val ratePlanRepository: RatePlanRepository,
     private val reservationRepository: ReservationRepository,
-    private val paymentRepository: PaymentRepository,
-    private val paymentOutboxRepository: PaymentOutboxRepository,
+    private val reservationPaymentPort: ReservationPaymentPort,
     private val inventoryReservationPort: InventoryReservationPort,
     private val rateResolverService: RateResolverService,
     private val clock: Clock,
@@ -133,13 +127,10 @@ class CustomerReservationApplication(
         )
 
         // 7. Payment 생성 (PENDING)
-        val payment = paymentRepository.save(
-            Payment.create(
-                id = idGenerator.generate(),
-                reservationId = reservation.id,
-                memberId = memberId,
-                amount = pricing.totalAmount
-            )
+        val payment = reservationPaymentPort.createPendingPayment(
+            reservationId = reservation.id,
+            memberId = memberId,
+            amount = pricing.totalAmount
         )
 
         log.info("예약 생성: reservationId={}, paymentId={}", reservation.id, payment.id)
@@ -149,7 +140,7 @@ class CustomerReservationApplication(
     @Transactional(readOnly = true)
     fun getMyReservations(memberId: String): List<CustomerReservationReadResult> {
         val reservations = reservationRepository.findByMemberId(memberId)
-        val paymentsByReservationId = paymentRepository.findByMemberId(memberId)
+        val paymentsByReservationId = reservationPaymentPort.findByMemberId(memberId)
             .associateBy { it.reservationId }
         return reservations.map { reservation ->
             CustomerReservationReadResult(reservation, paymentsByReservationId[reservation.id])
@@ -165,7 +156,7 @@ class CustomerReservationApplication(
         }
         return CustomerReservationReadResult(
             reservation = reservation,
-            payment = paymentRepository.findByReservationId(reservationId)
+            payment = reservationPaymentPort.findByReservationId(reservationId)
         )
     }
 
@@ -185,7 +176,7 @@ class CustomerReservationApplication(
         }
 
         // 2. Payment 조회
-        val payment = paymentRepository.findByReservationId(reservationId)
+        val payment = reservationPaymentPort.findByReservationId(reservationId)
             ?: throw NotFoundException("PAYMENT_NOT_FOUND", "결제 정보를 찾을 수 없습니다: $reservationId")
 
         // 2-1. 멱등성: 이미 CONFIRMED 상태이면 기존 결과 반환
@@ -198,52 +189,14 @@ class CustomerReservationApplication(
             throw BusinessException("RESERVATION_EXPIRED", "결제 가능 시간이 만료되었습니다")
         }
 
-        // 4. orderId 검증 — 클라이언트가 보낸 orderId와 DB orderId 비교
-        if (payment.orderId != orderId) {
-            throw BusinessException(
-                "ORDER_ID_MISMATCH",
-                "주문 ID가 일치하지 않습니다. 예상: ${payment.orderId}, 요청: $orderId"
-            )
-        }
-
-        // 5. 금액 검증 — 클라이언트가 보낸 금액과 DB 금액 비교
-        if (payment.amount.amount.compareTo(amount) != 0) {
-            throw BusinessException(
-                "AMOUNT_MISMATCH",
-                "결제 금액이 일치하지 않습니다. 예상: ${payment.amount.amount}, 요청: $amount"
-            )
-        }
-
-        if (payment.status == PaymentStatus.FAILED || payment.status == PaymentStatus.CANCELLED) {
-            throw BusinessException("PAYMENT_NOT_CONFIRMABLE", "승인 요청할 수 없는 결제 상태입니다: ${payment.status}")
-        }
-
-        // 6. Payment 승인 요청 상태 저장 + 결제 승인 Outbox 생성
-        val requestedPayment = payment.requestConfirm(paymentKey)
-        val savedPayment = if (requestedPayment == payment) {
-            payment
-        } else {
-            paymentRepository.save(requestedPayment)
-        }
-
-        val existingOutbox = paymentOutboxRepository.findByPaymentIdAndType(
-            savedPayment.id,
-            PaymentOutboxType.CONFIRM_PAYMENT
+        // 4. Payment 승인 요청 상태 저장 + 결제 승인 Outbox 생성은 Payment adapter에 위임
+        val savedPayment = reservationPaymentPort.requestConfirm(
+            reservationId = reservation.id,
+            memberId = memberId,
+            paymentKey = paymentKey,
+            orderId = orderId,
+            amount = amount
         )
-        if (existingOutbox == null) {
-            paymentOutboxRepository.save(
-                PaymentOutboxMessage.createConfirm(
-                    id = idGenerator.generate(),
-                    paymentId = savedPayment.id,
-                    reservationId = reservation.id,
-                    memberId = memberId,
-                    paymentKey = paymentKey,
-                    orderId = savedPayment.orderId,
-                    amount = savedPayment.amount,
-                    now = clock.instant()
-                )
-            )
-        }
 
         log.info("결제 승인 요청 접수: reservationId={}, paymentId={}", reservationId, savedPayment.id)
         return CustomerReservationResult(reservation, savedPayment)
@@ -258,47 +211,21 @@ class CustomerReservationApplication(
             throw ForbiddenException("ACCESS_DENIED", "본인의 예약만 취소할 수 있습니다")
         }
 
-        // 2. Payment 조회
-        val payment = paymentRepository.findByReservationId(reservationId)
-            ?: throw NotFoundException("PAYMENT_NOT_FOUND", "결제 정보를 찾을 수 없습니다: $reservationId")
-
-        // 3. 상태에 따라 분기
+        // 2. 상태에 따라 분기
         val cancelledReservation: Reservation
-        val cancelledPayment: Payment
+        val cancelledPayment: ReservationPaymentSnapshot
 
         if (reservation.status == ReservationStatus.PENDING) {
             // PENDING: 결제 전이므로 Toss 환불 불필요
             cancelledReservation = reservationRepository.save(reservation.cancelPending())
-            cancelledPayment = paymentRepository.save(payment.fail(PaymentCancelReason.CUSTOMER_REQUEST.message))
+            cancelledPayment = reservationPaymentPort.cancelPendingByCustomerRequest(reservation.id)
         } else {
             // CONFIRMED: 결제 취소 요청을 Outbox로 남기고 worker가 PG 취소를 처리
             cancelledReservation = reservationRepository.save(reservation.cancel())
-            val requestedPayment = payment.requestCancel()
-            cancelledPayment = if (requestedPayment == payment) {
-                payment
-            } else {
-                paymentRepository.save(requestedPayment)
-            }
-
-            val existingOutbox = paymentOutboxRepository.findByPaymentIdAndType(
-                cancelledPayment.id,
-                PaymentOutboxType.CANCEL_PAYMENT
+            cancelledPayment = reservationPaymentPort.requestCancelByCustomerRequest(
+                reservationId = reservation.id,
+                memberId = memberId
             )
-            if (existingOutbox == null) {
-                paymentOutboxRepository.save(
-                    PaymentOutboxMessage.createCancel(
-                        id = idGenerator.generate(),
-                        paymentId = cancelledPayment.id,
-                        reservationId = reservation.id,
-                        memberId = memberId,
-                        paymentKey = cancelledPayment.paymentKey!!,
-                        orderId = cancelledPayment.orderId,
-                        amount = cancelledPayment.amount,
-                        cancelReason = PaymentCancelReason.CUSTOMER_REQUEST.message,
-                        now = clock.instant()
-                    )
-                )
-            }
 
             // 4. 확정 예약은 이미 결제 승인 worker에서 재고가 차감되었으므로 취소 시 복원한다.
             reservation.dateRange.allDates().forEach { date ->
@@ -313,10 +240,10 @@ class CustomerReservationApplication(
 
 data class CustomerReservationResult(
     val reservation: Reservation,
-    val payment: Payment
+    val payment: ReservationPaymentSnapshot
 )
 
 data class CustomerReservationReadResult(
     val reservation: Reservation,
-    val payment: Payment?
+    val payment: ReservationPaymentSnapshot?
 )
