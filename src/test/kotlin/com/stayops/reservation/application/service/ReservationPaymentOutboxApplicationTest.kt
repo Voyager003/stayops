@@ -1,4 +1,4 @@
-package com.stayops.payment.application.service
+package com.stayops.reservation.application.service
 
 import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.payment.domain.model.Payment
@@ -35,7 +35,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-class PaymentOutboxProcessorTest : BehaviorSpec({
+class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
 
     val outboxRepository = mockk<PaymentOutboxRepository>()
     val paymentRepository = mockk<PaymentRepository>()
@@ -48,7 +48,7 @@ class PaymentOutboxProcessorTest : BehaviorSpec({
         override fun generate(): String = "generated-outbox-id"
     }
 
-    val processor = PaymentOutboxProcessor(
+    val application = ReservationPaymentOutboxApplication(
         outboxRepository = outboxRepository,
         paymentRepository = paymentRepository,
         reservationRepository = reservationRepository,
@@ -149,7 +149,7 @@ class PaymentOutboxProcessorTest : BehaviorSpec({
                     cardCompany = null
                 )
 
-                processor.processPendingMessages(workerId = "worker-1")
+                application.processPendingMessages(workerId = "worker-1")
 
                 verify(exactly = 2) { inventoryReservationPort.reserve("prop-1", "rt-1", any()) }
                 verify { paymentRepository.save(match { it.status == PaymentStatus.APPROVED }) }
@@ -173,7 +173,7 @@ class PaymentOutboxProcessorTest : BehaviorSpec({
                     totalAmount = BigDecimal(200_000)
                 )
 
-                processor.processPendingMessages(workerId = "worker-1")
+                application.processPendingMessages(workerId = "worker-1")
 
                 verify(exactly = 2) { inventoryReservationPort.reserve("prop-1", "rt-1", any()) }
                 verify { paymentRepository.save(match { it.status == PaymentStatus.APPROVED }) }
@@ -208,7 +208,7 @@ class PaymentOutboxProcessorTest : BehaviorSpec({
                 every { inventoryReservationPort.reserve("prop-1", "rt-1", checkIn) } throws
                     IllegalArgumentException("가용 객실이 없습니다: available=0")
 
-                processor.processPendingMessages(workerId = "worker-1")
+                application.processPendingMessages(workerId = "worker-1")
 
                 verify { paymentRepository.save(match { it.status == PaymentStatus.CANCEL_REQUESTED }) }
                 verify { reservationRepository.save(match { it.status == ReservationStatus.CANCELLED }) }
@@ -252,7 +252,7 @@ class PaymentOutboxProcessorTest : BehaviorSpec({
                 every { inventoryReservationPort.reserve("prop-1", "rt-1", checkIn.plusDays(1)) } throws
                     ConflictException("INVENTORY_CONFLICT", "재고 변경 충돌이 발생했습니다")
 
-                processor.processPendingMessages(workerId = "worker-1")
+                application.processPendingMessages(workerId = "worker-1")
 
                 verify(exactly = 1) { inventoryReservationPort.release("prop-1", "rt-1", checkIn) }
                 verify(exactly = 0) { paymentRepository.save(match { it.status == PaymentStatus.CANCEL_REQUESTED }) }
@@ -278,7 +278,7 @@ class PaymentOutboxProcessorTest : BehaviorSpec({
                 every { paymentGateway.inquire("toss_pk_123") } throws
                     PaymentGatewayException.ProviderError("PROVIDER_ERROR", "PG사 장애")
 
-                processor.processPendingMessages(workerId = "worker-1")
+                application.processPendingMessages(workerId = "worker-1")
 
                 verify(exactly = 0) { paymentRepository.save(match { it.status == PaymentStatus.APPROVED }) }
                 verify(exactly = 0) { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
@@ -301,7 +301,7 @@ class PaymentOutboxProcessorTest : BehaviorSpec({
                     totalAmount = BigDecimal(200_000)
                 )
 
-                processor.processPendingMessages(workerId = "worker-1")
+                application.processPendingMessages(workerId = "worker-1")
 
                 verify(exactly = 0) { paymentRepository.save(match { it.status == PaymentStatus.FAILED }) }
                 verify(exactly = 0) { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
@@ -316,7 +316,7 @@ class PaymentOutboxProcessorTest : BehaviorSpec({
                 every { paymentRepository.findById("pay-1") } returns confirmRequestedPayment().fail("고객 요청에 의한 취소")
                 every { reservationRepository.findById("rsv-1") } returns pendingReservation().cancelPending()
 
-                processor.processPendingMessages(workerId = "worker-1")
+                application.processPendingMessages(workerId = "worker-1")
 
                 verify(exactly = 0) { paymentGateway.confirm(any(), any(), any(), any()) }
                 verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.SKIPPED }) }
@@ -339,7 +339,7 @@ class PaymentOutboxProcessorTest : BehaviorSpec({
                     )
                 } returns com.stayops.payment.domain.service.PaymentCancelResult("toss_pk_123")
 
-                processor.processPendingMessages(workerId = "worker-1")
+                application.processPendingMessages(workerId = "worker-1")
 
                 verify { paymentRepository.save(match { it.status == PaymentStatus.CANCELLED }) }
                 verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
@@ -355,7 +355,7 @@ class PaymentOutboxProcessorTest : BehaviorSpec({
                 every { paymentGateway.cancel(any(), any(), any()) } throws
                     PaymentGatewayException.AlreadyProcessed("toss_pk_123")
 
-                processor.processPendingMessages(workerId = "worker-1")
+                application.processPendingMessages(workerId = "worker-1")
 
                 verify { paymentRepository.save(match { it.status == PaymentStatus.CANCELLED }) }
                 verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
@@ -371,7 +371,7 @@ class PaymentOutboxProcessorTest : BehaviorSpec({
                 every { paymentGateway.cancel(any(), any(), any()) } throws
                     PaymentGatewayException.ProviderError("PROVIDER_ERROR", "PG사 장애")
 
-                processor.processPendingMessages(workerId = "worker-1")
+                application.processPendingMessages(workerId = "worker-1")
 
                 verify(exactly = 0) { paymentRepository.save(match { it.status == PaymentStatus.CANCELLED }) }
                 verify(exactly = 0) { paymentRepository.save(match { it.status == PaymentStatus.CANCEL_FAILED }) }
@@ -386,7 +386,7 @@ class PaymentOutboxProcessorTest : BehaviorSpec({
                 every { paymentRepository.findById("pay-1") } returns approvedPayment().cancel()
                 every { reservationRepository.findById("rsv-1") } returns pendingReservation().confirm().cancel()
 
-                processor.processPendingMessages(workerId = "worker-1")
+                application.processPendingMessages(workerId = "worker-1")
 
                 verify(exactly = 0) { paymentGateway.cancel(any(), any(), any()) }
                 verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }

@@ -1,4 +1,4 @@
-package com.stayops.payment.application.service
+package com.stayops.reservation.application.service
 
 import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.payment.domain.model.Payment
@@ -25,7 +25,7 @@ import java.time.Instant
 import java.time.LocalDate
 
 @Service
-class PaymentOutboxProcessor(
+class ReservationPaymentOutboxApplication(
     private val outboxRepository: PaymentOutboxRepository,
     private val paymentRepository: PaymentRepository,
     private val reservationRepository: ReservationRepository,

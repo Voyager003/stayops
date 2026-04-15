@@ -1,13 +1,13 @@
 package com.stayops.payment.infrastructure.scheduler
 
-import com.stayops.payment.application.service.PaymentOutboxProcessor
+import com.stayops.reservation.application.service.ReservationPaymentOutboxApplication
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
 @Component
 class PaymentOutboxScheduler(
-    private val paymentOutboxProcessor: PaymentOutboxProcessor
+    private val reservationPaymentOutboxApplication: ReservationPaymentOutboxApplication
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -18,7 +18,7 @@ class PaymentOutboxScheduler(
     )
     fun processPaymentOutbox() {
         try {
-            paymentOutboxProcessor.processPendingMessages()
+            reservationPaymentOutboxApplication.processPendingMessages()
         } catch (e: Exception) {
             log.error("PaymentOutbox scheduler 처리 실패", e)
         }

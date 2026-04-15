@@ -8,7 +8,7 @@ import com.stayops.reservation.application.service.CustomerReservationApplicatio
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.inventory.application.service.RoomInventoryApplication
-import com.stayops.payment.application.service.PaymentOutboxProcessor
+import com.stayops.reservation.application.service.ReservationPaymentOutboxApplication
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentRepository
 import com.stayops.payment.domain.service.PaymentCancelResult
@@ -51,7 +51,7 @@ class CustomerReservationE2ETest @Autowired constructor(
     private val memberRepository: MemberRepository,
     private val reservationRepository: ReservationRepository,
     private val paymentRepository: PaymentRepository,
-    private val paymentOutboxProcessor: PaymentOutboxProcessor,
+    private val reservationPaymentOutboxApplication: ReservationPaymentOutboxApplication,
     private val mongoTemplate: MongoTemplate,
     @MockkBean private val paymentGateway: PaymentGateway
 ) {
@@ -155,7 +155,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             assertThat(requested.reservation.status).isEqualTo(ReservationStatus.PENDING)
             assertThat(requested.payment.status).isEqualTo(PaymentStatus.CONFIRM_REQUESTED)
 
-            paymentOutboxProcessor.processPendingMessages(workerId = "e2e-worker")
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
 
             val confirmedReservation = reservationRepository.findById(reservationResult.reservation.id)!!
             val confirmedPayment = paymentRepository.findByReservationId(reservationResult.reservation.id)!!
@@ -181,7 +181,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             assertThat(cancelRequested.reservation.status).isEqualTo(ReservationStatus.CANCELLED)
             assertThat(cancelRequested.payment.status).isEqualTo(PaymentStatus.CANCEL_REQUESTED)
 
-            paymentOutboxProcessor.processPendingMessages(workerId = "e2e-worker")
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
 
             val cancelledPayment = paymentRepository.findByReservationId(reservationResult.reservation.id)!!
             assertThat(cancelledPayment.status).isEqualTo(PaymentStatus.CANCELLED)
@@ -263,7 +263,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             assertThat(firstResult.reservation.status).isEqualTo(ReservationStatus.PENDING)
             assertThat(firstResult.payment.status).isEqualTo(PaymentStatus.CONFIRM_REQUESTED)
 
-            paymentOutboxProcessor.processPendingMessages(workerId = "e2e-worker")
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
 
             // 3. 두 번째 결제 확인 — Toss 호출 없이 기존 결과 반환
             val secondResult = customerReservationApplication.confirmPayment(
@@ -322,7 +322,7 @@ class CustomerReservationE2ETest @Autowired constructor(
                 orderId = reservationResult.payment.orderId,
                 amount = BigDecimal(200_000)
             )
-            paymentOutboxProcessor.processPendingMessages(workerId = "e2e-worker")
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
 
             val afterConfirm = inventoryApplication.getAvailability(
                 "prop-e2e", "rt-e2e", checkIn, checkIn.plusDays(1)
@@ -332,7 +332,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             // 취소 (재고 복원)
             every { paymentGateway.cancel("toss_pk_inv", any(), any()) } returns PaymentCancelResult("toss_pk_inv")
             customerReservationApplication.cancelReservation("customer-e2e", reservationResult.reservation.id)
-            paymentOutboxProcessor.processPendingMessages(workerId = "e2e-worker")
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
 
             val afterCancel = inventoryApplication.getAvailability(
                 "prop-e2e", "rt-e2e", checkIn, checkIn.plusDays(1)

@@ -9,7 +9,7 @@ import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.guest.domain.repository.GuestRepository
 import com.stayops.inventory.application.service.RoomInventoryApplication
-import com.stayops.payment.application.service.PaymentOutboxProcessor
+import com.stayops.reservation.application.service.ReservationPaymentOutboxApplication
 import com.stayops.payment.domain.model.PaymentCancelReason
 import com.stayops.payment.domain.model.PaymentOutboxType
 import com.stayops.payment.domain.model.PaymentStatus
@@ -61,7 +61,7 @@ class CustomerReservationTransactionRollbackTest @Autowired constructor(
     private val guestRepository: GuestRepository,
     private val paymentRepository: PaymentRepository,
     private val paymentOutboxRepository: PaymentOutboxRepository,
-    private val paymentOutboxProcessor: PaymentOutboxProcessor,
+    private val reservationPaymentOutboxApplication: ReservationPaymentOutboxApplication,
     private val mongoTemplate: MongoTemplate,
     @MockkBean private val paymentGateway: PaymentGateway
 ) {
@@ -198,7 +198,7 @@ class CustomerReservationTransactionRollbackTest @Autowired constructor(
                 orderId = result.payment.orderId,
                 amount = BigDecimal(200_000)
             )
-            paymentOutboxProcessor.processPendingMessages(workerId = "inventory-shortage-worker")
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "inventory-shortage-worker")
 
             // Then: 예약은 확정되지 않고 취소된다.
             val reservation = reservationRepository.findById(result.reservation.id)
