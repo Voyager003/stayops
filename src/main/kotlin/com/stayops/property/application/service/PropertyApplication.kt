@@ -1,9 +1,5 @@
 package com.stayops.property.application.service
 
-import com.stayops.auth.domain.model.PropertyRole
-import com.stayops.auth.domain.repository.MemberRepository
-import com.stayops.channel.domain.model.Channel
-import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo
 import com.stayops.property.domain.model.Property
@@ -17,8 +13,6 @@ import org.springframework.stereotype.Service
 @Service
 class PropertyApplication(
     private val propertyRepository: PropertyRepository,
-    private val memberRepository: MemberRepository,
-    private val channelRepository: ChannelRepository,
     private val idGenerator: IdGenerator
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -45,14 +39,6 @@ class PropertyApplication(
             currency = currency
         )
         val saved = propertyRepository.save(property)
-
-        channelRepository.save(Channel.createDirect(idGenerator.generate(), saved.id))
-
-        val member = memberRepository.findById(ownerId)
-        if (member != null) {
-            val granted = member.grantAccess(saved.id, PropertyRole.OWNER)
-            memberRepository.save(granted)
-        }
 
         log.info("숙소 생성: propertyId={}, ownerId={}, name={}", saved.id, ownerId, name)
         return saved

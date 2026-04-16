@@ -12,6 +12,7 @@ import org.springframework.http.MediaType
 import tools.jackson.databind.json.JsonMapper
 import java.math.BigDecimal
 import java.time.Duration
+import java.util.concurrent.TimeUnit
 
 class TossPaymentsClientTest : BehaviorSpec({
 
@@ -20,6 +21,11 @@ class TossPaymentsClientTest : BehaviorSpec({
 
     beforeSpec { server.start() }
     afterSpec { server.shutdown() }
+    afterTest {
+        while (server.takeRequest(10, TimeUnit.MILLISECONDS) != null) {
+            // Drain requests so header assertions read the request from the current test.
+        }
+    }
 
     fun createClient(): TossPaymentsClient {
         val properties = TossPaymentsProperties(
@@ -58,7 +64,13 @@ class TossPaymentsClientTest : BehaviorSpec({
             )
 
             val client = createClient()
-            val result = client.confirm("toss_pk_123", "STAYOPS-rsv-1-123", BigDecimal(200_000))
+            val result = client.confirm(
+                "toss_pk_123",
+                "STAYOPS-rsv-1-123",
+                BigDecimal(200_000),
+                "payment-confirm:pay-1:STAYOPS-rsv-1-123"
+            )
+            val request = server.takeRequest()
 
             then("기본 필드가 매핑된다") {
                 result.paymentKey shouldBe "toss_pk_123"
@@ -75,6 +87,9 @@ class TossPaymentsClientTest : BehaviorSpec({
             }
             then("영수증 URL이 매핑된다") {
                 result.receiptUrl shouldBe "https://receipt.toss.im/abc"
+            }
+            then("멱등성 키를 헤더로 전달한다") {
+                request.getHeader("Idempotency-Key") shouldBe "payment-confirm:pay-1:STAYOPS-rsv-1-123"
             }
         }
 
@@ -95,7 +110,12 @@ class TossPaymentsClientTest : BehaviorSpec({
             )
 
             val client = createClient()
-            val result = client.confirm("toss_pk_simple", "STAYOPS-rsv-5-555", BigDecimal(100_000))
+            val result = client.confirm(
+                "toss_pk_simple",
+                "STAYOPS-rsv-5-555",
+                BigDecimal(100_000),
+                "payment-confirm:pay-5:STAYOPS-rsv-5-555"
+            )
 
             then("카드/영수증 필드는 null이다") {
                 result.cardNumber shouldBe null
@@ -116,7 +136,12 @@ class TossPaymentsClientTest : BehaviorSpec({
 
             then("PaymentDeclined 예외가 발생한다") {
                 val ex = shouldThrow<PaymentGatewayException.PaymentDeclined> {
-                    client.confirm("toss_pk_456", "STAYOPS-rsv-2-456", BigDecimal(100_000))
+                    client.confirm(
+                        "toss_pk_456",
+                        "STAYOPS-rsv-2-456",
+                        BigDecimal(100_000),
+                        "payment-confirm:pay-2:STAYOPS-rsv-2-456"
+                    )
                 }
                 ex.code shouldBe "REJECT_CARD_PAYMENT"
             }
@@ -134,7 +159,12 @@ class TossPaymentsClientTest : BehaviorSpec({
 
             then("AlreadyProcessed 예외가 발생한다") {
                 shouldThrow<PaymentGatewayException.AlreadyProcessed> {
-                    client.confirm("toss_pk_789", "STAYOPS-rsv-3-789", BigDecimal(50_000))
+                    client.confirm(
+                        "toss_pk_789",
+                        "STAYOPS-rsv-3-789",
+                        BigDecimal(50_000),
+                        "payment-confirm:pay-3:STAYOPS-rsv-3-789"
+                    )
                 }
             }
         }
@@ -151,7 +181,12 @@ class TossPaymentsClientTest : BehaviorSpec({
 
             then("ProviderError 예외가 발생한다") {
                 shouldThrow<PaymentGatewayException.ProviderError> {
-                    client.confirm("toss_pk_err", "STAYOPS-rsv-4-000", BigDecimal(100_000))
+                    client.confirm(
+                        "toss_pk_err",
+                        "STAYOPS-rsv-4-000",
+                        BigDecimal(100_000),
+                        "payment-confirm:pay-4:STAYOPS-rsv-4-000"
+                    )
                 }
             }
         }
@@ -169,10 +204,18 @@ class TossPaymentsClientTest : BehaviorSpec({
             )
 
             val client = createClient()
-            val result = client.cancel("toss_pk_123", "고객 요청")
+            val result = client.cancel(
+                "toss_pk_123",
+                "고객 요청",
+                "payment-cancel:pay-1:STAYOPS-rsv-1-123"
+            )
+            val request = server.takeRequest()
 
             then("PaymentCancelResult로 변환하여 반환한다") {
                 result.paymentKey shouldBe "toss_pk_123"
+            }
+            then("멱등성 키를 헤더로 전달한다") {
+                request.getHeader("Idempotency-Key") shouldBe "payment-cancel:pay-1:STAYOPS-rsv-1-123"
             }
         }
 
@@ -188,7 +231,11 @@ class TossPaymentsClientTest : BehaviorSpec({
 
             then("ProviderError 예외가 발생한다") {
                 shouldThrow<PaymentGatewayException.ProviderError> {
-                    client.cancel("toss_pk_456", "고객 요청")
+                    client.cancel(
+                        "toss_pk_456",
+                        "고객 요청",
+                        "payment-cancel:pay-2:STAYOPS-rsv-2-456"
+                    )
                 }
             }
         }

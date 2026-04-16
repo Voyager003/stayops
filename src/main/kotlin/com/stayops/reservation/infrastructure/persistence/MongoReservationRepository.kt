@@ -82,17 +82,6 @@ class MongoReservationRepository(
     override fun findByMemberId(memberId: String): List<Reservation> =
         mongo.findByMemberId(memberId).map { it.toDomain() }
 
-    override fun findExpiredPending(now: Instant): List<Reservation> {
-        val query = Query(
-            Criteria().andOperator(
-                Criteria.where("status").`is`(ReservationStatus.PENDING.name),
-                Criteria.where("expiresAt").lt(now),
-                Criteria.where("expiresAt").ne(null)
-            )
-        )
-        return mongoTemplate.find(query, ReservationDocument::class.java).map { it.toDomain() }
-    }
-
     override fun countByPropertyIdAndCreatedDate(propertyId: String, date: LocalDate): Int {
         val zone = ZoneId.of("Asia/Seoul")
         val startOfDay = date.atStartOfDay(zone).toInstant()
@@ -104,19 +93,30 @@ class MongoReservationRepository(
         return mongoTemplate.count(query, ReservationDocument::class.java).toInt()
     }
 
-    override fun existsByMemberIdAndRoomTypeIdAndCheckInAndCheckOutAndStatusIn(
+    override fun existsActiveByMemberIdAndRoomTypeIdAndCheckInAndCheckOut(
         memberId: String,
         roomTypeId: String,
         checkIn: LocalDate,
         checkOut: LocalDate,
-        statuses: List<ReservationStatus>
+        now: Instant
     ): Boolean {
         val query = Query(
-            Criteria.where("memberId").`is`(memberId)
-                .and("roomTypeId").`is`(roomTypeId)
-                .and("dateRange.checkIn").`is`(checkIn.toString())
-                .and("dateRange.checkOut").`is`(checkOut.toString())
-                .and("status").`in`(statuses.map { it.name })
+            Criteria().andOperator(
+                Criteria.where("memberId").`is`(memberId),
+                Criteria.where("roomTypeId").`is`(roomTypeId),
+                Criteria.where("dateRange.checkIn").`is`(checkIn.toString()),
+                Criteria.where("dateRange.checkOut").`is`(checkOut.toString()),
+                Criteria().orOperator(
+                    Criteria.where("status").`is`(ReservationStatus.CONFIRMED.name),
+                    Criteria().andOperator(
+                        Criteria.where("status").`is`(ReservationStatus.PENDING.name),
+                        Criteria().orOperator(
+                            Criteria.where("expiresAt").`is`(null),
+                            Criteria.where("expiresAt").gte(now)
+                        )
+                    )
+                )
+            )
         )
         return mongoTemplate.exists(query, ReservationDocument::class.java)
     }

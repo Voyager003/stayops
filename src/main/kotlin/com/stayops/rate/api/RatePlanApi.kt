@@ -6,7 +6,7 @@ import com.stayops.rate.api.dto.RatePlanResponse
 import com.stayops.rate.api.dto.RatePreviewResponse
 import com.stayops.rate.api.dto.UpdateRatePlanRequest
 import com.stayops.rate.application.service.RatePlanApplication
-import com.stayops.shared.security.PropertyAccessChecker
+import com.stayops.member.infrastructure.security.PropertyAccessChecker
 import com.stayops.rate.domain.model.DayOfWeekRate
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money

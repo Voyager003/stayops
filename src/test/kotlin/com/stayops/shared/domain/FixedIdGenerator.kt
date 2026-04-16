@@ -6,7 +6,7 @@ package com.stayops.shared.domain
  * 사용 예:
  * ```kotlin
  * val idGenerator = FixedIdGenerator("rsv-001", "guest-001", "pay-001")
- * val sut = BookingApplication(..., idGenerator = idGenerator)
+ * val sut = CustomerReservationApplication(..., idGenerator = idGenerator)
  * // 호출 순서대로 "rsv-001", "guest-001", "pay-001" 반환
  * ```
  *

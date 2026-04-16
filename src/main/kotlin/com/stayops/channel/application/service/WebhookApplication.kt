@@ -8,9 +8,9 @@ import com.stayops.channel.domain.repository.ProcessedWebhookEventRepository
 import com.stayops.channel.domain.service.SignatureVerifier
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
-import com.stayops.inventory.application.service.RoomInventoryApplication
+import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.reservation.domain.event.ReservationCreated
-import com.stayops.reservation.domain.model.BookingChannel
+import com.stayops.reservation.domain.model.ReservationChannel
 import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationPricing
@@ -32,7 +32,7 @@ class WebhookApplication(
     private val signatureVerifier: SignatureVerifier,
     private val channelSyncApplication: ChannelSyncApplication,
     private val reservationRepository: ReservationRepository,
-    private val roomInventoryApplication: RoomInventoryApplication,
+    private val inventoryReservationPort: InventoryReservationPort,
     private val guestRepository: GuestRepository,
     private val eventPublisher: ApplicationEventPublisher,
     private val roomTypeRepository: com.stayops.room.domain.repository.RoomTypeRepository,
@@ -125,7 +125,7 @@ class WebhookApplication(
         // 1. Reserve inventory for each date
         val dateRange = DateRange.of(checkInDate, checkOutDate)
         dateRange.allDates().forEach { date ->
-            roomInventoryApplication.reserve(propertyId, roomTypeId, date)
+            inventoryReservationPort.reserve(propertyId, roomTypeId, date)
         }
 
         // 2. Create or find guest (OTA guests have no phone — use placeholder)
@@ -140,7 +140,7 @@ class WebhookApplication(
             )
 
         // 3. Create reservation (PENDING) then confirm (OTA = pre-paid, no payment needed)
-        val bookingChannel = BookingChannel(
+        val bookingChannel = ReservationChannel(
             channelCode = channelCode,
             externalReservationId = bookingId,
             commissionRate = commissionRate

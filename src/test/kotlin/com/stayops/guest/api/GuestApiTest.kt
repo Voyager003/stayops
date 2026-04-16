@@ -5,8 +5,8 @@ import com.stayops.guest.api.dto.UpdateGuestRequest
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.infrastructure.persistence.GuestDocument
 import com.stayops.guest.infrastructure.persistence.GuestMongoDataRepository
-import com.stayops.auth.domain.model.Member
-import com.stayops.auth.domain.model.MemberRole
+import com.stayops.member.domain.model.Member
+import com.stayops.member.domain.model.MemberRole
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested

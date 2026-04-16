@@ -50,7 +50,7 @@ class MongoSettlementQueryRepositoryTest @Autowired constructor(
         nightCount = 2,
         numberOfGuests = 2,
         status = status,
-        channel = ReservationDocument.BookingChannelData(channelCode, null, commissionRate),
+        channel = ReservationDocument.ReservationChannelData(channelCode, null, commissionRate),
         pricing = ReservationDocument.PricingData(
             roomRateAmount = totalAmount,
             roomRateCurrency = "KRW",

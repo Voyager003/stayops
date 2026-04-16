@@ -4,8 +4,8 @@ import java.math.BigDecimal
 import java.time.Instant
 
 interface PaymentGateway {
-    fun confirm(paymentKey: String, orderId: String, amount: BigDecimal): PaymentConfirmResult
-    fun cancel(paymentKey: String, cancelReason: String): PaymentCancelResult
+    fun confirm(paymentKey: String, orderId: String, amount: BigDecimal, idempotencyKey: String): PaymentConfirmResult
+    fun cancel(paymentKey: String, cancelReason: String, idempotencyKey: String): PaymentCancelResult
     fun inquire(paymentKey: String): PaymentInquiryResult
 }
 

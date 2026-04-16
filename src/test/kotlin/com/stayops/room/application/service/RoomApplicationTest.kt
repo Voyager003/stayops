@@ -1,6 +1,6 @@
 package com.stayops.room.application.service
 
-import com.stayops.inventory.application.service.RoomInventoryApplication
+import com.stayops.inventory.application.port.RoomInventorySyncPort
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomStatus
 import com.stayops.room.domain.repository.RoomRepository
@@ -18,11 +18,11 @@ import io.mockk.verify
 class RoomApplicationTest : BehaviorSpec({
 
     val roomRepository = mockk<RoomRepository>()
-    val inventoryApplication = mockk<RoomInventoryApplication>()
+    val roomInventorySyncPort = mockk<RoomInventorySyncPort>()
     val idGenerator = object : IdGenerator {
         override fun generate() = "room-new"
     }
-    val roomApplication = RoomApplication(roomRepository, inventoryApplication, idGenerator)
+    val roomApplication = RoomApplication(roomRepository, roomInventorySyncPort, idGenerator)
 
     fun newRoom(id: String = "room-1", propertyId: String = "prop-1", roomNumber: String = "101") =
         Room.create(
@@ -37,7 +37,7 @@ class RoomApplicationTest : BehaviorSpec({
         `when`("중복 호수가 없으면") {
             every { roomRepository.findByPropertyIdAndRoomNumber("prop-1", "101") } returns null
             every { roomRepository.save(any()) } answers { firstArg() }
-            justRun { inventoryApplication.syncInventoryForRoomType("prop-1", "rt-1") }
+            justRun { roomInventorySyncPort.syncInventoryForRoomType("prop-1", "rt-1") }
 
             val result = roomApplication.createRoom(
                 propertyId = "prop-1",

@@ -2,10 +2,10 @@ package com.stayops.reservation.application.service
 
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.guest.domain.repository.GuestRepository
-import com.stayops.inventory.application.service.RoomInventoryApplication
+import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
-import com.stayops.rate.domain.service.RateResolver
+import com.stayops.rate.domain.service.RateResolverService
 import com.stayops.reservation.domain.event.ReservationCancelled
 import com.stayops.reservation.domain.event.ReservationCheckedOut
 import com.stayops.reservation.domain.event.ReservationCreated
@@ -32,10 +32,10 @@ class ReservationApplication(
     private val channelRepository: ChannelRepository,
     private val ratePlanRepository: RatePlanRepository,
     private val guestRepository: GuestRepository,
-    private val inventoryApplication: RoomInventoryApplication,
+    private val inventoryReservationPort: InventoryReservationPort,
     private val roomRepository: RoomRepository,
     private val eventPublisher: ApplicationEventPublisher,
-    private val rateResolver: RateResolver,
+    private val rateResolverService: RateResolverService,
     private val idGenerator: IdGenerator
 ) {
 
@@ -63,16 +63,16 @@ class ReservationApplication(
         val channel = channelRepository.findByPropertyIdAndCode(propertyId, channelCode)
             ?: throw NotFoundException("CHANNEL_NOT_FOUND", "채널을 찾을 수 없습니다: $channelCode")
 
-        // 3. RateResolver로 날짜별 요금 산출
+        // 3. RateResolverService로 날짜별 요금 산출
         val dateRange = DateRange.of(checkIn, checkOut)
         val ratePlans = ratePlanRepository.findByPropertyIdAndRoomTypeIdAndStatus(
             propertyId, roomTypeId, RatePlanStatus.ACTIVE
         )
-        val roomRate = rateResolver.resolveForDateRange(ratePlans, roomType.basePrice, dateRange, channelCode)
+        val roomRate = rateResolverService.resolveForDateRange(ratePlans, roomType.basePrice, dateRange, channelCode)
 
         // 4. 날짜별 재고 차감
         dateRange.allDates().forEach { date ->
-            inventoryApplication.reserve(propertyId, roomTypeId, date)
+            inventoryReservationPort.reserve(propertyId, roomTypeId, date)
         }
 
         // 5. Guest 조회
@@ -94,7 +94,7 @@ class ReservationApplication(
             guestInfo = GuestInfo(name = guestName, phone = guestPhone, email = guestEmail),
             dateRange = dateRange,
             numberOfGuests = numberOfGuests,
-            channel = BookingChannel(
+            channel = ReservationChannel(
                 channelCode = channelCode,
                 externalReservationId = externalReservationId,
                 commissionRate = channel.commissionRate
@@ -159,7 +159,7 @@ class ReservationApplication(
 
         // 재고 복원
         reservation.dateRange.allDates().forEach { date ->
-            inventoryApplication.release(reservation.propertyId, reservation.roomTypeId, date)
+            inventoryReservationPort.release(reservation.propertyId, reservation.roomTypeId, date)
         }
 
         // 이벤트 발행

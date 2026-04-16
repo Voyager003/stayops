@@ -3,6 +3,7 @@ package com.stayops.inventory.application.service
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryCache
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
+import com.stayops.inventory.application.port.AvailabilitySyncPort
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.shared.exception.ConflictException
@@ -17,7 +18,6 @@ import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
-import com.stayops.channel.application.service.ChannelSyncApplication
 import com.stayops.shared.domain.IdGenerator
 import java.time.Clock
 import java.time.Instant
@@ -29,13 +29,13 @@ class RoomInventoryApplicationTest : BehaviorSpec({
     val inventoryRepository = mockk<RoomInventoryRepository>()
     val cache = mockk<RoomInventoryCache>()
     val roomRepository = mockk<RoomRepository>()
-    val channelSyncApplication = mockk<ChannelSyncApplication>(relaxed = true)
+    val availabilitySyncPort = mockk<AvailabilitySyncPort>(relaxed = true)
     val fixedClock = Clock.fixed(Instant.parse("2026-03-12T00:00:00Z"), ZoneId.of("Asia/Seoul"))
     val idGenerator = object : IdGenerator {
         override fun generate() = "inv-new"
     }
     val inventoryApplication = RoomInventoryApplication(
-        inventoryRepository, cache, roomRepository, channelSyncApplication, fixedClock, idGenerator
+        inventoryRepository, cache, roomRepository, availabilitySyncPort, fixedClock, idGenerator
     )
 
     val today = LocalDate.of(2026, 3, 12)

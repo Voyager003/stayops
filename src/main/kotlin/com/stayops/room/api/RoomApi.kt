@@ -5,7 +5,7 @@ import com.stayops.room.api.dto.RoomResponse
 import com.stayops.room.api.dto.RoomStatusAction
 import com.stayops.room.api.dto.UpdateRoomStatusRequest
 import com.stayops.room.application.service.RoomApplication
-import com.stayops.shared.security.PropertyAccessChecker
+import com.stayops.member.infrastructure.security.PropertyAccessChecker
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping

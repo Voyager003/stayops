@@ -1,13 +1,5 @@
 package com.stayops.property.application.service
 
-import com.stayops.auth.domain.model.Member
-import com.stayops.auth.domain.model.MemberRole
-import com.stayops.auth.domain.model.PropertyAccess
-import com.stayops.auth.domain.model.PropertyRole
-import com.stayops.auth.domain.repository.MemberRepository
-import com.stayops.channel.domain.model.Channel
-import com.stayops.channel.domain.model.ChannelType
-import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo
 import com.stayops.property.domain.model.Property
@@ -23,31 +15,18 @@ import io.mockk.*
 class PropertyApplicationTest : BehaviorSpec({
 
     val propertyRepository = mockk<PropertyRepository>()
-    val memberRepository = mockk<MemberRepository>()
-    val channelRepository = mockk<ChannelRepository>()
     val idGenerator = object : IdGenerator {
         private var counter = 0
         override fun generate() = "id-${++counter}"
     }
-    val propertyApplication = PropertyApplication(propertyRepository, memberRepository, channelRepository, idGenerator)
+    val propertyApplication = PropertyApplication(propertyRepository, idGenerator)
 
     fun sampleAddress() = Address.of("해운대로 123", "부산", "부산광역시", "48099", "KR")
     fun sampleContactInfo() = ContactInfo.of("051-123-4567", "test@pension.com")
 
     given("숙소 생성 시") {
         `when`("유효한 요청이면") {
-            val owner = Member.create(
-                id = "owner-1",
-                email = "owner@test.com",
-                passwordHash = "hashed",
-                name = "홍길동",
-                role = MemberRole.OWNER
-            )
-
             every { propertyRepository.save(any()) } answers { firstArg() }
-            every { channelRepository.save(any()) } answers { firstArg() }
-            every { memberRepository.findById("owner-1") } returns owner
-            every { memberRepository.save(any()) } answers { firstArg() }
 
             val result = propertyApplication.createProperty(
                 ownerId = "owner-1",
@@ -58,23 +37,12 @@ class PropertyApplicationTest : BehaviorSpec({
                 description = "아름다운 펜션"
             )
 
-            then("저장된 숙소를 반환한다") {
+            then("Property만 생성하고 저장된 숙소를 반환한다") {
                 result.name shouldBe "해운대 펜션"
                 result.ownerId shouldBe "owner-1"
-            }
-            then("OWNER에게 숙소 접근 권한이 부여된다") {
                 verify {
-                    memberRepository.save(match<Member> {
-                        it.propertyAccess.any { access ->
-                            access.propertyId == result.id && access.role == PropertyRole.OWNER
-                        }
-                    })
-                }
-            }
-            then("DIRECT 채널이 자동 생성된다") {
-                verify {
-                    channelRepository.save(match<Channel> {
-                        it.propertyId == result.id && it.code == "DIRECT" && it.type == ChannelType.DIRECT
+                    propertyRepository.save(match<Property> {
+                        it.name == "해운대 펜션" && it.ownerId == "owner-1"
                     })
                 }
             }

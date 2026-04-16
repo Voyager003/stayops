@@ -20,7 +20,7 @@ import java.time.ZoneId
  * val clock = MutableClock(Instant.parse("2026-04-09T10:00:00Z"))
  * // ...
  * clock.advance(Duration.ofMinutes(16))  // 16분 시간 진행
- * scheduler.expirePendingReservations()  // now()는 이제 10:16
+ * clock.instant()  // now()는 이제 10:16
  * ```
  */
 class MutableClock(

@@ -81,6 +81,15 @@ class PaymentTest : BehaviorSpec({
     given("PENDING 상태의 Payment") {
         val payment = pendingPayment()
 
+        `when`("requestConfirm() 호출 시") {
+            val requested = payment.requestConfirm("toss_pk_123")
+
+            then("상태가 CONFIRM_REQUESTED로 변경되고 paymentKey가 설정된다") {
+                requested.status shouldBe PaymentStatus.CONFIRM_REQUESTED
+                requested.paymentKey shouldBe "toss_pk_123"
+            }
+        }
+
         `when`("approve() 호출 시") {
             val approvedAt = Instant.parse("2026-04-01T12:00:00Z")
             val approved = payment.approve(
@@ -131,6 +140,52 @@ class PaymentTest : BehaviorSpec({
         }
     }
 
+    // -- 상태 전이: CONFIRM_REQUESTED → APPROVED/FAILED --
+
+    given("CONFIRM_REQUESTED 상태의 Payment") {
+        val payment = pendingPayment().requestConfirm("toss_pk_123")
+
+        `when`("동일한 paymentKey로 requestConfirm()을 다시 호출하면") {
+            val requested = payment.requestConfirm("toss_pk_123")
+
+            then("같은 상태를 반환한다") {
+                requested.status shouldBe PaymentStatus.CONFIRM_REQUESTED
+                requested.paymentKey shouldBe "toss_pk_123"
+            }
+        }
+
+        `when`("다른 paymentKey로 requestConfirm()을 다시 호출하면") {
+            then("예외가 발생한다") {
+                shouldThrow<IllegalStateException> {
+                    payment.requestConfirm("toss_pk_456")
+                }
+            }
+        }
+
+        `when`("approve() 호출 시") {
+            val approvedAt = Instant.parse("2026-04-01T12:00:00Z")
+            val approved = payment.approve(
+                paymentKey = "toss_pk_123",
+                method = "카드",
+                approvedAt = approvedAt
+            )
+
+            then("상태가 APPROVED로 변경된다") {
+                approved.status shouldBe PaymentStatus.APPROVED
+                approved.paymentKey shouldBe "toss_pk_123"
+            }
+        }
+
+        `when`("fail() 호출 시") {
+            val failed = payment.fail("결제 거절")
+
+            then("상태가 FAILED로 변경된다") {
+                failed.status shouldBe PaymentStatus.FAILED
+                failed.failReason shouldBe "결제 거절"
+            }
+        }
+    }
+
     // -- 상태 전이: APPROVED → CANCELLED --
 
     given("APPROVED 상태의 Payment") {
@@ -146,6 +201,14 @@ class PaymentTest : BehaviorSpec({
 
             then("상태가 CANCELLED로 변경된다") {
                 cancelled.status shouldBe PaymentStatus.CANCELLED
+            }
+        }
+
+        `when`("requestCancel() 호출 시") {
+            val cancelRequested = payment.requestCancel()
+
+            then("상태가 CANCEL_REQUESTED로 변경된다") {
+                cancelRequested.status shouldBe PaymentStatus.CANCEL_REQUESTED
             }
         }
 
@@ -176,6 +239,42 @@ class PaymentTest : BehaviorSpec({
                 cancelFailed.status shouldBe PaymentStatus.CANCEL_FAILED
             }
             then("failReason이 설정된다") {
+                cancelFailed.failReason shouldBe "Toss 환불 API 실패"
+            }
+        }
+    }
+
+    // -- 상태 전이: CANCEL_REQUESTED → CANCELLED/CANCEL_FAILED --
+
+    given("CANCEL_REQUESTED 상태의 Payment") {
+        val approvedAt = Instant.parse("2026-04-01T12:00:00Z")
+        val payment = pendingPayment().approve(
+            paymentKey = "toss_pk_123",
+            method = "카드",
+            approvedAt = approvedAt
+        ).requestCancel()
+
+        `when`("requestCancel()을 다시 호출하면") {
+            val requested = payment.requestCancel()
+
+            then("같은 상태를 반환한다") {
+                requested.status shouldBe PaymentStatus.CANCEL_REQUESTED
+            }
+        }
+
+        `when`("cancel() 호출 시") {
+            val cancelled = payment.cancel()
+
+            then("상태가 CANCELLED로 변경된다") {
+                cancelled.status shouldBe PaymentStatus.CANCELLED
+            }
+        }
+
+        `when`("failCancel() 호출 시") {
+            val cancelFailed = payment.failCancel("Toss 환불 API 실패")
+
+            then("상태가 CANCEL_FAILED로 변경된다") {
+                cancelFailed.status shouldBe PaymentStatus.CANCEL_FAILED
                 cancelFailed.failReason shouldBe "Toss 환불 API 실패"
             }
         }

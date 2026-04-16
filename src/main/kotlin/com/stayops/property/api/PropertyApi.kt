@@ -1,13 +1,13 @@
 package com.stayops.property.api
 
-import com.stayops.auth.domain.model.Member
-import com.stayops.auth.domain.model.MemberRole
-import com.stayops.auth.domain.repository.MemberRepository
+import com.stayops.member.domain.model.Member
+import com.stayops.member.domain.model.MemberRole
 import com.stayops.property.api.dto.CreatePropertyRequest
 import com.stayops.property.api.dto.PropertyResponse
 import com.stayops.property.api.dto.UpdatePropertyRequest
 import com.stayops.property.application.service.PropertyApplication
-import com.stayops.shared.security.PropertyAccessChecker
+import com.stayops.property.application.service.PropertyOnboardingApplication
+import com.stayops.member.infrastructure.security.PropertyAccessChecker
 import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo
 import jakarta.validation.Valid
@@ -23,8 +23,8 @@ import jakarta.servlet.http.HttpServletResponse
 @RequestMapping("/api/v1/properties")
 class PropertyApi(
     private val propertyApplication: PropertyApplication,
+    private val propertyOnboardingApplication: PropertyOnboardingApplication,
     private val propertyAccessChecker: PropertyAccessChecker,
-    private val memberRepository: MemberRepository
 ) {
     private val securityContextRepository = HttpSessionSecurityContextRepository()
 
@@ -36,7 +36,7 @@ class PropertyApi(
         httpResponse: HttpServletResponse
     ): PropertyResponse {
         val currentMember = SecurityContextHolder.getContext().authentication?.principal as Member
-        val property = propertyApplication.createProperty(
+        val result = propertyOnboardingApplication.onboardProperty(
             ownerId = currentMember.id,
             name = request.name,
             type = request.type,
@@ -48,15 +48,12 @@ class PropertyApi(
         )
 
         // SecurityContext의 Member를 갱신하여 세션에 즉시 반영
-        val updatedMember = memberRepository.findById(currentMember.id)
-        if (updatedMember != null) {
-            val newAuth = UsernamePasswordAuthenticationToken(updatedMember, null, emptyList())
-            val context = SecurityContextHolder.getContext()
-            context.authentication = newAuth
-            securityContextRepository.saveContext(context, httpRequest, httpResponse)
-        }
+        val newAuth = UsernamePasswordAuthenticationToken(result.owner, null, emptyList())
+        val context = SecurityContextHolder.getContext()
+        context.authentication = newAuth
+        securityContextRepository.saveContext(context, httpRequest, httpResponse)
 
-        return PropertyResponse.from(property)
+        return PropertyResponse.from(result.property)
     }
 
     @GetMapping

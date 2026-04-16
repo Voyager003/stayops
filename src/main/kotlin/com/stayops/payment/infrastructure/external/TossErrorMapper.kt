@@ -5,7 +5,8 @@ import com.stayops.payment.domain.service.PaymentGatewayException
 object TossErrorMapper {
 
     private val ALREADY_PROCESSED = setOf(
-        "ALREADY_PROCESSED_PAYMENT"
+        "ALREADY_PROCESSED_PAYMENT",
+        "ALREADY_CANCELED_PAYMENT"
     )
 
     private val PAYMENT_DECLINED = setOf(
