@@ -334,6 +334,56 @@ Grafana는 public expose 대신 SSH tunnel로 확인한다.
 ssh -L 3001:localhost:3001 <boot-ec2>
 ```
 
+## 8.5 부하 테스트 시작 전 최종 점검
+
+부하 테스트는 아래 항목이 모두 확인된 뒤 시작한다. 하나라도 실패하면 k6 결과를 성능 한계로 해석하지 않는다.
+
+### 파일 배치
+
+- Boot EC2: `infra/aws/boot/docker-compose.yml`, `nginx.conf.template`, `prometheus.yml`, `promtail.yml`, `deploy.env`
+- Mongo EC2 1: `infra/aws/mongo/docker-compose.yml`, `init-replica-set.js`, `promtail.yml`, `deploy.env`
+- Mongo EC2 2: `infra/aws/mongo/docker-compose.yml`, `init-replica-set.js`, `promtail.yml`, `deploy.env`
+- Oracle Mock OTA VM: `infra/oracle/mock-ota/docker-compose.yml`, `nginx.conf.template`, `promtail.yml`, `deploy.env`, `.htpasswd`
+
+### Env 값
+
+- Boot `deploy.env`: `API_DOMAIN`, `SPRING_MONGODB_URI`, `TOSS_SECRET_KEY`, `MOCK_OTA_ENDPOINT`, `MONGO1_HOST`, `MONGO2_HOST`, `GRAFANA_PASSWORD`
+- Mongo `deploy.env`: `MONGO1_HOST`, `MONGO2_HOST`, `MONGO_ARBITER_HOST`, `LOKI_URL`, `HOSTNAME`
+- Oracle Mock OTA `deploy.env`: `MOCK_OTA_DOMAIN`, `MOCK_OTA_PMS_WEBHOOK_URL`, `MOCK_OTA_HTPASSWD_PATH`, `LOKI_URL`
+- MongoDB URI는 `replicaSet=rs0`, `w=majority`, `readPreference=primary`를 포함해야 한다.
+- `deploy.env`, `.htpasswd`, private key 파일은 Git에 없어야 한다.
+
+### DNS와 TLS
+
+- `API_DOMAIN` DNS가 Boot EC2 public IP를 향한다.
+- `MOCK_OTA_DOMAIN` DNS가 Oracle Mock OTA VM public IP를 향한다.
+- Boot EC2에 `/etc/letsencrypt/live/<api-domain>/fullchain.pem`과 `privkey.pem`이 있다.
+- Oracle Mock OTA VM에 `/etc/letsencrypt/live/<mock-ota-domain>/fullchain.pem`과 `privkey.pem`이 있다.
+- 외부에서 `https://<api-domain>/health`가 정상 응답한다.
+- 외부에서 `https://<api-domain>/actuator/prometheus`가 `404`로 차단된다.
+
+### Compose 실행 순서
+
+```text
+1. Mongo EC2 1 compose up
+2. Mongo EC2 2 compose up
+3. Boot EC2 compose up
+4. MongoDB replica set 초기화
+5. Oracle Mock OTA compose up
+6. Prometheus target UP 확인
+7. App baseline 부하 테스트
+8. DB smoke 부하 테스트
+9. DB ramp/failover 부하 테스트
+```
+
+### 상태 확인
+
+- `rs.status()`에서 `PRIMARY`, `SECONDARY`, `ARBITER`가 확인된다.
+- Prometheus target에서 StayOps app, Mongo exporters, node exporters가 `UP`이다.
+- Loki가 Boot, Mongo, Mock OTA Docker log를 수집한다.
+- k6 실행 위치는 Boot EC2가 아니다.
+- 부하 테스트 대상 데이터의 `PROPERTY_ID`, `ROOM_TYPE_ID`, customer 계정, 재고, 요금이 준비되어 있다.
+
 ## 9. App 부하 테스트
 
 먼저 Application이 MongoDB보다 먼저 병목이 되는지 확인한다.
