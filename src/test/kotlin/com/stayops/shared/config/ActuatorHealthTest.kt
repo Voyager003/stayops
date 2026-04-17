@@ -48,6 +48,14 @@ class ActuatorHealthTest @Autowired constructor(
                     status { isOk() }
                 }
         }
+
+        @Test
+        fun `actuator prometheus는 인증 없이 200을 반환한다`() {
+            mockMvc.get("/actuator/prometheus")
+                .andExpect {
+                    status { isOk() }
+                }
+        }
     }
 
     @Nested
