@@ -8,6 +8,7 @@ const CUSTOMER_EMAIL = __ENV.CUSTOMER_EMAIL || "guest@dummy.com";
 const CUSTOMER_PASSWORD = __ENV.CUSTOMER_PASSWORD || "password123";
 const CHECK_IN = __ENV.CHECK_IN || offsetDate(14);
 const CHECK_OUT = __ENV.CHECK_OUT || offsetDate(15);
+const TEST_MODE = __ENV.TEST_MODE || "ramp";
 const READ_RATE = Number(__ENV.READ_RATE || "20");
 const WRITE_RATE = Number(__ENV.WRITE_RATE || "2");
 
@@ -20,12 +21,7 @@ export const options = {
       timeUnit: "1s",
       preAllocatedVUs: 30,
       maxVUs: 100,
-      stages: [
-        { target: READ_RATE, duration: "2m" },
-        { target: READ_RATE * 2, duration: "3m" },
-        { target: READ_RATE * 3, duration: "3m" },
-        { target: 0, duration: "1m" }
-      ]
+      stages: stagesFor(READ_RATE)
     },
     write_mixed: {
       executor: "ramping-arrival-rate",
@@ -34,12 +30,7 @@ export const options = {
       timeUnit: "1s",
       preAllocatedVUs: 10,
       maxVUs: 50,
-      stages: [
-        { target: WRITE_RATE, duration: "2m" },
-        { target: WRITE_RATE * 2, duration: "3m" },
-        { target: WRITE_RATE * 3, duration: "3m" },
-        { target: 0, duration: "1m" }
-      ]
+      stages: stagesFor(WRITE_RATE)
     }
   },
   thresholds: {
@@ -161,4 +152,37 @@ function offsetDate(days) {
   const date = new Date();
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+function stagesFor(rate) {
+  const profiles = {
+    smoke: [
+      { target: rate, duration: "30s" },
+      { target: 0, duration: "10s" }
+    ],
+    baseline: [
+      { target: rate, duration: "2m" },
+      { target: rate, duration: "10m" },
+      { target: 0, duration: "1m" }
+    ],
+    ramp: [
+      { target: rate, duration: "2m" },
+      { target: rate * 2, duration: "3m" },
+      { target: rate * 3, duration: "3m" },
+      { target: 0, duration: "1m" }
+    ],
+    spike: [
+      { target: rate, duration: "1m" },
+      { target: rate * 5, duration: "1m" },
+      { target: rate, duration: "2m" },
+      { target: 0, duration: "1m" }
+    ],
+    failover: [
+      { target: rate, duration: "3m" },
+      { target: rate, duration: "10m" },
+      { target: 0, duration: "2m" }
+    ]
+  };
+
+  return profiles[TEST_MODE] || profiles.ramp;
 }

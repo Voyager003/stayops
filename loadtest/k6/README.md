@@ -19,6 +19,7 @@ Run this before the DB-heavy test:
 
 ```bash
 BASE_URL=https://api.example.com \
+TEST_MODE=baseline \
 LIGHTWEIGHT_RATE=50 \
 BUSINESS_RATE=10 \
 k6 run loadtest/k6/stayops-app-load.js
@@ -67,6 +68,7 @@ The existing `scripts/init-dummy-data.js` can be used as a starting point, but v
 
 ```bash
 BASE_URL=https://api.example.com \
+TEST_MODE=smoke \
 PROPERTY_ID=property-dummy-001 \
 ROOM_TYPE_ID=roomtype-dummy-001 \
 CUSTOMER_EMAIL=guest@dummy.com \
@@ -75,6 +77,22 @@ READ_RATE=2 \
 WRITE_RATE=1 \
 k6 run loadtest/k6/stayops-db-load.js
 ```
+
+## Load Timing Control
+
+Start time is controlled by when you run the `k6 run` command. Stop time can be controlled with `Ctrl+C`, or by letting the selected `TEST_MODE` finish.
+
+Both scripts support the same `TEST_MODE` values:
+
+| TEST_MODE | Purpose | Load shape |
+|---|---|---|
+| `smoke` | Deployment/config check before real measurement | 30s at the configured rate, then stop |
+| `baseline` | Stable reference point before increasing load | 2m warm-up, 10m steady load, 1m cooldown |
+| `ramp` | Gradually find the first bottleneck | 1x, 2x, 3x configured rate, then cooldown |
+| `spike` | Short sudden traffic burst | 1x, 5x, 1x configured rate, then cooldown |
+| `failover` | Manual MongoDB primary stop/recovery test | 3m warm-up, 10m steady window for failover, 2m cooldown |
+
+For failover testing, start k6 first and wait until the steady window starts. Then stop the current MongoDB primary from another terminal or cloud console, and observe election time, write failures, write concern timeouts, latency, and recovery.
 
 ## Prometheus Remote Write
 

@@ -2,6 +2,7 @@ import http from "k6/http";
 import { check, group, sleep } from "k6";
 
 const BASE_URL = __ENV.BASE_URL || "https://api.example.com";
+const TEST_MODE = __ENV.TEST_MODE || "ramp";
 const LIGHTWEIGHT_RATE = Number(__ENV.LIGHTWEIGHT_RATE || "50");
 const BUSINESS_RATE = Number(__ENV.BUSINESS_RATE || "10");
 
@@ -14,12 +15,7 @@ export const options = {
       timeUnit: "1s",
       preAllocatedVUs: 50,
       maxVUs: 200,
-      stages: [
-        { target: LIGHTWEIGHT_RATE, duration: "2m" },
-        { target: LIGHTWEIGHT_RATE * 2, duration: "3m" },
-        { target: LIGHTWEIGHT_RATE * 3, duration: "3m" },
-        { target: 0, duration: "1m" }
-      ],
+      stages: stagesFor(LIGHTWEIGHT_RATE),
       tags: { test_type: "app_thread_pool" }
     },
     business_read_control: {
@@ -29,12 +25,7 @@ export const options = {
       timeUnit: "1s",
       preAllocatedVUs: 20,
       maxVUs: 100,
-      stages: [
-        { target: BUSINESS_RATE, duration: "2m" },
-        { target: BUSINESS_RATE * 2, duration: "3m" },
-        { target: BUSINESS_RATE * 3, duration: "3m" },
-        { target: 0, duration: "1m" }
-      ],
+      stages: stagesFor(BUSINESS_RATE),
       tags: { test_type: "app_with_db_read" }
     }
   },
@@ -85,4 +76,37 @@ export function handleSummary(data) {
     }, null, 2),
     "app-summary.json": JSON.stringify(data, null, 2)
   };
+}
+
+function stagesFor(rate) {
+  const profiles = {
+    smoke: [
+      { target: rate, duration: "30s" },
+      { target: 0, duration: "10s" }
+    ],
+    baseline: [
+      { target: rate, duration: "2m" },
+      { target: rate, duration: "10m" },
+      { target: 0, duration: "1m" }
+    ],
+    ramp: [
+      { target: rate, duration: "2m" },
+      { target: rate * 2, duration: "3m" },
+      { target: rate * 3, duration: "3m" },
+      { target: 0, duration: "1m" }
+    ],
+    spike: [
+      { target: rate, duration: "1m" },
+      { target: rate * 5, duration: "1m" },
+      { target: rate, duration: "2m" },
+      { target: 0, duration: "1m" }
+    ],
+    failover: [
+      { target: rate, duration: "3m" },
+      { target: rate, duration: "10m" },
+      { target: 0, duration: "2m" }
+    ]
+  };
+
+  return profiles[TEST_MODE] || profiles.ramp;
 }
