@@ -152,12 +152,12 @@ curl -i https://<api-domain>/actuator/prometheus
 
 ```bash
 cd infra/aws/mongo
-docker cp init-replica-set.js "$(docker compose ps -q mongo)":/tmp/init-replica-set.js
-MONGO_REPLICA_SET=rs0 \
-MONGO1_HOST=<mongo1-private-ip> \
-MONGO2_HOST=<mongo2-private-ip> \
-MONGO_ARBITER_HOST=<boot-private-ip> \
-docker compose exec mongo mongosh /tmp/init-replica-set.js
+docker compose exec \
+  -e MONGO_REPLICA_SET=rs0 \
+  -e MONGO1_HOST=<mongo1-private-ip> \
+  -e MONGO2_HOST=<mongo2-private-ip> \
+  -e MONGO_ARBITER_HOST=<boot-private-ip> \
+  mongo mongosh /opt/stayops/init-replica-set.js
 ```
 
 검증:
