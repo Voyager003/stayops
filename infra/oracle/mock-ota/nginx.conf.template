@@ -1,6 +1,6 @@
 server {
     listen 80;
-    server_name mock-ota.example.com;
+    server_name ${MOCK_OTA_DOMAIN};
 
     location / {
         return 301 https://$host$request_uri;
@@ -9,10 +9,10 @@ server {
 
 server {
     listen 443 ssl;
-    server_name mock-ota.example.com;
+    server_name ${MOCK_OTA_DOMAIN};
 
-    ssl_certificate /etc/letsencrypt/live/mock-ota.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/mock-ota.example.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/${MOCK_OTA_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${MOCK_OTA_DOMAIN}/privkey.pem;
 
     location ~ ^/api/v1/(simulate|ari/clear) {
         auth_basic "Mock OTA control";

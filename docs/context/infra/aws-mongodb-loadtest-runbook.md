@@ -50,7 +50,7 @@
 ### 배포 파일
 
 - Boot EC2에는 `infra/aws/boot` 파일과 커밋하지 않는 `deploy.env`를 둔다.
-- Mongo EC2 1, 2에는 `infra/aws/mongo` 파일을 둔다.
+- Mongo EC2 1, 2에는 `infra/aws/mongo` 파일과 커밋하지 않는 `deploy.env`를 둔다.
 - Oracle Mock OTA VM에는 `infra/oracle/mock-ota` 파일과 커밋하지 않는 `deploy.env`, `.htpasswd`를 둔다.
 - 실제 secret 값은 Git, 문서, issue, PR, k6 output에 남기지 않는다.
 
@@ -61,10 +61,9 @@
 ```bash
 node --check loadtest/k6/stayops-app-load.js
 node --check loadtest/k6/stayops-db-load.js
-docker compose --env-file infra/aws/env.example -f infra/aws/boot/docker-compose.yml config
+docker compose --env-file infra/aws/boot/env.example -f infra/aws/boot/docker-compose.yml config
+docker compose --env-file infra/aws/mongo/env.example -f infra/aws/mongo/docker-compose.yml config
 docker compose --env-file infra/oracle/mock-ota/env.example -f infra/oracle/mock-ota/docker-compose.yml config
-LOKI_URL=http://boot:3100/loki/api/v1/push HOSTNAME=mongo1 \
-  docker compose -f infra/aws/mongo/docker-compose.yml config
 ./gradlew test --no-daemon
 ```
 
@@ -145,18 +144,24 @@ private만 허용:
 
 ## 4. Mongo EC2 배포
 
-Mongo EC2 1과 Mongo EC2 2에 동일한 compose를 배포한다. 단, `HOSTNAME`은 각 노드에서 다르게 둔다.
+Mongo EC2 1과 Mongo EC2 2에 동일한 compose를 배포한다. 각 노드에는 `infra/aws/mongo/env.example`을 기준으로 `deploy.env`를 만든다.
+
+작성 기준:
+
+- `HOSTNAME`은 각 노드에서 다르게 둔다. 예: `mongo1`, `mongo2`
+- `LOKI_URL`은 Boot EC2의 Loki endpoint를 향하게 한다.
+- `MONGO1_HOST`, `MONGO2_HOST`, `MONGO_ARBITER_HOST`는 replica set 초기화 때도 같은 값으로 사용한다.
 
 ```bash
 cd infra/aws/mongo
-LOKI_URL=http://<boot-private-ip>:3100/loki/api/v1/push HOSTNAME=mongo1 docker compose up -d
+docker compose --env-file deploy.env up -d
 ```
 
 Mongo EC2 2:
 
 ```bash
 cd infra/aws/mongo
-LOKI_URL=http://<boot-private-ip>:3100/loki/api/v1/push HOSTNAME=mongo2 docker compose up -d
+docker compose --env-file deploy.env up -d
 ```
 
 확인:
@@ -172,8 +177,9 @@ Boot EC2에는 실제 런타임 값을 담은 `deploy.env` 파일을 별도로 �
 
 작성 기준:
 
-- `infra/aws/env.example`을 기준으로 필요한 key 목록만 맞춘다.
+- `infra/aws/boot/env.example`을 기준으로 필요한 key 목록만 맞춘다.
 - `change-me`, `replace-with-runtime-secret`, `example.com` 값은 실제 런타임 값으로 교체한다.
+- `API_DOMAIN`은 Nginx `server_name`과 Let's Encrypt certificate path에 사용되므로 실제 API domain과 일치해야 한다.
 - secret 값은 문서, 이슈, PR, commit message, k6 output에 남기지 않는다.
 - `TOSS_SECRET_KEY`, `GRAFANA_PASSWORD`는 운영자가 VM 안에서만 주입한다.
 - MongoDB URI에는 `replicaSet=rs0`, `w=majority`, `readPreference=primary`를 유지한다.
@@ -182,9 +188,11 @@ Boot EC2에는 실제 런타임 값을 담은 `deploy.env` 파일을 별도로 �
 필수 값:
 
 - `STAYOPS_IMAGE`
+- `API_DOMAIN`
 - `SPRING_MONGODB_URI`
 - `TOSS_SECRET_KEY`
 - `MOCK_OTA_ENDPOINT`
+- `MONGO_REPLICA_SET`
 - `MONGO1_HOST`
 - `MONGO2_HOST`
 - `GRAFANA_PASSWORD`
@@ -246,6 +254,7 @@ Oracle VM에는 Mock OTA runtime env와 Basic Auth 파일을 별도로 둔다.
 작성 기준:
 
 - `infra/oracle/mock-ota/env.example`을 기준으로 필요한 key 목록만 맞춘다.
+- `MOCK_OTA_DOMAIN`은 Nginx `server_name`과 Let's Encrypt certificate path에 사용되므로 실제 Mock OTA domain과 일치해야 한다.
 - `MOCK_OTA_PMS_WEBHOOK_URL`은 Boot API domain을 향하게 한다.
 - `MOCK_OTA_HTPASSWD_PATH`는 Git에 커밋하지 않는 `.htpasswd` 파일을 가리키게 한다.
 - Basic Auth 계정과 비밀번호는 문서와 로그에 남기지 않는다.
