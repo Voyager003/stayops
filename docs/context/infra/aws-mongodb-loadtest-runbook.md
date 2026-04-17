@@ -19,6 +19,41 @@
 - Mock OTA는 Oracle VM에서 HTTPS endpoint로 분리한다.
 - k6는 Boot EC2가 아닌 로컬 또는 별도 load generator에서 실행한다.
 
+## 0. 배포 전 준비 체크리스트
+
+배포 전에 다음 항목을 먼저 확정한다. 이 단계가 끝나기 전에는 compose를 실행하지 않는다.
+
+### 인스턴스
+
+- AWS Boot EC2 1대: public subnet, public IP 또는 DNS 연결 가능
+- AWS Mongo EC2 1대: private subnet, Boot EC2와 Mongo EC2 2에서 접근 가능
+- AWS Mongo EC2 2대: private subnet, Boot EC2와 Mongo EC2 1에서 접근 가능
+- Oracle Mock OTA VM 1대: public HTTPS endpoint 연결 가능
+- 운영자 로컬 또는 별도 load generator: k6 실행 위치
+
+### 네트워크
+
+- Boot EC2에서 Mongo EC2 1, 2의 private IP `27017`에 접근 가능해야 한다.
+- Mongo EC2 1과 Mongo EC2 2는 서로의 private IP `27017`에 접근 가능해야 한다.
+- Mongo EC2 1, 2에서 Boot EC2의 private IP `27017`에 접근 가능해야 한다. 이는 arbiter 통신을 위한 경로다.
+- Boot EC2에서 Mongo EC2 1, 2의 `9100`, `9216` exporter port에 접근 가능해야 한다.
+- Oracle Mock OTA VM은 Boot API public HTTPS endpoint로 webhook을 보낼 수 있어야 한다.
+- Boot EC2는 Oracle Mock OTA public HTTPS endpoint로 API 요청을 보낼 수 있어야 한다.
+
+### 런타임
+
+- 모든 VM에 Docker와 Docker Compose plugin을 설치한다.
+- 각 VM의 system clock이 동기화되어 있어야 한다. TLS, log timestamp, MongoDB election 분석에 필요하다.
+- Mongo EC2 1, 2의 disk 여유 공간과 I/O 한계를 기록한다. 부하 테스트 결과 해석 기준이 된다.
+- Boot EC2의 CPU, memory, network baseline을 기록한다. App 병목과 DB 병목을 분리하기 위한 기준이다.
+
+### 배포 파일
+
+- Boot EC2에는 `infra/aws/boot` 파일과 커밋하지 않는 `deploy.env`를 둔다.
+- Mongo EC2 1, 2에는 `infra/aws/mongo` 파일을 둔다.
+- Oracle Mock OTA VM에는 `infra/oracle/mock-ota` 파일과 커밋하지 않는 `deploy.env`, `.htpasswd`를 둔다.
+- 실제 secret 값은 Git, 문서, issue, PR, k6 output에 남기지 않는다.
+
 ## 1. 배포 전 로컬 검증
 
 로컬에서는 실제 성능을 측정하지 않는다. 배포 전에 스크립트와 compose 구성이 깨지지 않았는지만 확인한다.
@@ -73,6 +108,7 @@ Boot EC2 inbound:
 - `22`: operator IP only
 - `27017`: Mongo EC2 private IP only
 - `3001`, `9090`, `3100`: public open 금지. SSH tunnel 또는 제한된 operator IP만 허용
+- `9100`: public open 금지. 필요하면 operator IP만 임시 허용
 
 Mongo EC2 inbound:
 
@@ -85,6 +121,27 @@ Oracle Mock OTA inbound:
 - `80`, `443`: public
 - `22`: operator IP only
 - `9100`: 필요 시 Boot EC2 또는 operator IP only
+
+Outbound는 기본 허용으로 시작하되, 테스트가 끝난 뒤 최소 범위로 줄인다. 특히 MongoDB `27017`, Prometheus exporter port, Loki ingestion port가 public internet에 열려 있으면 안 된다.
+
+보안그룹 확인 기준:
+
+```text
+public 허용:
+- Boot Nginx 80/443
+- Oracle Mock OTA Nginx 80/443
+
+operator만 허용:
+- SSH 22
+- Grafana 3001
+- Prometheus 9090
+- Loki 3100
+
+private만 허용:
+- MongoDB 27017
+- node-exporter 9100
+- mongodb-exporter 9216
+```
 
 ## 4. Mongo EC2 배포
 
