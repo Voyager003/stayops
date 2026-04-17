@@ -44,6 +44,7 @@
 
 - 모든 VM에 Docker와 Docker Compose plugin을 설치한다.
 - 각 VM의 system clock이 동기화되어 있어야 한다. TLS, log timestamp, MongoDB election 분석에 필요하다.
+- Boot EC2와 Oracle Mock OTA VM에는 TLS 인증서 발급 도구를 준비한다.
 - Mongo EC2 1, 2의 disk 여유 공간과 I/O 한계를 기록한다. 부하 테스트 결과 해석 기준이 된다.
 - Boot EC2의 CPU, memory, network baseline을 기록한다. App 병목과 DB 병목을 분리하기 위한 기준이다.
 
@@ -53,6 +54,14 @@
 - Mongo EC2 1, 2에는 `infra/aws/mongo` 파일과 커밋하지 않는 `deploy.env`를 둔다.
 - Oracle Mock OTA VM에는 `infra/oracle/mock-ota` 파일과 커밋하지 않는 `deploy.env`, `.htpasswd`를 둔다.
 - 실제 secret 값은 Git, 문서, issue, PR, k6 output에 남기지 않는다.
+
+### DNS와 TLS
+
+- `API_DOMAIN`은 Boot EC2 public IP를 향해야 한다.
+- `MOCK_OTA_DOMAIN`은 Oracle Mock OTA VM public IP를 향해야 한다.
+- 두 VM 모두 `80`, `443` inbound가 열려 있어야 한다.
+- compose 실행 전에 각 domain의 Let's Encrypt 인증서가 `/etc/letsencrypt/live/<domain>` 아래에 있어야 한다.
+- 인증서가 없으면 Nginx 컨테이너가 `fullchain.pem` 또는 `privkey.pem`을 찾지 못하고 기동에 실패한다.
 
 ## 1. 배포 전 로컬 검증
 
@@ -199,6 +208,21 @@ Boot EC2에는 실제 런타임 값을 담은 `deploy.env` 파일을 별도로 �
 
 배포:
 
+TLS 인증서를 먼저 확인한다.
+
+```bash
+sudo test -f /etc/letsencrypt/live/<api-domain>/fullchain.pem
+sudo test -f /etc/letsencrypt/live/<api-domain>/privkey.pem
+```
+
+인증서가 없다면 DNS가 Boot EC2를 향하는지 확인한 뒤 먼저 발급한다. 이때 `80` port를 사용하는 기존 프로세스가 없어야 한다.
+
+```bash
+sudo certbot certonly --standalone -d <api-domain>
+```
+
+인증서 확인 후 compose를 실행한다.
+
 ```bash
 cd infra/aws/boot
 docker compose --env-file deploy.env up -d
@@ -258,6 +282,19 @@ Oracle VM에는 Mock OTA runtime env와 Basic Auth 파일을 별도로 둔다.
 - `MOCK_OTA_PMS_WEBHOOK_URL`은 Boot API domain을 향하게 한다.
 - `MOCK_OTA_HTPASSWD_PATH`는 Git에 커밋하지 않는 `.htpasswd` 파일을 가리키게 한다.
 - Basic Auth 계정과 비밀번호는 문서와 로그에 남기지 않는다.
+
+TLS 인증서를 먼저 확인한다.
+
+```bash
+sudo test -f /etc/letsencrypt/live/<mock-ota-domain>/fullchain.pem
+sudo test -f /etc/letsencrypt/live/<mock-ota-domain>/privkey.pem
+```
+
+인증서가 없다면 DNS가 Oracle Mock OTA VM을 향하는지 확인한 뒤 먼저 발급한다.
+
+```bash
+sudo certbot certonly --standalone -d <mock-ota-domain>
+```
 
 ```bash
 cd infra/oracle/mock-ota
