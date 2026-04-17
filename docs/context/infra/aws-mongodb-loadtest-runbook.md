@@ -111,7 +111,16 @@ docker compose logs mongo --tail=100
 
 ## 5. Boot EC2 배포
 
-Boot EC2에는 실제 런타임 값을 담은 env 파일을 별도로 둔다. 이 파일은 Git에 커밋하지 않는다.
+Boot EC2에는 실제 런타임 값을 담은 `deploy.env` 파일을 별도로 둔다. 이 파일은 Git에 커밋하지 않는다.
+
+작성 기준:
+
+- `infra/aws/env.example`을 기준으로 필요한 key 목록만 맞춘다.
+- `change-me`, `replace-with-runtime-secret`, `example.com` 값은 실제 런타임 값으로 교체한다.
+- secret 값은 문서, 이슈, PR, commit message, k6 output에 남기지 않는다.
+- `TOSS_SECRET_KEY`, `GRAFANA_PASSWORD`는 운영자가 VM 안에서만 주입한다.
+- MongoDB URI에는 `replicaSet=rs0`, `w=majority`, `readPreference=primary`를 유지한다.
+- `deploy.env`, `.htpasswd`, private key 파일은 `.gitignore` 대상이다.
 
 필수 값:
 
@@ -176,6 +185,13 @@ docker compose exec mongo mongosh --eval "db.hello()"
 ## 7. Oracle Mock OTA 배포
 
 Oracle VM에는 Mock OTA runtime env와 Basic Auth 파일을 별도로 둔다.
+
+작성 기준:
+
+- `infra/oracle/mock-ota/env.example`을 기준으로 필요한 key 목록만 맞춘다.
+- `MOCK_OTA_PMS_WEBHOOK_URL`은 Boot API domain을 향하게 한다.
+- `MOCK_OTA_HTPASSWD_PATH`는 Git에 커밋하지 않는 `.htpasswd` 파일을 가리키게 한다.
+- Basic Auth 계정과 비밀번호는 문서와 로그에 남기지 않는다.
 
 ```bash
 cd infra/oracle/mock-ota
