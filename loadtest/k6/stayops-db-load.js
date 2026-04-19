@@ -1,5 +1,5 @@
 import http from "k6/http";
-import { check, group, sleep } from "k6";
+import { check, group } from "k6";
 
 const BASE_URL = __ENV.BASE_URL || "https://api.example.com";
 const PROPERTY_ID = __ENV.PROPERTY_ID || "property-dummy-001";
@@ -9,8 +9,11 @@ const CUSTOMER_PASSWORD = __ENV.CUSTOMER_PASSWORD || "password123";
 const CHECK_IN = __ENV.CHECK_IN || offsetDate(14);
 const CHECK_OUT = __ENV.CHECK_OUT || offsetDate(15);
 const TEST_MODE = __ENV.TEST_MODE || "ramp";
+const EXPERIMENT_ID = __ENV.EXPERIMENT_ID || `local-${Date.now()}`;
+const LOADTEST_PHASE = __ENV.LOADTEST_PHASE || TEST_MODE;
 const READ_RATE = Number(__ENV.READ_RATE || "20");
 const WRITE_RATE = Number(__ENV.WRITE_RATE || "2");
+const WRITE_DATE_SPREAD_DAYS = Number(__ENV.WRITE_DATE_SPREAD_DAYS || "30");
 
 export const options = {
   scenarios: {
@@ -44,7 +47,7 @@ export function setup() {
   const loginRes = http.post(
     `${BASE_URL}/api/v1/customer/auth/login`,
     JSON.stringify({ email: CUSTOMER_EMAIL, password: CUSTOMER_PASSWORD }),
-    jsonParams()
+    jsonParams(null, "setup-login")
   );
 
   check(loginRes, {
@@ -58,7 +61,7 @@ export function setup() {
 
 export function readHeavy() {
   group("customer read path", () => {
-    const params = { tags: { flow: "read" } };
+    const params = requestParams("read-heavy", { flow: "read" });
 
     check(http.get(`${BASE_URL}/api/v1/customer/properties`, params), {
       "properties list 200": (res) => res.status === 200
@@ -81,24 +84,23 @@ export function readHeavy() {
       "rates 200": (res) => res.status === 200
     });
   });
-
-  sleep(1);
 }
 
 export function writeMixed(data) {
   group("customer reservation create", () => {
+    const dateRange = writeDateRange();
     const payload = {
       propertyId: PROPERTY_ID,
       roomTypeId: ROOM_TYPE_ID,
-      checkIn: CHECK_IN,
-      checkOut: CHECK_OUT,
+      checkIn: dateRange.checkIn,
+      checkOut: dateRange.checkOut,
       numberOfGuests: 2,
       guestName: `loadtest-${__VU}-${__ITER}`,
       guestPhone: "010-0000-0000",
       guestEmail: `loadtest-${__VU}-${__ITER}@example.com`
     };
 
-    const params = jsonParams(data.customerCookie);
+    const params = jsonParams(data.customerCookie, "write-mixed", { flow: "write" });
     const res = http.post(`${BASE_URL}/api/v1/customer/reservations`, JSON.stringify(payload), params);
 
     check(res, {
@@ -112,8 +114,6 @@ export function writeMixed(data) {
       }
     });
   });
-
-  sleep(1);
 }
 
 export function handleSummary(data) {
@@ -122,20 +122,43 @@ export function handleSummary(data) {
       metrics: {
         http_req_failed: data.metrics.http_req_failed,
         http_req_duration: data.metrics.http_req_duration,
+        dropped_iterations: data.metrics.dropped_iterations,
         checks: data.metrics.checks
       },
       root_group: data.root_group
     }, null, 2),
-    "summary.json": JSON.stringify(data, null, 2)
+    [`db-summary-${safeFileName(EXPERIMENT_ID)}.json`]: JSON.stringify(data, null, 2)
   };
 }
 
-function jsonParams(cookie) {
-  const headers = { "Content-Type": "application/json" };
+function requestParams(scenario, tags = {}) {
+  return {
+    headers: experimentHeaders(scenario),
+    tags
+  };
+}
+
+function jsonParams(cookie, scenario, tags = {}) {
+  const headers = {
+    ...experimentHeaders(scenario),
+    "Content-Type": "application/json"
+  };
   if (cookie) {
     headers.Cookie = cookie;
   }
-  return { headers };
+  return { headers, tags };
+}
+
+function experimentHeaders(scenario) {
+  return {
+    "X-Experiment-Id": EXPERIMENT_ID,
+    "X-Loadtest-Phase": LOADTEST_PHASE,
+    "X-Loadtest-Scenario": scenario
+  };
+}
+
+function safeFileName(value) {
+  return value.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 80);
 }
 
 function extractSessionCookie(response) {
@@ -154,6 +177,28 @@ function offsetDate(days) {
   return date.toISOString().slice(0, 10);
 }
 
+function writeDateRange() {
+  const offset = (__VU * 100000 + __ITER) % Math.max(1, WRITE_DATE_SPREAD_DAYS);
+  const checkIn = shiftDate(CHECK_IN, offset);
+  const nights = Math.max(1, daysBetween(CHECK_IN, CHECK_OUT));
+  return {
+    checkIn,
+    checkOut: shiftDate(checkIn, nights)
+  };
+}
+
+function shiftDate(isoDate, days) {
+  const date = new Date(`${isoDate}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function daysBetween(startIsoDate, endIsoDate) {
+  const start = new Date(`${startIsoDate}T00:00:00Z`);
+  const end = new Date(`${endIsoDate}T00:00:00Z`);
+  return Math.round((end.getTime() - start.getTime()) / 86400000);
+}
+
 function stagesFor(rate) {
   const profiles = {
     smoke: [
@@ -165,7 +210,18 @@ function stagesFor(rate) {
       { target: rate, duration: "10m" },
       { target: 0, duration: "1m" }
     ],
+    "db-baseline": [
+      { target: rate, duration: "2m" },
+      { target: rate, duration: "10m" },
+      { target: 0, duration: "1m" }
+    ],
     ramp: [
+      { target: rate, duration: "2m" },
+      { target: rate * 2, duration: "3m" },
+      { target: rate * 3, duration: "3m" },
+      { target: 0, duration: "1m" }
+    ],
+    "db-ramp": [
       { target: rate, duration: "2m" },
       { target: rate * 2, duration: "3m" },
       { target: rate * 3, duration: "3m" },
@@ -178,6 +234,11 @@ function stagesFor(rate) {
       { target: 0, duration: "1m" }
     ],
     failover: [
+      { target: rate, duration: "3m" },
+      { target: rate, duration: "10m" },
+      { target: 0, duration: "2m" }
+    ],
+    "failover-steady": [
       { target: rate, duration: "3m" },
       { target: rate, duration: "10m" },
       { target: 0, duration: "2m" }

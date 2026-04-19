@@ -1,8 +1,10 @@
 import http from "k6/http";
-import { check, group, sleep } from "k6";
+import { check, group } from "k6";
 
 const BASE_URL = __ENV.BASE_URL || "https://api.example.com";
 const TEST_MODE = __ENV.TEST_MODE || "ramp";
+const EXPERIMENT_ID = __ENV.EXPERIMENT_ID || `local-${Date.now()}`;
+const LOADTEST_PHASE = __ENV.LOADTEST_PHASE || TEST_MODE;
 const LIGHTWEIGHT_RATE = Number(__ENV.LIGHTWEIGHT_RATE || "50");
 const BUSINESS_RATE = Number(__ENV.BUSINESS_RATE || "10");
 
@@ -39,6 +41,7 @@ export const options = {
 export function lightweightHttp() {
   group("spring mvc lightweight endpoint", () => {
     const res = http.get(`${BASE_URL}/actuator/info`, {
+      headers: experimentHeaders("lightweight-http"),
       tags: { flow: "lightweight_http" }
     });
 
@@ -46,13 +49,12 @@ export function lightweightHttp() {
       "actuator info 200": (response) => response.status === 200
     });
   });
-
-  sleep(1);
 }
 
 export function businessReadControl() {
   group("public business read control", () => {
     const res = http.get(`${BASE_URL}/api/v1/customer/properties`, {
+      headers: experimentHeaders("business-read-control"),
       tags: { flow: "business_read_control" }
     });
 
@@ -60,8 +62,6 @@ export function businessReadControl() {
       "properties list 200": (response) => response.status === 200
     });
   });
-
-  sleep(1);
 }
 
 export function handleSummary(data) {
@@ -70,12 +70,25 @@ export function handleSummary(data) {
       metrics: {
         http_req_failed: data.metrics.http_req_failed,
         http_req_duration: data.metrics.http_req_duration,
+        dropped_iterations: data.metrics.dropped_iterations,
         checks: data.metrics.checks
       },
       root_group: data.root_group
     }, null, 2),
-    "app-summary.json": JSON.stringify(data, null, 2)
+    [`app-summary-${safeFileName(EXPERIMENT_ID)}.json`]: JSON.stringify(data, null, 2)
   };
+}
+
+function experimentHeaders(scenario) {
+  return {
+    "X-Experiment-Id": EXPERIMENT_ID,
+    "X-Loadtest-Phase": LOADTEST_PHASE,
+    "X-Loadtest-Scenario": scenario
+  };
+}
+
+function safeFileName(value) {
+  return value.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 80);
 }
 
 function stagesFor(rate) {
@@ -85,6 +98,11 @@ function stagesFor(rate) {
       { target: 0, duration: "10s" }
     ],
     baseline: [
+      { target: rate, duration: "2m" },
+      { target: rate, duration: "10m" },
+      { target: 0, duration: "1m" }
+    ],
+    "app-baseline": [
       { target: rate, duration: "2m" },
       { target: rate, duration: "10m" },
       { target: 0, duration: "1m" }
@@ -102,6 +120,11 @@ function stagesFor(rate) {
       { target: 0, duration: "1m" }
     ],
     failover: [
+      { target: rate, duration: "3m" },
+      { target: rate, duration: "10m" },
+      { target: 0, duration: "2m" }
+    ],
+    "failover-steady": [
       { target: rate, duration: "3m" },
       { target: rate, duration: "10m" },
       { target: 0, duration: "2m" }
