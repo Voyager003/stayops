@@ -3,14 +3,19 @@ name: stayops-mongo
 services:
   mongo:
     image: mongo:8
-    command: ["mongod", "--replSet", "${MONGO_REPLICA_SET:-rs0}", "--bind_ip_all", "--port", "27017"]
+    command: ["mongod", "--replSet", "${MONGO_REPLICA_SET:-rs0}", "--bind_ip_all", "--port", "27017", "--keyFile", "/etc/mongo/keyfile", "--auth"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
     ports:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
       - ./init-replica-set.js:/opt/stayops/init-replica-set.js:ro
+      - ./create-users.js:/opt/stayops/create-users.js:ro
+      - ${MONGO_KEYFILE_PATH:-./mongo-keyfile}:/etc/mongo/keyfile:ro
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD-SHELL", "mongosh -u \"$${MONGO_INITDB_ROOT_USERNAME}\" -p \"$${MONGO_INITDB_ROOT_PASSWORD}\" --authenticationDatabase admin --eval \"db.adminCommand('ping')\""]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -21,7 +26,7 @@ services:
   mongodb-exporter:
     image: percona/mongodb_exporter:0.43.1
     command:
-      - "--mongodb.uri=mongodb://mongo:27017/admin"
+      - "--mongodb.uri=mongodb://${MONGO_EXPORTER_USERNAME}:${MONGO_EXPORTER_PASSWORD}@mongo:27017/admin?authSource=admin"
       - "--collect-all"
     ports:
       - "9216:9216"
