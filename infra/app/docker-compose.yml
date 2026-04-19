@@ -18,6 +18,33 @@ services:
     networks:
       - stayops-app
 
+  mock-ota-app:
+    image: ${MOCK_OTA_IMAGE:-ghcr.io/voyager003/stayops-mock-ota:latest}
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mock-ota-mongodb:27017/mock-ota
+      MOCK_OTA_PMS_WEBHOOK_URL: ${MOCK_OTA_PMS_WEBHOOK_URL}
+    depends_on:
+      mock-ota-mongodb:
+        condition: service_healthy
+    expose:
+      - "8081"
+    restart: unless-stopped
+    networks:
+      - stayops-app
+
+  mock-ota-mongodb:
+    image: mongo:8
+    volumes:
+      - mock_ota_mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - stayops-app
+
   nginx:
     image: nginx:alpine
     environment:
@@ -28,8 +55,10 @@ services:
     volumes:
       - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ${MOCK_OTA_HTPASSWD_PATH:-./.htpasswd}:/etc/nginx/.htpasswd:ro
     depends_on:
       - app
+      - mock-ota-app
     restart: unless-stopped
     networks:
       - stayops-app
@@ -125,6 +154,7 @@ services:
 
 volumes:
   redis_data:
+  mock_ota_mongodb_data:
   prometheus_data:
   loki_data:
   grafana_data:
