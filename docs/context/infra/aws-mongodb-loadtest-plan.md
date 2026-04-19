@@ -96,8 +96,8 @@ Mock OTA는 실제 OTA 벤더를 대체하는 외부 시스템이다. Oracle VM�
 
 ## 작업 순서
 
-1. 저장소에 Oracle App VM용 compose를 추가한다.
-2. AWS MongoDB compose를 인증이 켜진 P-S-S 구성으로 바꾼다.
+1. 저장소에 App 역할 compose를 추가하고 실제 배포 위치는 runbook에서 Oracle VM으로 명시한다.
+2. MongoDB 역할 compose를 인증이 켜진 P-S-S 구성으로 바꾼다.
 3. MongoDB keyfile과 runtime secret은 커밋하지 않도록 제외한다.
 4. replica set 초기화 스크립트에서 arbiter를 제거하고 MongoDB 3대를 member로 둔다.
 5. App과 Prometheus가 MongoDB 3대를 바라보도록 env와 scrape target을 보강한다.

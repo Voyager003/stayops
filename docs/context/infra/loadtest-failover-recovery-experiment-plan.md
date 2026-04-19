@@ -26,7 +26,7 @@ Internet / Local k6
 ---------------------------------------------------------
 | Oracle App VM                                          |
 |--------------------------------------------------------|
-| docker compose: infra/oracle/app                       |
+| docker compose: infra/app                              |
 |                                                        |
 |  ---------      ---------      -----------             |
 | | nginx   | -> | app     | -> | redis     |            |
@@ -45,7 +45,7 @@ Internet / Local k6
 ---------------------------------------------------------
 | Oracle Mock OTA VM                                     |
 |--------------------------------------------------------|
-| docker compose: infra/oracle/mock-ota                  |
+| docker compose: infra/mock-ota                         |
 |                                                        |
 |  ---------      --------------      ----------------   |
 | | nginx   | -> | mock-ota-app | -> | mock-ota mongo |  |
@@ -58,7 +58,7 @@ Internet / Local k6
 ---------------------------------------------------------
 | AWS MongoDB VM 1                                       |
 |--------------------------------------------------------|
-| docker compose: infra/aws/mongo                        |
+| docker compose: infra/mongodb                          |
 | mongod data-bearing voting member                      |
 | mongodb-exporter / node-exporter / promtail            |
 ---------------------------------------------------------
@@ -97,9 +97,9 @@ Compose, k6, 테스트 코드가 로컬에서 깨지면 VM 배포 이후 문제 
 ```bash
 node --check loadtest/k6/stayops-app-load.js
 node --check loadtest/k6/stayops-db-load.js
-docker compose --env-file infra/aws/mongo/env.example -f infra/aws/mongo/docker-compose.yml config
-docker compose --env-file infra/oracle/app/env.example -f infra/oracle/app/docker-compose.yml config
-docker compose --env-file infra/oracle/mock-ota/env.example -f infra/oracle/mock-ota/docker-compose.yml config
+docker compose --env-file infra/mongodb/env.example -f infra/mongodb/docker-compose.yml config
+docker compose --env-file infra/app/env.example -f infra/app/docker-compose.yml config
+docker compose --env-file infra/mock-ota/env.example -f infra/mock-ota/docker-compose.yml config
 ./gradlew test --no-daemon
 ```
 

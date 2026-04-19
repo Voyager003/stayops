@@ -50,9 +50,9 @@
 
 ### 배포 파일
 
-- Oracle App VM: `infra/oracle/app`, 커밋하지 않는 `deploy.env`
-- AWS MongoDB VM 1, 2, 3: `infra/aws/mongo`, 커밋하지 않는 `deploy.env`, 커밋하지 않는 `mongo-keyfile`
-- Oracle Mock OTA VM: `infra/oracle/mock-ota`, 커밋하지 않는 `deploy.env`, `.htpasswd`
+- Oracle App VM: `infra/app`, 커밋하지 않는 `deploy.env`
+- AWS MongoDB VM 1, 2, 3: `infra/mongodb`, 커밋하지 않는 `deploy.env`, 커밋하지 않는 `mongo-keyfile`
+- Oracle Mock OTA VM: `infra/mock-ota`, 커밋하지 않는 `deploy.env`, `.htpasswd`
 - 실제 secret 값은 Git, 문서, issue, PR, k6 output에 남기지 않는다.
 
 ## 1. 배포 전 로컬 검증
@@ -62,9 +62,9 @@
 ```bash
 node --check loadtest/k6/stayops-app-load.js
 node --check loadtest/k6/stayops-db-load.js
-docker compose --env-file infra/aws/mongo/env.example -f infra/aws/mongo/docker-compose.yml config
-docker compose --env-file infra/oracle/app/env.example -f infra/oracle/app/docker-compose.yml config
-docker compose --env-file infra/oracle/mock-ota/env.example -f infra/oracle/mock-ota/docker-compose.yml config
+docker compose --env-file infra/mongodb/env.example -f infra/mongodb/docker-compose.yml config
+docker compose --env-file infra/app/env.example -f infra/app/docker-compose.yml config
+docker compose --env-file infra/mock-ota/env.example -f infra/mock-ota/docker-compose.yml config
 ./gradlew test --no-daemon
 ```
 
@@ -72,7 +72,7 @@ docker compose --env-file infra/oracle/mock-ota/env.example -f infra/oracle/mock
 
 ```text
 Oracle App VM
-- infra/oracle/app/docker-compose.yml
+- infra/app/docker-compose.yml
 - StayOps app
 - Nginx
 - Redis
@@ -80,28 +80,28 @@ Oracle App VM
 - Promtail / node-exporter
 
 AWS MongoDB VM 1
-- infra/aws/mongo/docker-compose.yml
+- infra/mongodb/docker-compose.yml
 - MongoDB data node
 - mongodb-exporter
 - node-exporter
 - promtail
 
 AWS MongoDB VM 2
-- infra/aws/mongo/docker-compose.yml
+- infra/mongodb/docker-compose.yml
 - MongoDB data node
 - mongodb-exporter
 - node-exporter
 - promtail
 
 AWS MongoDB VM 3
-- infra/aws/mongo/docker-compose.yml
+- infra/mongodb/docker-compose.yml
 - MongoDB data node
 - mongodb-exporter
 - node-exporter
 - promtail
 
 Oracle Mock OTA VM
-- infra/oracle/mock-ota/docker-compose.yml
+- infra/mock-ota/docker-compose.yml
 - Mock OTA app
 - Mock OTA MongoDB
 - Nginx / HTTPS
@@ -138,7 +138,7 @@ MongoDB replica set에서 `--auth`와 내부 member 인증을 함께 사용하�
 예시 절차:
 
 ```bash
-cd infra/aws/mongo
+cd infra/mongodb
 openssl rand -base64 756 > mongo-keyfile
 chmod 400 mongo-keyfile
 ```
@@ -147,7 +147,7 @@ chmod 400 mongo-keyfile
 
 ## 5. MongoDB VM 배포
 
-각 MongoDB VM에는 `infra/aws/mongo/env.example`을 기준으로 `deploy.env`를 만든다.
+각 MongoDB VM에는 `infra/mongodb/env.example`을 기준으로 `deploy.env`를 만든다.
 
 작성 기준:
 
@@ -161,7 +161,7 @@ chmod 400 mongo-keyfile
 각 VM에서 실행:
 
 ```bash
-cd infra/aws/mongo
+cd infra/mongodb
 docker compose --env-file deploy.env up -d
 docker compose ps
 docker compose logs mongo --tail=100
@@ -172,7 +172,7 @@ docker compose logs mongo --tail=100
 초기화는 MongoDB VM 중 한 곳에서 한 번만 수행한다. root 계정으로 인증한 뒤 실행한다.
 
 ```bash
-cd infra/aws/mongo
+cd infra/mongodb
 docker compose --env-file deploy.env exec \
   -e MONGO_REPLICA_SET=rs0 \
   -e MONGO1_HOST=<mongo1-host> \
@@ -222,7 +222,7 @@ App VM에는 실제 런타임 값을 담은 `deploy.env` 파일을 별도로 둔
 
 작성 기준:
 
-- `infra/oracle/app/env.example`을 기준으로 필요한 key 목록만 맞춘다.
+- `infra/app/env.example`을 기준으로 필요한 key 목록만 맞춘다.
 - `change-me`, `replace-with-runtime-secret`, `example.com` 값은 실제 런타임 값으로 교체한다.
 - `API_DOMAIN`은 Nginx `server_name`과 Let's Encrypt certificate path에 사용되므로 실제 API domain과 일치해야 한다.
 - `SPRING_MONGODB_URI`에는 MongoDB 3대 host, `replicaSet=rs0`, `w=majority`, `readPreference=primary`, `retryWrites=true`, `authSource=admin`을 유지한다.
@@ -244,7 +244,7 @@ sudo certbot certonly --standalone -d <api-domain>
 배포:
 
 ```bash
-cd infra/oracle/app
+cd infra/app
 docker compose --env-file deploy.env up -d
 docker compose ps
 ```
@@ -265,7 +265,7 @@ Oracle Mock OTA VM에는 runtime env와 Basic Auth 파일을 별도로 둔다.
 
 작성 기준:
 
-- `infra/oracle/mock-ota/env.example`을 기준으로 필요한 key 목록만 맞춘다.
+- `infra/mock-ota/env.example`을 기준으로 필요한 key 목록만 맞춘다.
 - `MOCK_OTA_DOMAIN`은 실제 Mock OTA domain과 일치해야 한다.
 - `MOCK_OTA_PMS_WEBHOOK_URL`은 App API domain을 향하게 한다.
 - `MOCK_OTA_HTPASSWD_PATH`는 Git에 커밋하지 않는 `.htpasswd` 파일을 가리키게 한다.
@@ -273,7 +273,7 @@ Oracle Mock OTA VM에는 runtime env와 Basic Auth 파일을 별도로 둔다.
 ```bash
 sudo certbot certonly --standalone -d <mock-ota-domain>
 
-cd infra/oracle/mock-ota
+cd infra/mock-ota
 docker compose --env-file deploy.env up -d
 docker compose ps
 curl -f https://<mock-ota-domain>/actuator/health
