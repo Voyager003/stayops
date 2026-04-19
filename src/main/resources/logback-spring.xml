@@ -20,6 +20,9 @@
         <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
             <encoder class="net.logstash.logback.encoder.LogstashEncoder">
                 <includeMdcKeyName>traceId</includeMdcKeyName>
+                <includeMdcKeyName>experimentId</includeMdcKeyName>
+                <includeMdcKeyName>phase</includeMdcKeyName>
+                <includeMdcKeyName>scenario</includeMdcKeyName>
             </encoder>
         </appender>
 
