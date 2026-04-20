@@ -21,6 +21,7 @@ import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.ForbiddenException
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -60,6 +61,13 @@ class CustomerReservationApplication(
         guestPhone: String,
         guestEmail: String?
     ): CustomerReservationResult {
+        if (MDC.get("experimentId") != null) {
+            log.info(
+                "부하 테스트 예약 생성 시작: propertyId={}, roomTypeId={}, checkIn={}, checkOut={}",
+                propertyId, roomTypeId, checkIn, checkOut
+            )
+        }
+
         // 0. 중복 예약 검증
         val hasDuplicate = reservationRepository.existsActiveByMemberIdAndRoomTypeIdAndCheckInAndCheckOut(
             memberId, roomTypeId, checkIn, checkOut, clock.instant()
@@ -133,7 +141,11 @@ class CustomerReservationApplication(
             amount = pricing.totalAmount
         )
 
-        log.info("예약 생성: reservationId={}, paymentId={}", reservation.id, payment.id)
+        if (MDC.get("experimentId") != null) {
+            log.info("부하 테스트 예약 생성 성공: reservationId={}, paymentId={}", reservation.id, payment.id)
+        } else {
+            log.info("예약 생성: reservationId={}, paymentId={}", reservation.id, payment.id)
+        }
         return CustomerReservationResult(reservation, payment)
     }
 

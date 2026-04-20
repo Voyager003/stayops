@@ -1,6 +1,7 @@
 package com.stayops.reservation.api.customer
 
 import com.stayops.reservation.api.customer.dto.*
+import com.stayops.reservation.application.service.PropertySearchCriteria
 import com.stayops.reservation.application.service.ReservationSearchApplication
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.ResponseEntity
@@ -14,8 +15,15 @@ class ReservationSearchApi(
 ) {
 
     @GetMapping
-    fun searchProperties(): ResponseEntity<List<PropertySearchResponse>> {
-        val properties = reservationSearchApplication.searchProperties()
+    fun searchProperties(
+        @RequestParam(required = false) region: String?,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) checkIn: LocalDate?,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) checkOut: LocalDate?,
+        @RequestParam(required = false) guests: Int?
+    ): ResponseEntity<List<PropertySearchResponse>> {
+        val properties = reservationSearchApplication.searchProperties(
+            PropertySearchCriteria(region, checkIn, checkOut, guests)
+        )
         return ResponseEntity.ok(properties.map { PropertySearchResponse.from(it) })
     }
 

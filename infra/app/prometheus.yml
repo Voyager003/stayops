@@ -1,0 +1,46 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: stayops-app
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - app:8080
+        labels:
+          instance: app
+
+  - job_name: node
+    static_configs:
+      - targets:
+          - node-exporter:9100
+        labels:
+          instance: app
+      - targets:
+          - ${MONGO1_HOST}:9100
+        labels:
+          instance: mongo1
+      - targets:
+          - ${MONGO2_HOST}:9100
+        labels:
+          instance: mongo2
+      - targets:
+          - ${MONGO3_HOST}:9100
+        labels:
+          instance: mongo3
+
+  - job_name: mongodb
+    static_configs:
+      - targets:
+          - ${MONGO1_HOST}:9216
+        labels:
+          instance: mongo1
+      - targets:
+          - ${MONGO2_HOST}:9216
+        labels:
+          instance: mongo2
+      - targets:
+          - ${MONGO3_HOST}:9216
+        labels:
+          instance: mongo3
