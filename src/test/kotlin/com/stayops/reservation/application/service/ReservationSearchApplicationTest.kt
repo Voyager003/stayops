@@ -49,6 +49,23 @@ class ReservationSearchApplicationTest : BehaviorSpec({
         currency = "KRW"
     ).activate()
 
+    fun activePropertyWithAddress(
+        id: String,
+        street: String,
+        city: String,
+        state: String
+    ) = Property.create(
+        id = id,
+        ownerId = "owner-1",
+        name = "$city 호텔",
+        type = PropertyType.HOTEL,
+        address = Address.of(street, city, state, "06000", "KR"),
+        contactInfo = ContactInfo.of("02-1234-5678", "hotel@test.com"),
+        description = "$city 호텔입니다",
+        timezone = "Asia/Seoul",
+        currency = "KRW"
+    ).activate()
+
     fun inactiveProperty(id: String = "prop-2") = Property.create(
         id = id,
         ownerId = "owner-1",
@@ -110,6 +127,85 @@ class ReservationSearchApplicationTest : BehaviorSpec({
             then("ACTIVE 숙소만 반환된다") {
                 result shouldHaveSize 2
                 result.all { it.status == PropertyStatus.ACTIVE } shouldBe true
+            }
+        }
+
+        `when`("지역 필터가 있으면") {
+            every { propertyRepository.findAll() } returns listOf(
+                activePropertyWithAddress("prop-1", "테헤란로 123", "서울", "강남구"),
+                activePropertyWithAddress("prop-2", "해운대로 1", "부산", "해운대구")
+            )
+
+            val result = service.searchProperties(PropertySearchCriteria(region = "서울"))
+
+            then("주소에 지역이 포함된 ACTIVE 숙소만 반환된다") {
+                result.map { it.id } shouldContainExactly listOf("prop-1")
+            }
+        }
+
+        `when`("인원 필터가 있으면") {
+            every { propertyRepository.findAll() } returns listOf(
+                activeProperty("prop-1"),
+                activeProperty("prop-2")
+            )
+            every { roomTypeRepository.findByPropertyId("prop-1") } returns listOf(
+                activeRoomType("rt-1", "prop-1")
+            )
+            every { roomTypeRepository.findByPropertyId("prop-2") } returns listOf(
+                RoomType.create(
+                    id = "rt-2",
+                    propertyId = "prop-2",
+                    name = "패밀리룸",
+                    description = "가족 객실",
+                    maxOccupancy = 4,
+                    basePrice = Money.won(180_000)
+                )
+            )
+
+            val result = service.searchProperties(PropertySearchCriteria(guests = 3))
+
+            then("수용 가능한 객실 타입이 있는 숙소만 반환된다") {
+                result.map { it.id } shouldContainExactly listOf("prop-2")
+            }
+        }
+
+        `when`("날짜와 인원 필터가 함께 있으면") {
+            val checkIn = LocalDate.of(2026, 5, 1)
+            val checkOut = LocalDate.of(2026, 5, 3)
+            every { propertyRepository.findAll() } returns listOf(
+                activeProperty("prop-1"),
+                activeProperty("prop-2")
+            )
+            every { roomTypeRepository.findByPropertyId("prop-1") } returns listOf(
+                activeRoomType("rt-1", "prop-1")
+            )
+            every { roomTypeRepository.findByPropertyId("prop-2") } returns listOf(
+                RoomType.create(
+                    id = "rt-2",
+                    propertyId = "prop-2",
+                    name = "패밀리룸",
+                    description = "가족 객실",
+                    maxOccupancy = 4,
+                    basePrice = Money.won(180_000)
+                )
+            )
+            every {
+                inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween("prop-1", "rt-1", checkIn, checkOut.minusDays(1))
+            } returns listOf(
+                inventory("prop-1", "rt-1", checkIn, totalCount = 2, reservedCount = 0),
+                inventory("prop-1", "rt-1", checkIn.plusDays(1), totalCount = 2, reservedCount = 0)
+            )
+            every {
+                inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween("prop-2", "rt-2", checkIn, checkOut.minusDays(1))
+            } returns listOf(
+                inventory("prop-2", "rt-2", checkIn, totalCount = 2, reservedCount = 2),
+                inventory("prop-2", "rt-2", checkIn.plusDays(1), totalCount = 2, reservedCount = 0)
+            )
+
+            val result = service.searchProperties(PropertySearchCriteria(checkIn = checkIn, checkOut = checkOut, guests = 2))
+
+            then("같은 객실 타입이 인원과 전체 숙박일 재고 조건을 만족하는 숙소만 반환된다") {
+                result.map { it.id } shouldContainExactly listOf("prop-1")
             }
         }
     }

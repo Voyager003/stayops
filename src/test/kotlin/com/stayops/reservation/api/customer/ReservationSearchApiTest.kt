@@ -2,6 +2,7 @@ package com.stayops.reservation.api.customer
 
 import com.stayops.reservation.application.service.ReservationSearchApplication
 import com.stayops.reservation.application.service.ReservationOffer
+import com.stayops.reservation.application.service.PropertySearchCriteria
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.property.domain.model.*
 import com.stayops.room.domain.model.RoomType
@@ -59,13 +60,35 @@ class ReservationSearchApiTest {
 
         @Test
         fun `ACTIVE 숙소 목록을 반환한다`() {
-            every { reservationSearchApplication.searchProperties() } returns listOf(sampleProperty())
+            every { reservationSearchApplication.searchProperties(PropertySearchCriteria()) } returns listOf(sampleProperty())
 
             mockMvc.get("/api/v1/customer/properties")
                 .andExpect {
                     status { isOk() }
                     jsonPath("$[0].name") { value("테스트 호텔") }
                     jsonPath("$[0].status") { value("ACTIVE") }
+                }
+        }
+
+        @Test
+        fun `검색 조건을 애플리케이션 서비스로 전달한다`() {
+            val checkIn = LocalDate.of(2026, 5, 1)
+            val checkOut = LocalDate.of(2026, 5, 3)
+            every {
+                reservationSearchApplication.searchProperties(
+                    PropertySearchCriteria(
+                        region = "서울",
+                        checkIn = checkIn,
+                        checkOut = checkOut,
+                        guests = 2
+                    )
+                )
+            } returns listOf(sampleProperty())
+
+            mockMvc.get("/api/v1/customer/properties?region=서울&checkIn=2026-05-01&checkOut=2026-05-03&guests=2")
+                .andExpect {
+                    status { isOk() }
+                    jsonPath("$[0].name") { value("테스트 호텔") }
                 }
         }
     }

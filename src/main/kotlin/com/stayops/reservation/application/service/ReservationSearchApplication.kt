@@ -11,6 +11,7 @@ import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
+import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.NotFoundException
 import org.springframework.stereotype.Service
 import java.time.LocalDate
@@ -24,6 +25,13 @@ data class ReservationOffer(
     val checkOut: LocalDate
 )
 
+data class PropertySearchCriteria(
+    val region: String? = null,
+    val checkIn: LocalDate? = null,
+    val checkOut: LocalDate? = null,
+    val guests: Int? = null
+)
+
 @Service
 class ReservationSearchApplication(
     private val propertyRepository: PropertyRepository,
@@ -33,8 +41,12 @@ class ReservationSearchApplication(
     private val rateResolverService: RateResolverService
 ) {
 
-    fun searchProperties(): List<Property> {
-        return propertyRepository.findAll().filter { it.isBookable() }
+    fun searchProperties(criteria: PropertySearchCriteria = PropertySearchCriteria()): List<Property> {
+        validateSearchCriteria(criteria)
+        return propertyRepository.findAll()
+            .filter { it.isBookable() }
+            .filter { matchesRegion(it, criteria.region) }
+            .filter { matchesStayConditions(it.id, criteria) }
     }
 
     fun getProperty(propertyId: String): Property {
@@ -112,5 +124,69 @@ class ReservationSearchApplication(
         )
 
         return rateResolverService.resolveForDateRange(ratePlans, roomType.basePrice, dateRange, "DIRECT")
+    }
+
+    private fun validateSearchCriteria(criteria: PropertySearchCriteria) {
+        if ((criteria.checkIn == null) != (criteria.checkOut == null)) {
+            throw BusinessException("INVALID_SEARCH_DATE", "체크인과 체크아웃은 함께 전달해야 합니다")
+        }
+
+        if (criteria.checkIn != null && !criteria.checkOut!!.isAfter(criteria.checkIn)) {
+            throw BusinessException("INVALID_SEARCH_DATE", "체크아웃은 체크인보다 이후여야 합니다")
+        }
+    }
+
+    private fun matchesRegion(property: Property, region: String?): Boolean {
+        val normalized = region?.trim()
+        if (normalized.isNullOrBlank() || normalized == "전체") {
+            return true
+        }
+
+        return listOf(
+            property.address.state,
+            property.address.city,
+            property.address.street
+        ).any { it.contains(normalized, ignoreCase = true) }
+    }
+
+    private fun matchesStayConditions(propertyId: String, criteria: PropertySearchCriteria): Boolean {
+        val guests = criteria.guests?.takeIf { it > 0 }
+        val checkIn = criteria.checkIn
+        val checkOut = criteria.checkOut
+
+        if (guests == null && (checkIn == null || checkOut == null)) {
+            return true
+        }
+
+        return roomTypeRepository.findByPropertyId(propertyId).any { roomType ->
+            val fitsGuests = guests == null || roomType.maxOccupancy >= guests
+            val hasAvailability =
+                if (checkIn != null && checkOut != null) {
+                    hasAvailabilityForStay(propertyId, roomType.id, checkIn, checkOut)
+                } else {
+                    true
+                }
+
+            fitsGuests && hasAvailability
+        }
+    }
+
+    private fun hasAvailabilityForStay(
+        propertyId: String,
+        roomTypeId: String,
+        checkIn: LocalDate,
+        checkOut: LocalDate
+    ): Boolean {
+        val dateRange = DateRange.of(checkIn, checkOut)
+        val inventoriesByDate = inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(
+            propertyId,
+            roomTypeId,
+            checkIn,
+            checkOut.minusDays(1)
+        ).associateBy { it.date }
+
+        return dateRange.allDates().all { date ->
+            (inventoriesByDate[date]?.availableCount ?: 0) > 0
+        }
     }
 }
