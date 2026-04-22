@@ -2,7 +2,11 @@
 
 ## Purpose
 
-이번 k6 스크립트는 **standalone MongoDB 기준의 read-heavy 숙소 조회 부하**를 검증하기 위한 것이다.
+이번 k6 스크립트는 **standalone MongoDB 기준의 read-heavy 숙소 조회 부하**를 기준으로,
+
+1. 현재 배포 서버의 안정 구간을 찾고
+2. 그 안정 구간으로 고정 부하를 검증하고
+3. 스펙업 외 개선 후보를 찾기 위한 것이다.
 
 현재 단계는 아래를 하지 않는다.
 
@@ -38,6 +42,14 @@ production-like read mix 용도다.
 
 핫한 숙소 몇 개에 상세 / offers 트래픽이 몰리는 상황을 기본값으로 둔다.
 
+## Before / After
+
+| Before | After |
+|---|---|
+| `smoke / db-baseline / db-ramp` | `smoke / db-step-load / db-load` |
+| baseline과 ramp 목적이 섞여 있음 | smoke, 안정 구간 탐색, 고정 부하 검증으로 역할 분리 |
+| `DB_RATE`, `DB_RAMP_*` 중심 | `DB_LOAD_RATE`, `DB_STEP_RATES` 중심 |
+
 ## Files
 
 - `common.js`
@@ -57,8 +69,8 @@ production-like read mix 용도다.
 ### DB script
 
 - `MODE=smoke`
-- `MODE=db-baseline`
-- `MODE=db-ramp`
+- `MODE=db-step-load`
+- `MODE=db-load`
 
 ## Environment variables
 
@@ -80,7 +92,7 @@ production-like read mix 용도다.
 
 ### DB script
 
-- `DB_RATE`
+- `DB_LOAD_RATE`
   - default: `12`
 - `DB_PRE_ALLOCATED_VUS`
   - default: `20`
@@ -104,14 +116,14 @@ production-like read mix 용도다.
   - default: `1,2,3`
 - `GUESTS_POOL`
   - default: `1,2,3,4`
-- `DB_RAMP_START`
-  - default: `8`
-- `DB_RAMP_STEP_1`
-  - default: `16`
-- `DB_RAMP_STEP_2`
-  - default: `24`
-- `DB_RAMP_STEP_3`
-  - default: `32`
+- `DB_STEP_RATES`
+  - default: `8,16,24,32`
+- deprecated:
+  - `DB_RATE`
+  - `DB_RAMP_START`
+  - `DB_RAMP_STEP_1`
+  - `DB_RAMP_STEP_2`
+  - `DB_RAMP_STEP_3`
 
 ## Run examples
 
@@ -137,31 +149,50 @@ BASE_URL=http://localhost:8080 MODE=app-baseline APP_RATE=5 k6 run stayops-app-l
 BASE_URL=http://localhost:8080 MODE=smoke k6 run stayops-db-load.js
 ```
 
-### DB baseline
+### DB step-load
 
 ```bash
 BASE_URL=http://localhost:8080 \
-MODE=db-baseline \
+MODE=db-step-load \
 SEARCH_RATE=0.50 \
 DETAIL_RATE=0.20 \
 OFFERS_RATE=0.30 \
 HOT_PROPERTY_COUNT=5 \
-DB_RATE=12 \
+DB_STEP_RATES=8,16,24,32 \
 k6 run stayops-db-load.js
 ```
 
-### DB ramp
+### DB load
 
 ```bash
 BASE_URL=http://localhost:8080 \
-MODE=db-ramp \
-HOT_PROPERTY_IDS=property-1,property-7,property-9 \
-DB_RAMP_START=8 \
-DB_RAMP_STEP_1=16 \
-DB_RAMP_STEP_2=24 \
-DB_RAMP_STEP_3=32 \
+MODE=db-load \
+HOT_PROPERTY_COUNT=5 \
+SEARCH_RATE=0.50 \
+DETAIL_RATE=0.20 \
+OFFERS_RATE=0.30 \
+DB_LOAD_RATE=16 \
 k6 run stayops-db-load.js
 ```
+
+## Metric focus
+
+Prometheus / Grafana에서 우선 확인할 지표는 아래다.
+
+- k6
+  - RPS, p95/p99, error rate, `dropped_iterations`
+- App / JVM
+  - endpoint별 latency
+  - `process.cpu.usage`, `system.cpu.usage`
+  - `jvm.memory.used`, `jvm.gc.pause`
+  - `tomcat.threads.*`
+- Host
+  - CPU, memory available, network rx/tx, disk I/O
+- MongoDB
+  - connections
+  - opcounters / operations trend
+  - network bytes in/out
+  - memory / resident memory
 
 ## Verification
 
@@ -176,3 +207,5 @@ node --check stayops-db-load.js
 - `availability` / `rates`는 이번 단계의 대표 시나리오가 아니다.
 - 필요하면 2차 진단용으로 별도 스크립트에 분리한다.
 - property list가 비어 있으면 setup 단계에서 즉시 실패한다.
+- `db-step-load`는 한계 돌파용 stress가 아니라, 현재 배포 서버의 안정 구간을 찾는 단계다.
+- `db-load`는 step-load에서 찾은 안정 구간을 고정해 검증하는 단계다.

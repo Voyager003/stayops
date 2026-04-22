@@ -7,34 +7,64 @@ import {
   envInt,
   normalizeWeights,
   parseCsv,
+  parseIntCsv,
   pickRandom,
   pickWeighted,
 } from "./common.js";
 
-const MODE = __ENV.MODE || "db-baseline";
+const MODE = resolveMode(__ENV.MODE || "db-load");
 
 const SEARCH_RATE = envFloat("SEARCH_RATE", 0.5);
 const DETAIL_RATE = envFloat("DETAIL_RATE", 0.2);
 const OFFERS_RATE = envFloat("OFFERS_RATE", 0.3);
 
 const HOT_PROPERTY_COUNT = envInt("HOT_PROPERTY_COUNT", 5);
-const DB_RATE = envInt("DB_RATE", 12);
+const DB_LOAD_RATE = envInt("DB_LOAD_RATE", envInt("DB_RATE", 12));
 const DB_PRE_ALLOCATED_VUS = envInt("DB_PRE_ALLOCATED_VUS", 20);
 const DB_MAX_VUS = envInt("DB_MAX_VUS", 100);
 const DB_THINK_TIME = envFloat("DB_THINK_TIME", 0.5);
+const DB_STEP_RATES = resolveStepRates();
 
-const DB_RAMP_START = envInt("DB_RAMP_START", 8);
-const DB_RAMP_STEP_1 = envInt("DB_RAMP_STEP_1", 16);
-const DB_RAMP_STEP_2 = envInt("DB_RAMP_STEP_2", 24);
-const DB_RAMP_STEP_3 = envInt("DB_RAMP_STEP_3", 32);
-
-const CHECK_IN_OFFSETS = parseCsv(__ENV.CHECK_IN_OFFSETS || "3,5,7,14,21,30").map((v) => Number.parseInt(v, 10));
-const NIGHTS_POOL = parseCsv(__ENV.NIGHTS_POOL || "1,2,3").map((v) => Number.parseInt(v, 10));
-const GUESTS_POOL = parseCsv(__ENV.GUESTS_POOL || "1,2,3,4").map((v) => Number.parseInt(v, 10));
+const CHECK_IN_OFFSETS = parseIntCsv(__ENV.CHECK_IN_OFFSETS || "3,5,7,14,21,30");
+const NIGHTS_POOL = parseIntCsv(__ENV.NIGHTS_POOL || "1,2,3");
+const GUESTS_POOL = parseIntCsv(__ENV.GUESTS_POOL || "1,2,3,4");
 
 const NORMALIZED = normalizeWeights(SEARCH_RATE, DETAIL_RATE, OFFERS_RATE);
 
 export const options = buildOptions();
+
+function resolveMode(rawMode) {
+  if (rawMode === "db-ramp") {
+    return "db-step-load";
+  }
+  if (rawMode === "db-baseline") {
+    return "db-load";
+  }
+  return rawMode;
+}
+
+function resolveStepRates() {
+  const fromSingleVar = parseIntCsv(__ENV.DB_STEP_RATES, []);
+  if (fromSingleVar.length > 0) {
+    return fromSingleVar;
+  }
+
+  const legacyStart = __ENV.DB_RAMP_START;
+  const legacyStep1 = __ENV.DB_RAMP_STEP_1;
+  const legacyStep2 = __ENV.DB_RAMP_STEP_2;
+  const legacyStep3 = __ENV.DB_RAMP_STEP_3;
+
+  if (legacyStart || legacyStep1 || legacyStep2 || legacyStep3) {
+    return [
+      envInt("DB_RAMP_START", 8),
+      envInt("DB_RAMP_STEP_1", 16),
+      envInt("DB_RAMP_STEP_2", 24),
+      envInt("DB_RAMP_STEP_3", 32),
+    ];
+  }
+
+  return [8, 16, 24, 32];
+}
 
 function buildOptions() {
   const thresholds = {
@@ -59,23 +89,17 @@ function buildOptions() {
     };
   }
 
-  if (MODE === "db-ramp") {
+  if (MODE === "db-step-load") {
     return {
       thresholds,
       scenarios: {
         db_read_mix: {
           executor: "ramping-arrival-rate",
-          startRate: DB_RAMP_START,
+          startRate: DB_STEP_RATES[0],
           timeUnit: "1s",
           preAllocatedVUs: DB_PRE_ALLOCATED_VUS,
           maxVUs: DB_MAX_VUS,
-          stages: [
-            { target: DB_RAMP_START, duration: "2m" },
-            { target: DB_RAMP_STEP_1, duration: "5m" },
-            { target: DB_RAMP_STEP_2, duration: "5m" },
-            { target: DB_RAMP_STEP_3, duration: "5m" },
-            { target: 0, duration: "1m" },
-          ],
+          stages: DB_STEP_RATES.map((rate) => ({ target: rate, duration: "5m" })).concat([{ target: 0, duration: "1m" }]),
         },
       },
     };
@@ -91,8 +115,8 @@ function buildOptions() {
         preAllocatedVUs: DB_PRE_ALLOCATED_VUS,
         maxVUs: DB_MAX_VUS,
         stages: [
-          { target: DB_RATE, duration: "2m" },
-          { target: DB_RATE, duration: "10m" },
+          { target: DB_LOAD_RATE, duration: "2m" },
+          { target: DB_LOAD_RATE, duration: "10m" },
           { target: 0, duration: "1m" },
         ],
       },

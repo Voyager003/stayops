@@ -9,7 +9,12 @@
 
 ## Goal
 
-이번 단계의 목적은 저비용 토폴로지에서 **숙소 조회 트래픽이 App 서버와 standalone MongoDB에 어떤 부하를 주는지** 먼저 확인하는 것이다.
+이번 단계의 목적은 아래 네 가지다.
+
+1. 현재 배포한 서버가 **얼마나 버티는지** 먼저 찾는다.
+2. 찾은 안정 구간으로 **고정 부하 Load Test**를 수행한다.
+3. 결과를 바탕으로 **스펙업 외 최적화 후보**를 찾는다.
+4. Prometheus / Grafana / k6 결과를 함께 읽을 수 있게 정리한다.
 
 Replica set 기반 failover 실험은 뒤로 미룬다. 현재 애플리케이션의 예약 생성 경로는 `MongoTransactionManager`와 `@Transactional`을 전제로 작성되어 있으므로, true standalone MongoDB에서 write-path 결과를 해석하면 부하 한계가 아니라 **배포 토폴로지 불일치**가 섞인다.
 
@@ -39,7 +44,9 @@ Replica set 기반 failover 실험은 뒤로 미룬다. 현재 애플리케이�
 - production-like access pattern
 - hot-property concentration
 - app baseline 측정
-- db read saturation 측정
+- db step-load로 안정 구간 탐색
+- db load로 고정 부하 검증
+- Prometheus / Grafana 관측 지표 정리
 
 ### Out
 
@@ -47,6 +54,7 @@ Replica set 기반 failover 실험은 뒤로 미룬다. 현재 애플리케이�
 - reservation create / payment confirm / cancel
 - authenticated write scenario
 - spike / stress test
+- 블로그 수정
 
 ## Evidence from code
 
@@ -88,6 +96,14 @@ Replica set 기반 failover 실험은 뒤로 미룬다. 현재 애플리케이�
 
 가까운 미래 날짜와 소수 인기 숙소에 조회가 몰리는 패턴을 기본 가정으로 둔다.
 
+## Before / After
+
+| Before | After |
+|---|---|
+| `smoke / db-baseline / db-ramp` | `smoke / db-step-load / db-load` |
+| baseline과 ramp 목적 혼재 | smoke, 안정 구간 탐색, 고정 부하 검증으로 분리 |
+| 처리량 추정 중심 | 안정 구간 탐색 + 개선 후보 도출 중심 |
+
 ## Execution modes
 
 ### `smoke`
@@ -105,22 +121,23 @@ Replica set 기반 failover 실험은 뒤로 미룬다. 현재 애플리케이�
   - steady `10m`
   - cooldown `1m`
 
-### `db-baseline`
+### `db-step-load`
 
 - 대상: read mix
-- 목적: 현재 스펙에서 안정적으로 유지 가능한 조회 처리량 확인
+- 목적: 현재 배포 서버의 안정 구간 탐색
+- 추천 구성:
+  - `8,16,24,32 RPS`
+  - 각 단계 `5m`
+  - 마지막 `1m` cooldown
+
+### `db-load`
+
+- 대상: read mix
+- 목적: step-load에서 찾은 안정 구간으로 고정 부하 검증
 - 추천 구성:
   - warm-up `2m`
   - steady `10m`
   - cooldown `1m`
-
-### `db-ramp`
-
-- 대상: read mix
-- 목적: 레이턴시 급등, dropped iterations, App/Mongo saturation이 시작되는 구간 확인
-- 권장 방식:
-  - 일정 구간별 rate step-up
-  - 마지막에 cooldown
 
 ## Success criteria
 
@@ -133,20 +150,56 @@ Replica set 기반 failover 실험은 뒤로 미룬다. 현재 애플리케이�
 - app CPU / memory
 - MongoDB CPU / memory / connection / operation trend
 
+### Primary dashboard rows
+
+- k6
+  - RPS
+  - p95 / p99
+  - error rate
+  - `dropped_iterations`
+- App / JVM
+  - endpoint latency
+  - `process.cpu.usage`
+  - `system.cpu.usage`
+  - `jvm.memory.used`
+  - `jvm.gc.pause`
+  - `tomcat.threads.*`
+- Host
+  - CPU
+  - memory available
+  - network rx/tx
+  - disk I/O
+- MongoDB
+  - connections
+  - opcounters / operations trend
+  - network bytes in/out
+  - memory / resident memory
+
 ### Decision points
 
-- `db-baseline`에서 p95가 안정적으로 유지되는가
-- `db-ramp`에서 어느 구간부터 p95가 급격히 튀는가
+- `db-step-load`에서 어느 단계까지 p95와 실패율이 안정적인가
+- `db-load`에서 고정 부하를 유지해도 p95와 error rate가 기준을 만족하는가
 - 먼저 포화되는 쪽이 App인지 MongoDB인지 구분되는가
 - hot-property 집중 시 `offers`가 전체 mix의 주 병목인지 확인되는가
+- 스펙업 전에 시도할 최적화 후보가 무엇인지 구분되는가
+
+### Unstable conditions
+
+아래 중 하나라도 충족하면 해당 단계는 불안정으로 본다.
+
+- `http_req_failed >= 1%`
+- `dropped_iterations > 0`
+- `customer-property-offers` p95 `> 2s`
+- App CPU가 `75%` 이상으로 지속
+- MongoDB CPU가 `75%` 이상으로 지속
 
 ## Deliverables
 
 - plan 문서
 - runbook
 - standalone override compose
+- standalone Prometheus scrape 설정
 - k6 script
-- 블로그 초안
 
 ## Next phase
 
@@ -155,4 +208,4 @@ Replica set 기반 failover 실험은 뒤로 미룬다. 현재 애플리케이�
 1. MongoDB를 single-node replica set으로 전환해서 현재 write-path를 보존한다.
 2. MongoDB를 multi-node replica set으로 전환해 failover / recovery와 write-path를 함께 검증한다.
 
-이 조건이 충족되기 전까지는 standalone 실험 결과를 **read-heavy 용량 추정**으로만 사용한다.
+이 조건이 충족되기 전까지는 standalone 실험 결과를 **현재 배포 서버의 read-heavy 안정 구간과 개선 후보**로만 사용한다.

@@ -34,6 +34,21 @@ export function parseCsv(raw) {
     .filter(Boolean);
 }
 
+export function parseIntCsv(raw, fallback = []) {
+  const items = parseCsv(raw);
+  if (items.length === 0) {
+    return fallback;
+  }
+
+  return items.map((value) => {
+    const parsed = Number.parseInt(value, 10);
+    if (Number.isNaN(parsed)) {
+      throw new Error(`Expected an integer list but received "${value}".`);
+    }
+    return parsed;
+  });
+}
+
 export function pickWeighted(weightedItems) {
   const total = weightedItems.reduce((sum, item) => sum + item.weight, 0);
   const point = Math.random() * total;

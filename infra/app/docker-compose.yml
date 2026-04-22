@@ -88,10 +88,12 @@ services:
       MONGO1_HOST: ${MONGO1_HOST}
       MONGO2_HOST: ${MONGO2_HOST}
       MONGO3_HOST: ${MONGO3_HOST}
+      MONGO_HOST: ${MONGO_HOST:-}
+      MONGO_EXPORTER_HOST: ${MONGO_EXPORTER_HOST:-}
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ${PROMETHEUS_CONFIG_PATH:-./prometheus.yml}:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     restart: unless-stopped
     networks:
