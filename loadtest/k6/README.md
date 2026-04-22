@@ -1,144 +1,211 @@
-# StayOps Load Tests
+# StayOps k6 Load Test
 
-StayOps 부하 테스트는 애플리케이션 병목과 MongoDB 병목을 분리해서 본다.
+## Purpose
 
-```text
-k6 -> Nginx -> StayOps Spring Boot -> MongoDB replica set
-```
+이번 k6 스크립트는 **standalone MongoDB 기준의 read-heavy 숙소 조회 부하**를 기준으로,
 
-## 공통 실행 규칙
+1. 현재 배포 서버의 안정 구간을 찾고
+2. 그 안정 구간으로 고정 부하를 검증하고
+3. 스펙업 외 개선 후보를 찾기 위한 것이다.
 
-부하 시작 시점은 `k6 run`을 실행하는 순간이다. 종료는 선택한 `TEST_MODE`가 끝나거나 `Ctrl+C`로 중단할 때 결정된다.
+현재 단계는 아래를 하지 않는다.
 
-모든 요청에는 다음 헤더가 붙는다.
+- failover / recovery
+- authenticated write flow
+- reservation create / payment confirm
+- stress / spike
 
-```text
-X-Experiment-Id: 실험 실행 단위
-X-Loadtest-Phase: smoke, app-baseline, db-ramp, failover-steady 등
-X-Loadtest-Scenario: lightweight-http, business-read-control, read-heavy, write-mixed
-```
+이 제한은 구현 전제와 맞춘 것이다. 현재 예약 write path는 Mongo transaction을 사용하므로, true standalone MongoDB에서 write 부하를 섞으면 결과 해석이 왜곡된다.
 
-Spring Boot prod 로그는 이 값을 JSON MDC 필드로 출력한다. k6 summary 파일도 `app-summary-<EXPERIMENT_ID>.json`, `db-summary-<EXPERIMENT_ID>.json` 형식으로 생성된다.
+## Scenarios
 
-지원하는 `TEST_MODE`:
+### `stayops-app-load.js`
 
-| TEST_MODE | 용도 | 부하 형태 |
-|---|---|---|
-| `smoke` | 배포와 설정 확인 | 30s 실행 후 종료 |
-| `baseline`, `app-baseline`, `db-baseline` | 안정 기준선 측정 | 2m warm-up, 10m steady, 1m cooldown |
-| `ramp`, `db-ramp` | 병목 지점 탐색 | 1x, 2x, 3x 단계 증가 후 cooldown |
-| `spike` | 짧은 급증 트래픽 | 1x, 5x, 1x 후 cooldown |
-| `failover`, `failover-steady` | primary 중단 실험 | 3m warm-up, 10m failover window, 2m cooldown |
+가벼운 앱 baseline 용도다.
 
-`dropped_iterations`가 증가하면 k6가 목표 도착률을 만들지 못했다는 뜻이다. 이 경우 서버가 아니라 load generator 리소스가 부족했을 가능성도 같이 확인한다.
+- `GET /actuator/health`
+- `GET /actuator/info`
 
-## Application Thread-Pool Test
+DB 부하가 거의 없는 상태에서 앱과 네트워크의 기본 레이턴시를 본다.
 
-`stayops-app-load.js`는 Boot App이 DB보다 먼저 병목이 되는지 확인한다.
+### `stayops-db-load.js`
 
-```text
-lightweight_http        -> /actuator/info
-business_read_control  -> /api/v1/customer/properties
-```
+production-like read mix 용도다.
 
-예시:
+- `50%` property list
+  - `GET /api/v1/customer/properties`
+- `20%` property detail exploration
+  - `GET /api/v1/customer/properties/{propertyId}`
+  - `GET /api/v1/customer/properties/{propertyId}/room-types`
+- `30%` property offers
+  - `GET /api/v1/customer/properties/{propertyId}/offers?checkIn=&checkOut=&guests=`
 
-```bash
-BASE_URL=https://api.example.com \
-EXPERIMENT_ID=20260419-app-baseline-001 \
-LOADTEST_PHASE=app-baseline \
-TEST_MODE=app-baseline \
-LIGHTWEIGHT_RATE=50 \
-BUSINESS_RATE=10 \
-k6 run loadtest/k6/stayops-app-load.js
-```
+핫한 숙소 몇 개에 상세 / offers 트래픽이 몰리는 상황을 기본값으로 둔다.
 
-주요 지표:
+## Before / After
 
-- k6: throughput, p95/p99 latency, failed request rate, dropped iterations
-- Spring Boot: HTTP latency, JVM heap, GC pause, live threads, Tomcat busy threads
-- VM: CPU, memory, network, load average
-- MongoDB: read control 요청에서만 CPU/IO가 상승하는지
+| Before | After |
+|---|---|
+| `smoke / db-baseline / db-ramp` | `smoke / db-step-load / db-load` |
+| baseline과 ramp 목적이 섞여 있음 | smoke, 안정 구간 탐색, 고정 부하 검증으로 역할 분리 |
+| `DB_RATE`, `DB_RAMP_*` 중심 | `DB_LOAD_RATE`, `DB_STEP_RATES` 중심 |
 
-## MongoDB DB Load Test
+## Files
 
-`stayops-db-load.js`는 MongoDB에 영향을 주는 읽기와 예약 생성 경로를 함께 실행한다.
+- `common.js`
+- `stayops-app-load.js`
+- `stayops-db-load.js`
+- `package.json`
 
-```text
-read_heavy  -> 숙소 목록, 상세, 객실 타입, 재고, 요금 조회
-write_mixed -> 고객 예약 생성
-```
+`package.json`은 `node --check` 검증 시 ESM 문법을 허용하기 위한 최소 설정이다.
 
-예약 생성은 같은 회원, 같은 객실 타입, 같은 기간의 중복 예약 검증에 걸릴 수 있다. 따라서 write 시나리오는 `WRITE_DATE_SPREAD_DAYS` 범위 안에서 투숙일을 분산한다. 이 값보다 많은 write를 장시간 실행하면 다시 중복 충돌이 발생할 수 있으므로 테스트 데이터의 요금/재고 기간을 함께 늘려야 한다.
+## Modes
 
-필수 데이터:
+### App script
 
-- `PROPERTY_ID`
-- `ROOM_TYPE_ID`
-- customer account email/password
-- `CHECK_IN`부터 `CHECK_IN + WRITE_DATE_SPREAD_DAYS`까지 적용 가능한 요금
-- failover 실험에서는 충분한 MongoDB 디스크 여유 공간
+- `MODE=smoke`
+- `MODE=app-baseline`
 
-Smoke:
+### DB script
 
-```bash
-BASE_URL=https://api.example.com \
-EXPERIMENT_ID=20260419-db-smoke-001 \
-LOADTEST_PHASE=smoke \
-TEST_MODE=smoke \
-PROPERTY_ID=property-dummy-001 \
-ROOM_TYPE_ID=roomtype-dummy-001 \
-CUSTOMER_EMAIL=guest@example.com \
-CUSTOMER_PASSWORD=replace-at-runtime \
-READ_RATE=2 \
-WRITE_RATE=1 \
-WRITE_DATE_SPREAD_DAYS=30 \
-k6 run loadtest/k6/stayops-db-load.js
-```
+- `MODE=smoke`
+- `MODE=db-step-load`
+- `MODE=db-load`
 
-Ramp:
+## Environment variables
 
-```bash
-BASE_URL=https://api.example.com \
-EXPERIMENT_ID=20260419-db-ramp-001 \
-LOADTEST_PHASE=db-ramp \
-TEST_MODE=db-ramp \
-PROPERTY_ID=property-dummy-001 \
-ROOM_TYPE_ID=roomtype-dummy-001 \
-CUSTOMER_EMAIL=guest@example.com \
-CUSTOMER_PASSWORD=replace-at-runtime \
-READ_RATE=20 \
-WRITE_RATE=2 \
-WRITE_DATE_SPREAD_DAYS=90 \
-k6 run loadtest/k6/stayops-db-load.js
-```
+### Common
 
-Failover:
+- `BASE_URL`
+  - default: `http://localhost:8080`
 
-```bash
-BASE_URL=https://api.example.com \
-EXPERIMENT_ID=20260419-failover-001 \
-LOADTEST_PHASE=failover-steady \
-TEST_MODE=failover-steady \
-PROPERTY_ID=property-dummy-001 \
-ROOM_TYPE_ID=roomtype-dummy-001 \
-CUSTOMER_EMAIL=guest@example.com \
-CUSTOMER_PASSWORD=replace-at-runtime \
-READ_RATE=20 \
-WRITE_RATE=2 \
-WRITE_DATE_SPREAD_DAYS=90 \
-k6 run loadtest/k6/stayops-db-load.js
-```
+### App script
 
-Failover 실험은 steady window가 시작된 뒤 현재 MongoDB primary를 의도적으로 중지하고 관찰한다. DB를 트래픽으로 무너뜨리는 실험이 아니라, 통제된 장애 주입으로 election, write 실패율, 복구 시간을 측정한다.
+- `APP_RATE`
+  - default: `5`
+- `APP_PRE_ALLOCATED_VUS`
+  - default: `10`
+- `APP_MAX_VUS`
+  - default: `50`
+- `APP_THINK_TIME`
+  - default: `0.2`
 
-## Prometheus Remote Write
+### DB script
 
-Prometheus compose는 k6 remote write receiver를 켠다.
+- `DB_LOAD_RATE`
+  - default: `12`
+- `DB_PRE_ALLOCATED_VUS`
+  - default: `20`
+- `DB_MAX_VUS`
+  - default: `100`
+- `DB_THINK_TIME`
+  - default: `0.5`
+- `HOT_PROPERTY_COUNT`
+  - default: `5`
+- `HOT_PROPERTY_IDS`
+  - optional csv list
+- `SEARCH_RATE`
+  - default: `0.5`
+- `DETAIL_RATE`
+  - default: `0.2`
+- `OFFERS_RATE`
+  - default: `0.3`
+- `CHECK_IN_OFFSETS`
+  - default: `3,5,7,14,21,30`
+- `NIGHTS_POOL`
+  - default: `1,2,3`
+- `GUESTS_POOL`
+  - default: `1,2,3,4`
+- `DB_STEP_RATES`
+  - default: `8,16,24,32`
+- deprecated:
+  - `DB_RATE`
+  - `DB_RAMP_START`
+  - `DB_RAMP_STEP_1`
+  - `DB_RAMP_STEP_2`
+  - `DB_RAMP_STEP_3`
+
+## Run examples
 
 ```bash
-K6_PROMETHEUS_RW_SERVER_URL=http://localhost:9090/api/v1/write \
-k6 run -o experimental-prometheus-rw loadtest/k6/stayops-db-load.js
+cd loadtest/k6
 ```
 
-원격에서 실행할 때는 Prometheus port를 public으로 열지 않고 SSH tunnel 또는 제한된 source IP만 사용한다.
+### App smoke
+
+```bash
+BASE_URL=http://localhost:8080 MODE=smoke k6 run stayops-app-load.js
+```
+
+### App baseline
+
+```bash
+BASE_URL=http://localhost:8080 MODE=app-baseline APP_RATE=5 k6 run stayops-app-load.js
+```
+
+### DB smoke
+
+```bash
+BASE_URL=http://localhost:8080 MODE=smoke k6 run stayops-db-load.js
+```
+
+### DB step-load
+
+```bash
+BASE_URL=http://localhost:8080 \
+MODE=db-step-load \
+SEARCH_RATE=0.50 \
+DETAIL_RATE=0.20 \
+OFFERS_RATE=0.30 \
+HOT_PROPERTY_COUNT=5 \
+DB_STEP_RATES=8,16,24,32 \
+k6 run stayops-db-load.js
+```
+
+### DB load
+
+```bash
+BASE_URL=http://localhost:8080 \
+MODE=db-load \
+HOT_PROPERTY_COUNT=5 \
+SEARCH_RATE=0.50 \
+DETAIL_RATE=0.20 \
+OFFERS_RATE=0.30 \
+DB_LOAD_RATE=16 \
+k6 run stayops-db-load.js
+```
+
+## Metric focus
+
+Prometheus / Grafana에서 우선 확인할 지표는 아래다.
+
+- k6
+  - RPS, p95/p99, error rate, `dropped_iterations`
+- App / JVM
+  - endpoint별 latency
+  - `process.cpu.usage`, `system.cpu.usage`
+  - `jvm.memory.used`, `jvm.gc.pause`
+  - `tomcat.threads.*`
+- Host
+  - CPU, memory available, network rx/tx, disk I/O
+- MongoDB
+  - connections
+  - opcounters / operations trend
+  - network bytes in/out
+  - memory / resident memory
+
+## Verification
+
+```bash
+node --check common.js
+node --check stayops-app-load.js
+node --check stayops-db-load.js
+```
+
+## Notes
+
+- `availability` / `rates`는 이번 단계의 대표 시나리오가 아니다.
+- 필요하면 2차 진단용으로 별도 스크립트에 분리한다.
+- property list가 비어 있으면 setup 단계에서 즉시 실패한다.
+- `db-step-load`는 한계 돌파용 stress가 아니라, 현재 배포 서버의 안정 구간을 찾는 단계다.
+- `db-load`는 step-load에서 찾은 안정 구간을 고정해 검증하는 단계다.
