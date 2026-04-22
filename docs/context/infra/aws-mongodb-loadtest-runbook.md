@@ -1,359 +1,188 @@
-# AWS MongoDB Load Test Runbook
+# AWS MongoDB Standalone Load Test Runbook
 
-작성일: 2026-04-17
-수정일: 2026-04-19
-상태: 초안
+## Purpose
 
-## 목적
+이 Runbook은 **true standalone MongoDB** 기준의 read-heavy 부하 테스트 준비 절차를 정리한다.
 
-이 문서는 로컬 PC에서 k6를 실행하고, AWS App Stack EC2 1대와 AWS MongoDB EC2 3대로 부하 테스트와 MongoDB failover/recovery를 검증하는 절차를 정의한다.
+이번 단계에서는 기존 replica set 기반 `docker-compose.yml`을 직접 바꾸지 않는다. 대신 standalone override 파일을 추가해서, read-heavy 검증을 위한 최소 토폴로지만 분리한다.
 
-## 최종 전제
+## Topology
 
-- k6는 로컬 PC에서 실행한다.
-- App Stack EC2는 4 GiB 메모리로 시작한다.
-- MongoDB EC2 1/2/3은 가능한 작은 메모리로 시작한다.
-- App Stack EC2에는 StayOps App, Mock OTA, Redis, Mock OTA MongoDB, Prometheus, Loki, Grafana를 함께 둔다.
-- Mock OTA는 별도 도메인 없이 `https://api.<domain>/mock-ota` 경로로 제공한다.
-- MongoDB replica set은 `Primary - Secondary - Secondary` 구성이다.
-- MongoDB runtime secret, keyfile, deploy.env, `.htpasswd`는 커밋하지 않는다.
+- Local PC
+  - k6 실행
+- AWS EC2 #1
+  - `app`
+  - `redis`
+  - `mock-ota`
+  - 관측용 loki / promtail / grafana 선택
+- AWS EC2 #2
+  - standalone `mongod`
 
-## 0. 인스턴스 생성
+## Files
 
-초기 권장값:
+- base compose: `docker-compose.yml`
+- standalone override: `docker-compose.loadtest-standalone.yml`
+- k6 scripts:
+  - `loadtest/k6/stayops-app-load.js`
+  - `loadtest/k6/stayops-db-load.js`
 
-```text
-App Stack EC2:
-- t3.medium
-- 2 vCPU / 4 GiB
-- EBS 30 GiB 이상
+## Preconditions
 
-MongoDB EC2 1:
-- t3.micro
-- 2 vCPU / 1 GiB
-- EBS 30 GiB 이상
+- 대상 브랜치: `feat/standalone-mongodb-loadtest-main`
+- MongoDB는 replica set이 아니라 standalone으로 띄운다.
+- reservation write 시나리오는 이번 단계에서 제외한다.
+- App/Mongo private network 연결이 가능해야 한다.
 
-MongoDB EC2 2:
-- t3.micro
-- 2 vCPU / 1 GiB
-- EBS 30 GiB 이상
+## Step 1. Standalone compose shape 확인
 
-MongoDB EC2 3:
-- t3.micro
-- 2 vCPU / 1 GiB
-- EBS 30 GiB 이상
-```
+standalone override는 아래 두 가지만 바꾼다.
 
-MongoDB가 `t3.micro`에서 OOM 또는 기동 불안정으로 failover/recovery 실험 자체가 어려워지면 `t3.small`로 올리고, 그 판단을 결과에 기록한다.
+1. MongoDB 실행 옵션에서 replica set 제거
+2. App의 Mongo URI에서 `replicaSet=rs0` 제거
 
-## 1. Security Group
+`mongo-init`은 compose 병합 충돌을 피하기 위해 **no-op 서비스**로 남긴다. 즉 standalone 실험에서는 `rs.initiate()`를 실행하지 않는다.
 
-App Stack EC2 inbound:
-
-```text
-80   from 0.0.0.0/0
-443  from 0.0.0.0/0
-22   from operator IP only
-3001 from operator IP only 또는 SSH tunnel
-9090 from operator IP only 또는 SSH tunnel
-3100 from operator IP only 또는 SSH tunnel
-9100 public open 금지
-```
-
-MongoDB EC2 inbound:
-
-```text
-27017 from App Stack EC2 Security Group
-27017 from MongoDB EC2 Security Group
-27017 from operator IP only, 필요 시 임시
-9216  from App Stack EC2 Security Group
-9100  from App Stack EC2 Security Group
-22    from operator IP only
-```
-
-MongoDB `27017`, `9100`, `9216`을 public 전체에 열지 않는다.
-
-## 2. 모든 EC2 공통 초기 설정
+## Step 2. Compose config 검증
 
 ```bash
-sudo timedatectl set-timezone Asia/Seoul
-timedatectl
+docker compose -f docker-compose.yml -f docker-compose.loadtest-standalone.yml config
 ```
 
-이후 모든 EC2에 Docker와 Docker Compose plugin을 설치한다.
+확인 포인트:
 
-확인:
+- `mongodb.command`에 `--replSet`가 없어야 한다.
+- `app.environment.SPRING_MONGODB_URI`에 `replicaSet=rs0`가 없어야 한다.
+- `mongo-init.entrypoint`가 `standalone mode: skip rs.initiate` 메시지를 출력하는 no-op이어야 한다.
+
+## Step 3. App stack 기동
+
+### 3-1. MongoDB EC2
 
 ```bash
-docker --version
-docker compose version
-df -h
-free -h
+docker compose -f docker-compose.yml -f docker-compose.loadtest-standalone.yml up -d mongodb
 ```
 
-## 3. 배포 전 로컬 검증
+### 3-2. App EC2
 
-로컬 PC에서 실행한다.
+MongoDB가 별도 EC2에 있으므로 App 컨테이너는 private IP를 직접 바라보게 한다.
 
 ```bash
-node --check loadtest/k6/stayops-app-load.js
-node --check loadtest/k6/stayops-db-load.js
-docker compose --env-file infra/app/env.example -f infra/app/docker-compose.yml config
-docker compose --env-file infra/mongodb/env.mongo1.example -f infra/mongodb/docker-compose.yml config
-docker compose --env-file infra/mongodb/env.mongo2.example -f infra/mongodb/docker-compose.yml config
-docker compose --env-file infra/mongodb/env.mongo3.example -f infra/mongodb/docker-compose.yml config
+SPRING_MONGODB_URI=mongodb://<MONGO_PRIVATE_IP>:27017/stayops \
+docker compose -f docker-compose.yml -f docker-compose.loadtest-standalone.yml up -d app redis mock-ota
 ```
 
-## 4. MongoDB keyfile 준비
-
-모든 MongoDB EC2는 같은 keyfile을 가져야 한다.
+로그 확인:
 
 ```bash
-cd infra/mongodb
-openssl rand -base64 756 > mongo-keyfile
-chmod 400 mongo-keyfile
+docker compose -f docker-compose.yml -f docker-compose.loadtest-standalone.yml logs -f app
 ```
 
-생성한 `mongo-keyfile`을 MongoDB EC2 1/2/3의 `infra/mongodb/mongo-keyfile`에 같은 내용으로 배치한다.
+## Step 4. Smoke check
 
-## 5. MongoDB EC2 배포
-
-세 MongoDB EC2는 같은 compose를 사용하고, `deploy.env`의 `HOSTNAME`만 다르게 둔다.
-
-```text
-MongoDB EC2 1:
-- infra/mongodb/env.mongo1.example 기준
-- HOSTNAME=mongo1
-
-MongoDB EC2 2:
-- infra/mongodb/env.mongo2.example 기준
-- HOSTNAME=mongo2
-
-MongoDB EC2 3:
-- infra/mongodb/env.mongo3.example 기준
-- HOSTNAME=mongo3
-```
-
-각 MongoDB EC2에서 실행:
+공개 엔드포인트 확인:
 
 ```bash
-cd infra/mongodb
-docker compose --env-file deploy.env up -d
-docker compose ps
-docker compose logs mongo --tail=100
+curl http://<APP_HOST>:8080/actuator/health
+curl http://<APP_HOST>:8080/actuator/info
+curl http://<APP_HOST>:8080/api/v1/customer/properties
 ```
 
-## 6. Replica Set 초기화
+결과:
 
-MongoDB EC2 중 한 곳에서 한 번만 실행한다.
+- `200 OK`
+- properties 응답이 배열
+
+## Step 5. k6 smoke
 
 ```bash
-cd infra/mongodb
-docker compose --env-file deploy.env exec \
-  -e MONGO_REPLICA_SET=rs0 \
-  -e MONGO1_HOST=<mongo1-private-ip> \
-  -e MONGO2_HOST=<mongo2-private-ip> \
-  -e MONGO3_HOST=<mongo3-private-ip> \
-  mongo mongosh \
-  -u <root-user> \
-  -p <root-password> \
-  --authenticationDatabase admin \
-  /opt/stayops/init-replica-set.js
+cd loadtest/k6
+BASE_URL=http://<APP_HOST>:8080 MODE=smoke k6 run stayops-app-load.js
+BASE_URL=http://<APP_HOST>:8080 MODE=smoke k6 run stayops-db-load.js
 ```
 
-App/exporter 계정도 한 번만 생성한다.
+## Step 6. App baseline
 
 ```bash
-docker compose --env-file deploy.env exec \
-  -e MONGO_APP_USERNAME=<app-user> \
-  -e MONGO_APP_PASSWORD=<app-password> \
-  -e MONGO_EXPORTER_USERNAME=<exporter-user> \
-  -e MONGO_EXPORTER_PASSWORD=<exporter-password> \
-  mongo mongosh \
-  -u <root-user> \
-  -p <root-password> \
-  --authenticationDatabase admin \
-  /opt/stayops/create-users.js
+cd loadtest/k6
+BASE_URL=http://<APP_HOST>:8080 MODE=app-baseline APP_RATE=5 k6 run stayops-app-load.js
 ```
 
-확인:
+목적:
+
+- App front door latency 확인
+- DB가 아닌 앱/네트워크 기본 상태 확인
+
+## Step 7. DB baseline
 
 ```bash
-docker compose --env-file deploy.env exec mongo mongosh \
-  -u <root-user> \
-  -p <root-password> \
-  --authenticationDatabase admin \
-  --eval "rs.status().members.map(m => ({ name: m.name, stateStr: m.stateStr }))"
+cd loadtest/k6
+BASE_URL=http://<APP_HOST>:8080 \
+MODE=db-baseline \
+HOT_PROPERTY_COUNT=5 \
+SEARCH_RATE=0.50 \
+DETAIL_RATE=0.20 \
+OFFERS_RATE=0.30 \
+DB_RATE=12 \
+k6 run stayops-db-load.js
 ```
 
-기대 상태:
-
-```text
-PRIMARY
-SECONDARY
-SECONDARY
-```
-
-## 7. App Stack EC2 배포
-
-`infra/app/env.example`을 기준으로 `deploy.env`를 만든다.
-
-중요 값:
-
-```env
-API_DOMAIN=api.<domain>
-MOCK_OTA_ENDPOINT=https://api.<domain>/mock-ota
-MOCK_OTA_PMS_WEBHOOK_URL=https://api.<domain>/api/v1/properties/{propertyId}/channels/webhook/{channelCode}
-MOCK_OTA_HTPASSWD_PATH=./.htpasswd
-SPRING_MONGODB_URI=mongodb://<app-user>:<password>@<mongo1>:27017,<mongo2>:27017,<mongo3>:27017/stayops?replicaSet=rs0&w=majority&readPreference=primary&retryWrites=true&authSource=admin
-```
-
-Mock OTA 제어 API 보호를 위해 `.htpasswd`를 생성한다. 파일은 커밋하지 않는다.
+`HOT_PROPERTY_IDS`를 직접 주고 싶다면:
 
 ```bash
-htpasswd -bc .htpasswd <user> <password>
+HOT_PROPERTY_IDS=prop-1,prop-7,prop-9
 ```
 
-TLS 인증서를 준비한다.
+## Step 8. DB ramp
 
 ```bash
-sudo certbot certonly --standalone -d <api-domain>
+cd loadtest/k6
+BASE_URL=http://<APP_HOST>:8080 \
+MODE=db-ramp \
+HOT_PROPERTY_COUNT=5 \
+DB_RAMP_START=8 \
+DB_RAMP_STEP_1=16 \
+DB_RAMP_STEP_2=24 \
+DB_RAMP_STEP_3=32 \
+k6 run stayops-db-load.js
 ```
 
-배포:
+중점 관찰:
+
+- p95 급등 시점
+- `dropped_iterations`
+- app CPU / memory
+- MongoDB CPU / memory / connection / operation trend
+
+## Step 9. Explicit non-goals
+
+이번 Runbook에서 하지 않는 것:
+
+- primary 중지
+- election 관찰
+- recovery 관찰
+- write failure 실험
+- spike / stress test
+
+## Step 10. Result interpretation
+
+standalone 결과는 아래 의미로만 해석한다.
+
+- 현재 read-heavy public scenario에서의 처리량 추정
+- hot-property 집중 시 `offers` fan-out 비용 확인
+- App vs MongoDB 중 어디가 먼저 포화되는지 구분
+
+아래 의미로 해석하면 안 된다.
+
+- MongoDB write-path capacity
+- failover capability
+- replica set recovery behavior
+- production HA 보장
+
+## Rollback
+
+standalone 실험 종료 후 base compose만 다시 쓰면 replica set 방식으로 돌아간다.
 
 ```bash
-cd infra/app
-docker compose --env-file deploy.env up -d
-docker compose ps
+docker compose down
+docker compose up -d
 ```
-
-확인:
-
-```bash
-curl -f http://localhost:8080/actuator/health
-curl -f https://<api-domain>/health
-curl -i https://<api-domain>/actuator/prometheus
-curl -i https://<api-domain>/mock-ota/api/v1/ari/received
-```
-
-외부 `/actuator/prometheus` 기대 결과는 `404`이다.
-
-## 8. 관측 계층 확인
-
-App Stack EC2에서 확인한다.
-
-```bash
-curl -f http://localhost:9090/-/ready
-curl -f http://localhost:3100/ready
-```
-
-Grafana는 SSH tunnel로 접근한다.
-
-```bash
-ssh -L 3001:localhost:3001 <app-stack-ec2>
-```
-
-브라우저:
-
-```text
-http://localhost:3001
-```
-
-Prometheus target에서 다음이 `UP`인지 확인한다.
-
-- StayOps App
-- App Stack node-exporter
-- MongoDB EC2 1/2/3 node-exporter
-- MongoDB EC2 1/2/3 mongodb-exporter
-
-## 9. 로컬 k6 smoke test
-
-로컬 PC에서 실행한다.
-
-```bash
-BASE_URL=https://<api-domain> \
-EXPERIMENT_ID=local-smoke-001 \
-LOADTEST_PHASE=smoke \
-TEST_MODE=smoke \
-LIGHTWEIGHT_RATE=5 \
-BUSINESS_RATE=1 \
-k6 run loadtest/k6/stayops-app-load.js
-```
-
-## 10. 로컬 k6 DB ramp
-
-```bash
-BASE_URL=https://<api-domain> \
-EXPERIMENT_ID=local-db-ramp-001 \
-LOADTEST_PHASE=db-ramp \
-TEST_MODE=db-ramp \
-PROPERTY_ID=<property-id> \
-ROOM_TYPE_ID=<room-type-id> \
-CUSTOMER_EMAIL=<customer-email> \
-CUSTOMER_PASSWORD=<customer-password> \
-READ_RATE=10 \
-WRITE_RATE=1 \
-WRITE_DATE_SPREAD_DAYS=90 \
-k6 run loadtest/k6/stayops-db-load.js
-```
-
-## 11. MongoDB Failover 테스트
-
-로컬 PC에서 steady load를 실행한다.
-
-```bash
-BASE_URL=https://<api-domain> \
-EXPERIMENT_ID=local-failover-001 \
-LOADTEST_PHASE=failover-steady \
-TEST_MODE=failover-steady \
-PROPERTY_ID=<property-id> \
-ROOM_TYPE_ID=<room-type-id> \
-CUSTOMER_EMAIL=<customer-email> \
-CUSTOMER_PASSWORD=<customer-password> \
-READ_RATE=10 \
-WRITE_RATE=1 \
-WRITE_DATE_SPREAD_DAYS=90 \
-k6 run loadtest/k6/stayops-db-load.js
-```
-
-3분 warm-up 후 primary를 확인하고, primary EC2에서 `mongod`를 중지한다.
-
-```bash
-docker compose --env-file deploy.env stop mongo
-```
-
-복구:
-
-```bash
-docker compose --env-file deploy.env start mongo
-```
-
-관찰 항목:
-
-- election 시간
-- k6 failed request rate
-- p95/p99 latency 증가폭
-- write concern timeout
-- MongoDB driver error
-- replication lag
-- 복귀 노드의 SECONDARY 재합류 여부
-
-## 12. 종료 절차
-
-테스트 종료 후 비용이 계속 발생하지 않도록 확인한다.
-
-```bash
-docker compose ps
-```
-
-AWS 콘솔에서 확인한다.
-
-- EC2 중지 여부
-- 사용하지 않는 Public IPv4
-- Elastic IP
-- EBS volume
-- snapshot
-- NAT Gateway
-
-MongoDB volume은 결과 보존 여부를 먼저 결정한 뒤 삭제한다.

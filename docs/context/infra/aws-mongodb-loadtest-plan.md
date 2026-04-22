@@ -1,121 +1,158 @@
-# AWS MongoDB Load Test Infra Plan
+# AWS MongoDB Standalone Load Test Plan
 
-작성일: 2026-04-17
-수정일: 2026-04-19
-상태: 구현 준비
+## Status
 
-## 목표
+- Owner: backend
+- Status: active
+- Topology: `local k6 -> app EC2 -> standalone MongoDB EC2`
+- Current phase excludes failover, recovery, stress, and write-path validation
 
-StayOps의 부하 테스트와 MongoDB failover/recovery 가설을 검증한다. 이번 단계의 목적은 완전한 프로덕션 고가용성 구성이 아니라, 작은 MongoDB 인스턴스 3대에서 P-S-S replica set이 어떤 부하와 장애 상황을 버티는지 관찰하는 것이다.
+## Goal
 
-## 최종 구성
+이번 단계의 목적은 저비용 토폴로지에서 **숙소 조회 트래픽이 App 서버와 standalone MongoDB에 어떤 부하를 주는지** 먼저 확인하는 것이다.
 
-```text
-Local PC
-+-------------------------------+
-| k6                            |
-+---------------+---------------+
-                |
-                | HTTPS
-                v
-AWS
-+------------------------------------------------+
-| App Stack EC2                                  |
-|------------------------------------------------|
-| Nginx 80/443                                   |
-| - /           -> StayOps Spring Boot           |
-| - /mock-ota   -> Mock OTA Spring Boot          |
-| Redis                                           |
-| Mock OTA MongoDB                                |
-| Prometheus / Grafana / Loki                     |
-| Promtail / node-exporter                        |
-+---------------+--------------------------------+
-                |
-                | MongoDB replica set URI
-                v
-+-----------------------+     +-----------------------+
-| MongoDB EC2 1         |     | MongoDB EC2 2         |
-| - mongod data + vote  |<--->| - mongod data + vote  |
-| - mongodb-exporter    |     | - mongodb-exporter    |
-| - promtail            |     | - promtail            |
-| - node-exporter       |     | - node-exporter       |
-+-----------+-----------+     +-----------+-----------+
-            ^                             ^
-            |                             |
-            +-------------+---------------+
-                          |
-                          v
-              +-----------------------+
-              | MongoDB EC2 3         |
-              | - mongod data + vote  |
-              | - mongodb-exporter    |
-              | - promtail            |
-              | - node-exporter       |
-              +-----------------------+
-```
+Replica set 기반 failover 실험은 뒤로 미룬다. 현재 애플리케이션의 예약 생성 경로는 `MongoTransactionManager`와 `@Transactional`을 전제로 작성되어 있으므로, true standalone MongoDB에서 write-path 결과를 해석하면 부하 한계가 아니라 **배포 토폴로지 불일치**가 섞인다.
 
-## 인스턴스 산정
+## Why read-heavy first
 
-초기 산정은 다음과 같이 둔다.
+숙소 시스템에서 가장 빈도가 높은 요청은 조회다. 다만 조회도 무게가 다르다.
 
-```text
-App Stack EC2:
-- t3.medium
-- 2 vCPU / 4 GiB
-- App, Mock OTA, Redis, Mock OTA MongoDB, Observability를 함께 실행
+- `GET /api/v1/customer/properties`
+  - 현재 구현은 `propertyRepository.findAll()` 이후 애플리케이션 레벨에서 `isBookable()` 필터를 적용한다.
+- `GET /api/v1/customer/properties/{propertyId}/offers`
+  - 숙소를 하나 고른 뒤 객실 타입별로 재고와 요금제를 다시 읽는다.
+  - 실제 예약 직전 사용자가 여러 번 반복할 가능성이 큰 조회다.
 
-MongoDB EC2 1/2/3:
-- t3.micro
-- 2 vCPU / 1 GiB
-- 의도적으로 작은 DB 노드로 시작해 DB 부하 한계와 failover/recovery를 관찰
-```
+현재 `main` 기준 공개 검색 API는 날짜/인원 파라미터를 받지 않는다. 그래서 이번 계획의 현실적인 read 시나리오는 아래 흐름으로 정의한다.
 
-MongoDB가 `t3.micro`에서 기동 안정성 문제나 OOM으로 failover 가설 검증 자체가 어려워지면 `t3.small`로 올린다. 이 변경은 실험 결과에 기록한다.
+1. 목록 조회
+2. 인기 숙소 상세 조회
+3. 인기 숙소 offers 조회
 
-## 판단 근거
+날짜와 인원으로 인한 무거운 읽기는 `offers`에 집중된다.
 
-### k6는 로컬 PC에서 실행한다
+## Scope
 
-k6를 별도 EC2에 배포하지 않는다. 처음에는 로컬 PC에서 `BASE_URL=https://api.<domain>`을 향해 부하를 발생시킨다.
+### In
 
-로컬 k6의 한계는 `dropped_iterations`, 로컬 CPU, 로컬 네트워크 상태로 판단한다. 로컬 PC가 목표 부하를 만들지 못하면 그때 별도 k6 EC2를 도입한다.
+- standalone MongoDB 기준 read-heavy 시나리오
+- production-like access pattern
+- hot-property concentration
+- app baseline 측정
+- db read saturation 측정
 
-### App과 Mock OTA는 같은 App Stack EC2에 둔다
+### Out
 
-이번 실험의 핵심은 Mock OTA의 인프라 독립성이 아니라 MongoDB 부하와 장애 복구다. 따라서 Mock OTA를 별도 서버로 분리하지 않고 App Stack EC2에 함께 둔다.
+- MongoDB failover / recovery / election / oplog catch-up
+- reservation create / payment confirm / cancel
+- authenticated write scenario
+- spike / stress test
 
-도메인은 하나만 사용한다.
+## Evidence from code
 
-```text
-https://api.<domain>/             -> StayOps App
-https://api.<domain>/mock-ota/... -> Mock OTA App
-```
+- `src/main/kotlin/com/stayops/reservation/application/service/ReservationSearchApplication.kt`
+  - `searchProperties()` -> `propertyRepository.findAll()`
+  - `getReservationOffers()` -> room type별 inventory / ratePlan fan-out
+- `src/main/kotlin/com/stayops/shared/config/MongoConfig.kt`
+  - `MongoTransactionManager` 등록
+- `src/main/kotlin/com/stayops/reservation/application/service/CustomerReservationApplication.kt`
+  - `createReservation()` / `confirmPayment()` / `cancelReservation()`에 `@Transactional`
 
-### MongoDB는 P-S-S로 둔다
+## Traffic model
 
-Arbiter는 투표에는 참여하지만 데이터를 저장하지 않는다. 장애 복구와 데이터 정합성 실험이 목적이므로 세 노드를 모두 data-bearing member로 둔다.
+### Primary mix
 
-```text
-Primary - Secondary - Secondary
-```
+- `50%` property list
+  - endpoint: `GET /api/v1/customer/properties`
+  - role: 검색 진입, 전체 목록 응답 비용 측정
+- `20%` property detail exploration
+  - endpoints:
+    - `GET /api/v1/customer/properties/{propertyId}`
+    - `GET /api/v1/customer/properties/{propertyId}/room-types`
+  - role: 상세 진입 이후 숙소/객실 기본 정보 확인
+- `30%` offers comparison
+  - endpoint: `GET /api/v1/customer/properties/{propertyId}/offers?checkIn=&checkOut=&guests=`
+  - role: 예약 직전 비교, 날짜 기반 읽기 부하 측정
 
-쓰기 안정성을 위해 App의 MongoDB URI에는 `w=majority`, `readPreference=primary`, `retryWrites=true`를 둔다.
+### Hot-property concentration
 
-## 작업 순서
+- 인기 숙소는 `HOT_PROPERTY_IDS` 환경변수로 직접 주입하거나
+- 초기 property list 응답의 앞쪽 `N`개를 hot set으로 사용한다.
+- 기본 hot set 크기: `5`
 
-1. `infra/app`에 StayOps App, Mock OTA, Redis, Observability를 통합한다.
-2. `infra/mock-ota` 단독 배포 구성을 제거한다.
-3. `infra/mongodb`에 MongoDB 노드별 env 예시를 둔다.
-4. 문서를 로컬 k6, AWS App Stack, AWS MongoDB 3대 기준으로 갱신한다.
-5. compose config와 k6 문법을 로컬에서 검증한다.
-6. PR 이후 AWS EC2 4대를 생성한다.
-7. MongoDB EC2 3대에 같은 compose와 노드별 `deploy.env`를 배포한다.
-8. App Stack EC2에 `infra/app`을 배포한다.
-9. 로컬 PC에서 k6 smoke, app-baseline, db-ramp, failover-steady 순으로 실행한다.
+### Date and guest distribution
 
-## 비용 통제
+- check-in offset pool: `3,5,7,14,21,30`
+- nights pool: `1,2,3`
+- guests pool: `1,2,3,4`
 
-- EC2는 실험 시간에만 실행한다.
-- Elastic IP, EBS volume, snapshot, public IPv4 비용을 확인한다.
-- NAT Gateway는 이번 실험에 필수로 두지 않는다.
-- 테스트 종료 후 EC2 중지와 사용하지 않는 리소스 정리를 수행한다.
+가까운 미래 날짜와 소수 인기 숙소에 조회가 몰리는 패턴을 기본 가정으로 둔다.
+
+## Execution modes
+
+### `smoke`
+
+- 목적: 경로와 응답 형식 확인
+- duration: `30s`
+- low VU / low rate
+
+### `app-baseline`
+
+- 대상: `/actuator/health`, `/actuator/info`
+- 목적: DB 부담이 거의 없는 상태에서 앱/네트워크 기본 레이턴시 확인
+- 추천 구성:
+  - warm-up `2m`
+  - steady `10m`
+  - cooldown `1m`
+
+### `db-baseline`
+
+- 대상: read mix
+- 목적: 현재 스펙에서 안정적으로 유지 가능한 조회 처리량 확인
+- 추천 구성:
+  - warm-up `2m`
+  - steady `10m`
+  - cooldown `1m`
+
+### `db-ramp`
+
+- 대상: read mix
+- 목적: 레이턴시 급등, dropped iterations, App/Mongo saturation이 시작되는 구간 확인
+- 권장 방식:
+  - 일정 구간별 rate step-up
+  - 마지막에 cooldown
+
+## Success criteria
+
+### Must measure
+
+- latency: p50 / p90 / p95 / max
+- error rate
+- throughput
+- dropped iterations
+- app CPU / memory
+- MongoDB CPU / memory / connection / operation trend
+
+### Decision points
+
+- `db-baseline`에서 p95가 안정적으로 유지되는가
+- `db-ramp`에서 어느 구간부터 p95가 급격히 튀는가
+- 먼저 포화되는 쪽이 App인지 MongoDB인지 구분되는가
+- hot-property 집중 시 `offers`가 전체 mix의 주 병목인지 확인되는가
+
+## Deliverables
+
+- plan 문서
+- runbook
+- standalone override compose
+- k6 script
+- 블로그 초안
+
+## Next phase
+
+다음 단계로 넘어가려면 아래 조건 중 하나가 필요하다.
+
+1. MongoDB를 single-node replica set으로 전환해서 현재 write-path를 보존한다.
+2. MongoDB를 multi-node replica set으로 전환해 failover / recovery와 write-path를 함께 검증한다.
+
+이 조건이 충족되기 전까지는 standalone 실험 결과를 **read-heavy 용량 추정**으로만 사용한다.
