@@ -3,43 +3,13 @@ services:
     image: ghcr.io/voyager003/stayops:latest
     environment:
       - SPRING_PROFILES_ACTIVE=prod
-      - SPRING_MONGODB_URI=mongodb://mongodb:27017/stayops?replicaSet=rs0
+      - SPRING_MONGODB_URI=${SPRING_MONGODB_URI}
       - SPRING_DATA_REDIS_HOST=redis
       - TOSS_SECRET_KEY=${TOSS_SECRET_KEY}
     depends_on:
-      mongodb:
-        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
-    networks:
-      - stayops-net
-
-  mongodb:
-    image: mongo:8
-    command: ["--replSet", "rs0"]
-    volumes:
-      - mongodb_data:/data/db
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    networks:
-      - stayops-net
-
-  mongo-init:
-    image: mongo:8
-    depends_on:
-      mongodb:
-        condition: service_healthy
-    restart: "no"
-    entrypoint: >
-      mongosh --host mongodb --eval '
-        try { rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "mongodb:27017" }] }); }
-        catch(e) { if (e.codeName !== "AlreadyInitialized") throw e; }
-      '
     networks:
       - stayops-net
 
@@ -117,7 +87,6 @@ services:
       - stayops-net
 
 volumes:
-  mongodb_data:
   redis_data:
   loki_data:
   grafana_data:
