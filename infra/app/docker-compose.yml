@@ -80,10 +80,18 @@ services:
   prometheus:
     image: prom/prometheus:latest
     command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--config.expand-env=true"
-      - "--web.enable-lifecycle"
-      - "--web.enable-remote-write-receiver"
+      - /bin/sh
+      - -c
+      - |
+        sed \
+          -e "s|\$${MONGO1_HOST}|$${MONGO1_HOST}|g" \
+          -e "s|\$${MONGO2_HOST}|$${MONGO2_HOST}|g" \
+          -e "s|\$${MONGO3_HOST}|$${MONGO3_HOST}|g" \
+          /etc/prometheus/prometheus.yml.tmpl > /tmp/prometheus.yml && \
+        exec /bin/prometheus \
+          --config.file=/tmp/prometheus.yml \
+          --web.enable-lifecycle \
+          --web.enable-remote-write-receiver
     environment:
       MONGO1_HOST: ${MONGO1_HOST}
       MONGO2_HOST: ${MONGO2_HOST}
@@ -93,7 +101,7 @@ services:
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
-      - ${PROMETHEUS_CONFIG_PATH:-./prometheus.yml}:/etc/prometheus/prometheus.yml:ro
+      - ${PROMETHEUS_CONFIG_PATH:-./prometheus.yml}:/etc/prometheus/prometheus.yml.tmpl:ro
       - prometheus_data:/prometheus
     restart: unless-stopped
     networks:
