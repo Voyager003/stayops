@@ -10,6 +10,7 @@ import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolverService
 import com.stayops.reservation.application.port.ReservationPaymentPort
 import com.stayops.reservation.application.port.ReservationPaymentSnapshot
+import com.stayops.reservation.application.port.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.*
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
@@ -191,8 +192,8 @@ class CustomerReservationApplication(
         val payment = reservationPaymentPort.findByReservationId(reservationId)
             ?: throw NotFoundException("PAYMENT_NOT_FOUND", "결제 정보를 찾을 수 없습니다: $reservationId")
 
-        // 2-1. 멱등성: 이미 CONFIRMED 상태이면 기존 결과 반환
-        if (reservation.status == ReservationStatus.CONFIRMED) {
+        // 2-1. 멱등성: 이미 결제가 승인되었거나 예약이 확정되었으면 기존 결과 반환
+        if (reservation.status == ReservationStatus.CONFIRMED || payment.status == ReservationPaymentStatus.APPROVED) {
             return CustomerReservationResult(reservation, payment)
         }
 
@@ -222,24 +223,31 @@ class CustomerReservationApplication(
         if (reservation.memberId != memberId) {
             throw ForbiddenException("ACCESS_DENIED", "본인의 예약만 취소할 수 있습니다")
         }
+        val payment = reservationPaymentPort.findByReservationId(reservationId)
+            ?: throw NotFoundException("PAYMENT_NOT_FOUND", "결제 정보를 찾을 수 없습니다: $reservationId")
 
         // 2. 상태에 따라 분기
         val cancelledReservation: Reservation
         val cancelledPayment: ReservationPaymentSnapshot
+        val shouldRequestRefund = payment.status == ReservationPaymentStatus.APPROVED ||
+            payment.status == ReservationPaymentStatus.CANCEL_REQUESTED ||
+            payment.status == ReservationPaymentStatus.CANCEL_FAILED
 
-        if (reservation.status == ReservationStatus.PENDING) {
+        if (reservation.status == ReservationStatus.PENDING && !shouldRequestRefund) {
             // PENDING: 결제 전이므로 Toss 환불 불필요
             cancelledReservation = reservationRepository.save(reservation.cancelPending())
             cancelledPayment = reservationPaymentPort.cancelPendingByCustomerRequest(reservation.id)
         } else {
-            // CONFIRMED: 결제 취소 요청을 Outbox로 남기고 worker가 PG 취소를 처리
-            cancelledReservation = reservationRepository.save(reservation.cancel())
+            // 결제 완료 후 또는 CONFIRMED 상태에서는 결제 취소 요청을 Outbox로 남기고 worker가 PG 취소를 처리
+            cancelledReservation = reservationRepository.save(
+                if (reservation.status == ReservationStatus.PENDING) reservation.cancelPending() else reservation.cancel()
+            )
             cancelledPayment = reservationPaymentPort.requestCancelByCustomerRequest(
                 reservationId = reservation.id,
                 memberId = memberId
             )
 
-            // 4. 확정 예약은 이미 결제 승인 worker에서 재고가 차감되었으므로 취소 시 복원한다.
+            // 결제 승인 worker가 재고를 차감했으므로 취소 시 복원한다.
             reservation.dateRange.allDates().forEach { date ->
                 inventoryReservationPort.release(reservation.propertyId, reservation.roomTypeId, date)
             }

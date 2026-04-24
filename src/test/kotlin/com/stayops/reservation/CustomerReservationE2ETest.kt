@@ -161,7 +161,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             val confirmedReservation = reservationRepository.findById(reservationResult.reservation.id)!!
             val confirmedPayment = paymentRepository.findByReservationId(reservationResult.reservation.id)!!
 
-            assertThat(confirmedReservation.status).isEqualTo(ReservationStatus.CONFIRMED)
+            assertThat(confirmedReservation.status).isEqualTo(ReservationStatus.PENDING)
             assertThat(confirmedPayment.status).isEqualTo(PaymentStatus.APPROVED)
             assertThat(confirmedPayment.paymentKey).isEqualTo("toss_pk_e2e")
 
@@ -229,7 +229,7 @@ class CustomerReservationE2ETest @Autowired constructor(
     inner class `결제_확인_멱등성` {
 
         @Test
-        fun `이미_CONFIRMED된_예약에_confirmPayment를_다시_호출하면_기존_결과_반환`() {
+        fun `결제가_이미_완료된_PENDING_예약에_confirmPayment를_다시_호출하면_기존_결과_반환`() {
             // 1. 예약 생성
             val reservationResult = customerReservationApplication.createReservation(
                 memberId = "customer-e2e",
@@ -275,7 +275,7 @@ class CustomerReservationE2ETest @Autowired constructor(
                 amount = BigDecimal(200_000)
             )
 
-            assertThat(secondResult.reservation.status).isEqualTo(ReservationStatus.CONFIRMED)
+            assertThat(secondResult.reservation.status).isEqualTo(ReservationStatus.PENDING)
             assertThat(secondResult.payment.status).isEqualTo(ReservationPaymentStatus.APPROVED)
         }
     }

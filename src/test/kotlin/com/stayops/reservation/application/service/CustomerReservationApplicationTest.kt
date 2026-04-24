@@ -462,6 +462,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             val reservation = pendingReservation()
             val payment = pendingPayment()
             every { reservationRepository.findById("rsv-1") } returns reservation
+            every { reservationPaymentPort.findByReservationId("rsv-1") } returns payment
             every { reservationRepository.save(any()) } answers { firstArg() }
             every { reservationPaymentPort.cancelPendingByCustomerRequest("rsv-1") } returns
                 payment.fail("고객 요청에 의한 취소")
@@ -478,11 +479,35 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             }
         }
 
+        `when`("결제가 완료되었지만 예약이 아직 PENDING인 상태에서 취소하면") {
+            clearAllMocks()
+            val reservation = pendingReservation()
+            val payment = pendingPayment().approve(paymentKey = "toss_pk_approved")
+            every { reservationRepository.findById("rsv-1") } returns reservation
+            every { reservationPaymentPort.findByReservationId("rsv-1") } returns payment
+            every { reservationRepository.save(any()) } answers { firstArg() }
+            every { reservationPaymentPort.cancelPendingByCustomerRequest("rsv-1") } returns
+                payment.fail("고객 요청에 의한 취소")
+            every { reservationPaymentPort.requestCancelByCustomerRequest("rsv-1", "member-1") } returns payment.requestCancel()
+            justRun { inventoryReservationPort.release(any(), any(), any()) }
+
+            val result = service.cancelReservation(memberId = "member-1", reservationId = "rsv-1")
+
+            then("환불 요청을 생성하고 이미 차감된 재고를 복원한다") {
+                result.reservation.status shouldBe ReservationStatus.CANCELLED
+                result.payment.status shouldBe ReservationPaymentStatus.CANCEL_REQUESTED
+                verify(exactly = 0) { reservationPaymentPort.cancelPendingByCustomerRequest("rsv-1") }
+                verify(exactly = 1) { reservationPaymentPort.requestCancelByCustomerRequest("rsv-1", "member-1") }
+                verify(exactly = 2) { inventoryReservationPort.release("prop-1", "rt-1", any()) }
+            }
+        }
+
         `when`("CONFIRMED 예약을 취소하면") {
             clearAllMocks()
             val reservation = pendingReservation().confirm()
             val payment = pendingPayment().approve(paymentKey = "toss_pk_456")
             every { reservationRepository.findById("rsv-1") } returns reservation
+            every { reservationPaymentPort.findByReservationId("rsv-1") } returns payment
             every { reservationRepository.save(any()) } answers { firstArg() }
             every { reservationPaymentPort.requestCancelByCustomerRequest("rsv-1", "member-1") } returns payment.requestCancel()
             justRun { inventoryReservationPort.release(any(), any(), any()) }
@@ -502,6 +527,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             val reservation = pendingReservation().confirm()
             val payment = pendingPayment().approve(paymentKey = "toss_pk_789").requestCancel()
             every { reservationRepository.findById("rsv-1") } returns reservation
+            every { reservationPaymentPort.findByReservationId("rsv-1") } returns payment
             every { reservationRepository.save(any()) } answers { firstArg() }
             every { reservationPaymentPort.requestCancelByCustomerRequest("rsv-1", "member-1") } returns payment
             justRun { inventoryReservationPort.release(any(), any(), any()) }

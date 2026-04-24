@@ -116,6 +116,25 @@ class CustomerReservationMyPageApiTest {
                     jsonPath("$.confirmationStatus") { value("CONFIRMING") }
                 }
         }
+
+        @Test
+        fun `결제는 완료되었지만 예약이 아직 확정 전이면 결제 완료 상태를 반환한다`() {
+            mockCustomer()
+            every { customerReservationApplication.getMyReservation("member-1", "rsv-1") } returns
+                CustomerReservationReadResult(
+                    sampleReservation(),
+                    samplePayment().copy(status = ReservationPaymentStatus.APPROVED, paymentKey = "pk-1")
+                )
+
+            mockMvc.get("/api/v1/customer/reservations/rsv-1")
+                .andExpect {
+                    status { isOk() }
+                    jsonPath("$.reservationId") { value("rsv-1") }
+                    jsonPath("$.status") { value("PENDING") }
+                    jsonPath("$.paymentStatus") { value("APPROVED") }
+                    jsonPath("$.confirmationStatus") { value("PAYMENT_COMPLETED") }
+                }
+        }
     }
 
     @Nested
