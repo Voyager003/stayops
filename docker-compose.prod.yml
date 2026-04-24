@@ -74,19 +74,11 @@ services:
 
   prometheus:
     image: prom/prometheus:latest
-    command:
+    entrypoint:
       - /bin/sh
       - -c
-      - |
-        sed \
-          -e "s|\$${MONGO1_HOST}|$${MONGO1_HOST}|g" \
-          -e "s|\$${MONGO2_HOST}|$${MONGO2_HOST}|g" \
-          -e "s|\$${MONGO3_HOST}|$${MONGO3_HOST}|g" \
-          /etc/prometheus/prometheus.yml.tmpl > /tmp/prometheus.yml && \
-        exec /bin/prometheus \
-          --config.file=/tmp/prometheus.yml \
-          --web.enable-lifecycle \
-          --web.enable-remote-write-receiver
+    command:
+      - 'sed -e "s|\$${MONGO1_HOST}|$${MONGO1_HOST}|g" -e "s|\$${MONGO2_HOST}|$${MONGO2_HOST}|g" -e "s|\$${MONGO3_HOST}|$${MONGO3_HOST}|g" /etc/prometheus/prometheus.yml.tmpl > /tmp/prometheus.yml && exec /bin/prometheus --config.file=/tmp/prometheus.yml --web.enable-lifecycle --web.enable-remote-write-receiver'
     environment:
       MONGO1_HOST: ${MONGO1_HOST}
       MONGO2_HOST: ${MONGO2_HOST}
