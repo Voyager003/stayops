@@ -126,7 +126,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
 
     given("결제 승인 Outbox 처리 시") {
         `when`("PG 승인에 성공하면") {
-            then("Payment 승인 후 Reservation은 대기 상태를 유지하고 Outbox를 완료한다") {
+            then("Payment 승인과 Reservation 확정 후 Outbox를 완료한다") {
                 val message = confirmMessage()
                 every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
                 every { paymentRepository.findById("pay-1") } returns confirmRequestedPayment()
@@ -153,13 +153,13 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
 
                 verify(exactly = 2) { inventoryReservationPort.reserve("prop-1", "rt-1", any()) }
                 verify { paymentRepository.save(match { it.status == PaymentStatus.APPROVED }) }
-                verify(exactly = 0) { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
+                verify { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
                 verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
             }
         }
 
         `when`("PG가 이미 처리됐다고 응답하고 조회 결과 DONE이면") {
-            then("외부 상태 조회 결과로 내부 결제만 승인 처리하고 예약은 대기 상태를 유지한다") {
+            then("외부 상태 조회 결과로 내부 결제와 예약 상태를 복구한다") {
                 val message = confirmMessage()
                 every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
                 every { paymentRepository.findById("pay-1") } returns confirmRequestedPayment()
@@ -177,7 +177,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
 
                 verify(exactly = 2) { inventoryReservationPort.reserve("prop-1", "rt-1", any()) }
                 verify { paymentRepository.save(match { it.status == PaymentStatus.APPROVED }) }
-                verify(exactly = 0) { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
+                verify { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
                 verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
             }
         }

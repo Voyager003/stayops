@@ -28,16 +28,6 @@ class ReservationConfirmationStatusTest {
     }
 
     @Test
-    fun `결제 승인만 완료되고 예약이 아직 대기 중이면 결제 완료로 매핑한다`() {
-        val status = ReservationConfirmationStatus.from(
-            reservationStatus = ReservationStatus.PENDING,
-            paymentStatus = ReservationPaymentStatus.APPROVED
-        )
-
-        assertEquals(ReservationConfirmationStatus.PAYMENT_COMPLETED, status)
-    }
-
-    @Test
     fun `예약이 아직 대기 중이고 결제가 실패하면 확정 실패로 매핑한다`() {
         val status = ReservationConfirmationStatus.from(
             reservationStatus = ReservationStatus.PENDING,

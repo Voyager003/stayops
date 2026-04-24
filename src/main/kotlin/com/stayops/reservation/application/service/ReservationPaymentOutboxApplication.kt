@@ -92,7 +92,7 @@ class ReservationPaymentOutboxApplication(
             return
         }
 
-        if (payment.status == PaymentStatus.APPROVED) {
+        if (payment.status == PaymentStatus.APPROVED && reservation.status == ReservationStatus.CONFIRMED) {
             outboxRepository.save(message.complete(now))
             return
         }
@@ -204,6 +204,9 @@ class ReservationPaymentOutboxApplication(
             return
         }
 
+        if (reservation.status == ReservationStatus.PENDING) {
+            reservationRepository.save(reservation.confirm())
+        }
         outboxRepository.save(message.complete(clock.instant()))
     }
 

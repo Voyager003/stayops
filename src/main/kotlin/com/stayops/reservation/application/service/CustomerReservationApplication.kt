@@ -10,7 +10,6 @@ import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolverService
 import com.stayops.reservation.application.port.ReservationPaymentPort
 import com.stayops.reservation.application.port.ReservationPaymentSnapshot
-import com.stayops.reservation.application.port.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.*
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
@@ -192,8 +191,8 @@ class CustomerReservationApplication(
         val payment = reservationPaymentPort.findByReservationId(reservationId)
             ?: throw NotFoundException("PAYMENT_NOT_FOUND", "결제 정보를 찾을 수 없습니다: $reservationId")
 
-        // 2-1. 멱등성: 결제 승인 또는 예약 확정이 끝났으면 기존 결과 반환
-        if (reservation.status == ReservationStatus.CONFIRMED || payment.status == ReservationPaymentStatus.APPROVED) {
+        // 2-1. 멱등성: 이미 CONFIRMED 상태이면 기존 결과 반환
+        if (reservation.status == ReservationStatus.CONFIRMED) {
             return CustomerReservationResult(reservation, payment)
         }
 

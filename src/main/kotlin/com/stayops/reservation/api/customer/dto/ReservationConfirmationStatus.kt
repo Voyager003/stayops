@@ -6,7 +6,6 @@ import com.stayops.reservation.domain.model.ReservationStatus
 enum class ReservationConfirmationStatus {
     PAYMENT_WAITING,
     CONFIRMING,
-    PAYMENT_COMPLETED,
     CONFIRMED,
     FAILED,
     CANCEL_REQUESTED,
@@ -40,7 +39,7 @@ enum class ReservationConfirmationStatus {
                     ReservationStatus.CHECKED_IN,
                     ReservationStatus.CHECKED_OUT,
                     ReservationStatus.NO_SHOW -> CONFIRMED
-                    else -> PAYMENT_COMPLETED
+                    else -> CONFIRMING
                 }
                 ReservationPaymentStatus.FAILED -> FAILED
                 ReservationPaymentStatus.CANCEL_REQUESTED -> CANCEL_REQUESTED
