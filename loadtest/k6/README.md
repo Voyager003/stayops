@@ -2,20 +2,72 @@
 
 ## Purpose
 
-이번 k6 스크립트는 **standalone MongoDB 기준의 read-heavy 숙소 조회 부하**를 기준으로,
+이 부하 테스트는 고객 핵심 여정 기준으로 App 서버와 MongoDB replica set의 처리 한계를 찾고,
+한계 초과 부하에서 mongo1 장애와 recovery를 관측하기 위한 것이다.
 
-1. 현재 배포 서버의 안정 구간을 찾고
-2. 그 안정 구간으로 고정 부하를 검증하고
-3. 스펙업 외 개선 후보를 찾기 위한 것이다.
+이번 범위에 포함한다.
 
-현재 단계는 아래를 하지 않는다.
+- 고객 숙소 탐색
+- 숙소 상세 / 객실 타입 조회
+- 날짜 / 인원 기준 offers 조회
+- 고객 로그인 세션
+- 예약 생성
+- 내 예약 조회
+- breakpoint 탐색
+- MongoDB overload 실험
 
-- failover / recovery
-- authenticated write flow
-- reservation create / payment confirm
-- stress / spike
+이번 범위에서 제외한다.
 
-이 제한은 구현 전제와 맞춘 것이다. 현재 예약 write path는 Mongo transaction을 사용하므로, true standalone MongoDB에서 write 부하를 섞으면 결과 해석이 왜곡된다.
+- Toss 결제 confirm
+- OTA random booking / webhook 유입
+- PMS admin 수동 확정
+
+외부 결제 API는 대량 부하 테스트 결과를 왜곡하므로 별도 mock gateway 또는 sandbox 검증 단계로 분리한다.
+
+## Synthetic data
+
+부하 테스트 전 운영 MongoDB에 synthetic data를 넣는다. 모든 데이터는 `loadtest-<runId>` prefix를 사용한다.
+
+기본 규모:
+
+- 숙소 50개
+- 고객 계정 100개
+- 재고 180일
+- 기존 예약 / 결제 50,000건
+
+mongo1에서 실행:
+
+```bash
+cd ~/stayops/infra/mongodb
+set -a
+source .env
+set +a
+
+docker compose cp /path/to/stayops/loadtest/mongodb/seed-synthetic-data.js mongo:/tmp/seed-synthetic-data.js
+docker compose cp /path/to/stayops/loadtest/mongodb/cleanup-synthetic-data.js mongo:/tmp/cleanup-synthetic-data.js
+
+LOADTEST_RUN_ID=run-001 \
+LOADTEST_PROPERTY_COUNT=50 \
+LOADTEST_CUSTOMER_COUNT=100 \
+LOADTEST_INVENTORY_DAYS=180 \
+LOADTEST_RESERVATION_COUNT=50000 \
+docker compose exec -T mongo \
+  mongosh -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" \
+  --authenticationDatabase admin \
+  --file /tmp/seed-synthetic-data.js
+```
+
+정리:
+
+```bash
+LOADTEST_PREFIX=loadtest-run-001 \
+docker compose exec -T mongo \
+  mongosh -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" \
+  --authenticationDatabase admin \
+  --file /tmp/cleanup-synthetic-data.js
+```
+
+로컬 파일을 컨테이너에서 바로 읽을 수 없으면 `docker cp`로 mongo 컨테이너에 복사한 뒤 실행한다.
 
 ## Scenarios
 
@@ -23,107 +75,55 @@
 
 가벼운 앱 baseline 용도다.
 
-- `GET /actuator/health`
-- `GET /actuator/info`
+- `GET /health`
+- `GET /api/v1/customer/properties`
 
-DB 부하가 거의 없는 상태에서 앱과 네트워크의 기본 레이턴시를 본다.
+운영 `/health`가 200을 반환하지 않으면 `HEALTH_WEIGHT=0 INFO_WEIGHT=1`로 실행한다.
 
 ### `stayops-db-load.js`
 
-production-like read mix 용도다.
+read-heavy 숙소 조회 부하다.
 
-- `50%` property list
-  - `GET /api/v1/customer/properties`
-- `20%` property detail exploration
-  - `GET /api/v1/customer/properties/{propertyId}`
-  - `GET /api/v1/customer/properties/{propertyId}/room-types`
-- `30%` property offers
-  - `GET /api/v1/customer/properties/{propertyId}/offers?checkIn=&checkOut=&guests=`
+- `GET /api/v1/customer/properties`
+- `GET /api/v1/customer/properties/{propertyId}`
+- `GET /api/v1/customer/properties/{propertyId}/room-types`
+- `GET /api/v1/customer/properties/{propertyId}/offers`
 
-핫한 숙소 몇 개에 상세 / offers 트래픽이 몰리는 상황을 기본값으로 둔다.
+### `stayops-cuj-load.js`
 
-## Before / After
+고객 핵심 여정 baseline / step-load 용도다.
 
-| Before | After |
-|---|---|
-| `smoke / db-baseline / db-ramp` | `smoke / db-step-load / db-load` |
-| baseline과 ramp 목적이 섞여 있음 | smoke, 안정 구간 탐색, 고정 부하 검증으로 역할 분리 |
-| `DB_RATE`, `DB_RAMP_*` 중심 | `DB_LOAD_RATE`, `DB_STEP_RATES` 중심 |
+기본 mix:
 
-## Files
+- `25%` 숙소 목록 조회
+- `20%` 숙소 상세 + 객실 타입 조회
+- `25%` offers 조회
+- `20%` 예약 생성
+- `10%` 내 예약 조회
 
-- `common.js`
-- `stayops-app-load.js`
-- `stayops-db-load.js`
-- `package.json`
+인증이 필요한 요청은 고객 계정 풀로 로그인한 뒤 세션 쿠키를 사용한다.
 
-`package.json`은 `node --check` 검증 시 ESM 문법을 허용하기 위한 최소 설정이다.
+### `stayops-breakpoint-load.js`
 
-## Modes
+처리 한계 탐색용이다. 기본 RPS 단계:
 
-### App script
+```text
+20 -> 40 -> 80 -> 120 -> 160 -> 220
+```
 
-- `MODE=smoke`
-- `MODE=app-baseline`
+각 단계는 기본 5분이다.
 
-### DB script
+### `stayops-mongo-overload.js`
 
-- `MODE=smoke`
-- `MODE=db-step-load`
-- `MODE=db-load`
+destructive 실험용이다. breakpoint 이후 한계 이상의 부하를 가해 mongo1 primary 장애를 유도한다.
 
-## Environment variables
+기본 RPS 단계:
 
-### Common
+```text
+160 -> 240 -> 320 -> 480
+```
 
-- `BASE_URL`
-  - default: `http://localhost:8080`
-
-### App script
-
-- `APP_RATE`
-  - default: `5`
-- `APP_PRE_ALLOCATED_VUS`
-  - default: `10`
-- `APP_MAX_VUS`
-  - default: `50`
-- `APP_THINK_TIME`
-  - default: `0.2`
-
-### DB script
-
-- `DB_LOAD_RATE`
-  - default: `12`
-- `DB_PRE_ALLOCATED_VUS`
-  - default: `20`
-- `DB_MAX_VUS`
-  - default: `100`
-- `DB_THINK_TIME`
-  - default: `0.5`
-- `HOT_PROPERTY_COUNT`
-  - default: `5`
-- `HOT_PROPERTY_IDS`
-  - optional csv list
-- `SEARCH_RATE`
-  - default: `0.5`
-- `DETAIL_RATE`
-  - default: `0.2`
-- `OFFERS_RATE`
-  - default: `0.3`
-- `CHECK_IN_OFFSETS`
-  - default: `3,5,7,14,21,30`
-- `NIGHTS_POOL`
-  - default: `1,2,3`
-- `GUESTS_POOL`
-  - default: `1,2,3,4`
-- `DB_STEP_RATES`
-  - default: `8,16,24,32`
-- deprecated:
-  - `DB_RATE`
-  - `DB_RAMP_START`
-  - `DB_RAMP_STEP_1`
-  - `DB_RAMP_STEP_2`
-  - `DB_RAMP_STEP_3`
+실행 전 mongo1, mongo2, mongo3의 `rs.status()`와 Grafana 대시보드를 열어둔다.
 
 ## Run examples
 
@@ -131,81 +131,117 @@ production-like read mix 용도다.
 cd loadtest/k6
 ```
 
-### App smoke
+### Smoke
 
 ```bash
-BASE_URL=http://localhost:8080 MODE=smoke k6 run stayops-app-load.js
+MODE=smoke k6 run stayops-cuj-load.js
 ```
 
-### App baseline
+### CUJ baseline
 
 ```bash
-BASE_URL=http://localhost:8080 MODE=app-baseline APP_RATE=5 k6 run stayops-app-load.js
+CUJ_RATE=10 \
+CUSTOMER_COUNT=100 \
+k6 run stayops-cuj-load.js
 ```
 
-### DB smoke
+### CUJ step-load
 
 ```bash
-BASE_URL=http://localhost:8080 MODE=smoke k6 run stayops-db-load.js
+MODE=step-load \
+CUJ_STEP_RATES=5,10,20,40,80 \
+CUSTOMER_COUNT=100 \
+k6 run stayops-cuj-load.js
 ```
 
-### DB step-load
+### Breakpoint
 
 ```bash
-BASE_URL=http://localhost:8080 \
-MODE=db-step-load \
-SEARCH_RATE=0.50 \
-DETAIL_RATE=0.20 \
-OFFERS_RATE=0.30 \
-HOT_PROPERTY_COUNT=5 \
-DB_STEP_RATES=8,16,24,32 \
-k6 run stayops-db-load.js
+BREAKPOINT_RATES=20,40,80,120,160,220 \
+BREAKPOINT_STAGE_MINUTES=5 \
+CUSTOMER_COUNT=100 \
+k6 run stayops-breakpoint-load.js
 ```
 
-### DB load
+### Mongo overload
 
 ```bash
-BASE_URL=http://localhost:8080 \
-MODE=db-load \
-HOT_PROPERTY_COUNT=5 \
-SEARCH_RATE=0.50 \
-DETAIL_RATE=0.20 \
-OFFERS_RATE=0.30 \
-DB_LOAD_RATE=16 \
-k6 run stayops-db-load.js
+OVERLOAD_RATES=160,240,320,480 \
+OVERLOAD_STAGE_MINUTES=3 \
+CUSTOMER_COUNT=100 \
+k6 run stayops-mongo-overload.js
 ```
 
-## Metric focus
+## Metrics
 
-Prometheus / Grafana에서 우선 확인할 지표는 아래다.
+k6:
 
-- k6
-  - RPS, p95/p99, error rate, `dropped_iterations`
-- App / JVM
-  - endpoint별 latency
-  - `process.cpu.usage`, `system.cpu.usage`
-  - `jvm.memory.used`, `jvm.gc.pause`
-  - `tomcat.threads.*`
-- Host
-  - CPU, memory available, network rx/tx, disk I/O
-- MongoDB
-  - connections
-  - opcounters / operations trend
-  - network bytes in/out
-  - memory / resident memory
+- `http_req_duration p95/p99`
+- `http_req_failed`
+- `dropped_iterations`
+- endpoint별 RPS
+
+App / JVM:
+
+- `http_server_requests_seconds_count`
+- `http_server_requests_seconds_bucket`
+- 5xx rate
+- `jvm_memory_used_bytes`
+- `jvm_gc_pause_seconds_bucket`
+- Tomcat thread metrics
+
+Host:
+
+- `node_cpu_seconds_total`
+- `node_memory_MemAvailable_bytes`
+- network rx / tx
+- disk I/O
+
+MongoDB:
+
+- mongo1/2/3 up
+- primary / secondary state
+- connections
+- opcounters
+- replication lag
+- CPU / memory / disk I/O
+
+CloudWatch:
+
+- EC2 CPU
+- CPU credit balance
+- instance status check
+- network
+- EBS metrics
+
+## Pass / fail 기준
+
+안정적으로 감당 가능한 부하는 아래 기준을 만족하는 최대 RPS로 본다.
+
+- `http_req_failed < 1%`
+- `dropped_iterations = 0`
+- 주요 API p95 `< 1.5s ~ 2.5s`
+- App 5xx가 지속적으로 증가하지 않음
+- MongoDB primary가 정상 유지
+
+Mongo overload는 pass/fail보다 관측 실험이다.
+
+- mongo1이 죽는 시점의 RPS
+- secondary 승격 시간
+- app 오류 지속 시간
+- 정상 read/write 복구 시간
+- mongo1 복귀 후 secondary 합류 여부
 
 ## Verification
 
 ```bash
 node --check common.js
+node --check cuj-flow.js
 node --check stayops-app-load.js
 node --check stayops-db-load.js
+node --check stayops-cuj-load.js
+node --check stayops-breakpoint-load.js
+node --check stayops-mongo-overload.js
+node --check ../mongodb/seed-synthetic-data.js
+node --check ../mongodb/cleanup-synthetic-data.js
 ```
-
-## Notes
-
-- `availability` / `rates`는 이번 단계의 대표 시나리오가 아니다.
-- 필요하면 2차 진단용으로 별도 스크립트에 분리한다.
-- property list가 비어 있으면 setup 단계에서 즉시 실패한다.
-- `db-step-load`는 한계 돌파용 stress가 아니라, 현재 배포 서버의 안정 구간을 찾는 단계다.
-- `db-load`는 step-load에서 찾은 안정 구간을 고정해 검증하는 단계다.

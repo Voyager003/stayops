@@ -9,6 +9,8 @@ const APP_MAX_VUS = envInt("APP_MAX_VUS", 50);
 const APP_THINK_TIME = envFloat("APP_THINK_TIME", 0.2);
 const HEALTH_WEIGHT = envFloat("HEALTH_WEIGHT", 0.7);
 const INFO_WEIGHT = envFloat("INFO_WEIGHT", 0.3);
+const HEALTH_PATH = __ENV.HEALTH_PATH || "/health";
+const INFO_PATH = __ENV.INFO_PATH || "/api/v1/customer/properties";
 
 export const options = buildOptions();
 
@@ -16,8 +18,8 @@ function buildOptions() {
   const thresholds = {
     http_req_failed: ["rate<0.01"],
     checks: ["rate>0.99"],
-    "http_req_duration{name:actuator-health}": ["p(95)<300"],
-    "http_req_duration{name:actuator-info}": ["p(95)<300"],
+    "http_req_duration{name:health}": ["p(95)<300"],
+    "http_req_duration{name:public-read}": ["p(95)<1500"],
   };
 
   if (MODE === "smoke") {
@@ -59,18 +61,18 @@ export default function () {
   ]);
 
   if (route === "health") {
-    const response = http.get(`${BASE_URL}/actuator/health`, {
-      tags: { name: "actuator-health" },
+    const response = http.get(`${BASE_URL}${HEALTH_PATH}`, {
+      tags: { name: "health" },
     });
     check(response, {
       "health status is 200": (r) => r.status === 200,
     });
   } else {
-    const response = http.get(`${BASE_URL}/actuator/info`, {
-      tags: { name: "actuator-info" },
+    const response = http.get(`${BASE_URL}${INFO_PATH}`, {
+      tags: { name: "public-read" },
     });
     check(response, {
-      "info status is 200": (r) => r.status === 200,
+      "public read status is 200": (r) => r.status === 200,
     });
   }
 
