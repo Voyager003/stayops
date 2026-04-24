@@ -350,6 +350,29 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             }
         }
 
+        `when`("이미 결제가 승인되었고 예약이 아직 대기 상태이면") {
+            clearAllMocks()
+            val reservation = pendingReservation()
+            val payment = pendingPayment().copy(
+                status = ReservationPaymentStatus.APPROVED,
+                paymentKey = "toss_pk_123"
+            )
+            every { reservationRepository.findById("rsv-1") } returns reservation
+            every { reservationPaymentPort.findByReservationId("rsv-1") } returns payment
+
+            val result = service.confirmPayment(
+                memberId = "member-1", reservationId = "rsv-1",
+                paymentKey = "toss_pk_123", orderId = payment.orderId,
+                amount = BigDecimal(200_000)
+            )
+
+            then("기존 승인 결과를 그대로 반환하고 추가 승인 요청을 보내지 않는다") {
+                result.payment.status shouldBe ReservationPaymentStatus.APPROVED
+                result.reservation.status shouldBe ReservationStatus.PENDING
+                verify(exactly = 0) { reservationPaymentPort.requestConfirm(any(), any(), any(), any(), any()) }
+            }
+        }
+
         `when`("만료된 PENDING 예약에 결제하면") {
             clearAllMocks()
             val reservation = expiredReservation()
