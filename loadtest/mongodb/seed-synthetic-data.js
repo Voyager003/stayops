@@ -208,7 +208,8 @@ const payments = [];
 for (let i = 1; i <= reservationCount; i += 1) {
   const property = propertySummaries[i % propertySummaries.length];
   const roomTypeId = property.roomTypeIds[i % property.roomTypeIds.length];
-  const customer = customers[i % customers.length];
+  const customerNo = String((i % customerCount) + 1).padStart(4, "0");
+  const customerId = `${prefix}-customer-${customerNo}`;
   const guestId = `${prefix}-guest-${String(i).padStart(6, "0")}`;
   const reservationId = `${prefix}-reservation-${String(i).padStart(6, "0")}`;
   const paymentId = `${prefix}-payment-${String(i).padStart(6, "0")}`;
@@ -263,7 +264,7 @@ for (let i = 1; i <= reservationCount; i += 1) {
       commissionAmount: NumberDecimal("0"),
       netAmount: amount,
     },
-    memberId: customer._id,
+    memberId: customerId,
     expiresAt: i % 4 === 0 ? addDays(1) : null,
     version: long(0),
     createdAt: now,
@@ -274,7 +275,7 @@ for (let i = 1; i <= reservationCount; i += 1) {
   pushAndFlush(database.payments, payments, {
     _id: paymentId,
     reservationId,
-    memberId: customer._id,
+    memberId: customerId,
     orderId: `STAYOPS-${reservationId}-${now.getTime()}`,
     amount,
     currency: "KRW",
