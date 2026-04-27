@@ -10,23 +10,31 @@
 - 고객 숙소 탐색
 - 숙소 상세 / 객실 타입 조회
 - 날짜 / 인원 기준 offers 조회
-- 고객 로그인 세션
-- 예약 생성
+- setup 단계 고객 / OWNER 로그인 세션
+- 고객 예약 생성
+- 결제 확인 API 호출
 - 내 예약 조회
+- PMS 예약 목록 조회
+- PMS PENDING 예약 수동 확정
 - breakpoint 탐색
 - MongoDB overload 실험
 
 이번 범위에서 제외한다.
 
-- Toss 결제 confirm
 - OTA random booking / webhook 유입
-- PMS admin 수동 확정
+- 실제 Toss API 대량 호출
 
-외부 결제 API는 대량 부하 테스트 결과를 왜곡하므로 별도 mock gateway 또는 sandbox 검증 단계로 분리한다.
+외부 결제 API는 대량 부하 테스트 결과를 왜곡하므로 App 서버는 `STAYOPS_PAYMENT_GATEWAY=loadtest`일 때
+loadtest 전용 mock payment gateway를 사용한다. 기본값은 `toss`이며 운영 결제 동작은 유지된다.
 
 ## Synthetic data
 
 부하 테스트 전 운영 MongoDB에 synthetic data를 넣는다. 모든 데이터는 `loadtest-<runId>` prefix를 사용한다.
+테스트 계정도 run prefix를 포함한다.
+
+- 고객: `loadtest-run-001-customer-0001@example.com`
+- OWNER: `loadtest-run-001-owner-0001@example.com`
+- 비밀번호: `password123`
 
 2GiB MongoDB 인스턴스 기준 기본 규모:
 
@@ -48,13 +56,14 @@ set +a
 docker compose cp /path/to/stayops/loadtest/mongodb/seed-synthetic-data.js mongo:/tmp/seed-synthetic-data.js
 docker compose cp /path/to/stayops/loadtest/mongodb/cleanup-synthetic-data.js mongo:/tmp/cleanup-synthetic-data.js
 
-LOADTEST_RUN_ID=run-001 \
-LOADTEST_PROPERTY_COUNT=10 \
-LOADTEST_CUSTOMER_COUNT=30 \
-LOADTEST_INVENTORY_DAYS=60 \
-LOADTEST_RESERVATION_COUNT=5000 \
-LOADTEST_BATCH_SIZE=500 \
-docker compose exec -T mongo \
+docker compose exec \
+  -e LOADTEST_RUN_ID=run-001 \
+  -e LOADTEST_PROPERTY_COUNT=10 \
+  -e LOADTEST_CUSTOMER_COUNT=30 \
+  -e LOADTEST_INVENTORY_DAYS=60 \
+  -e LOADTEST_RESERVATION_COUNT=5000 \
+  -e LOADTEST_BATCH_SIZE=500 \
+  -T mongo \
   mongosh -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" \
   --authenticationDatabase admin \
   --file /tmp/seed-synthetic-data.js
@@ -63,8 +72,9 @@ docker compose exec -T mongo \
 정리:
 
 ```bash
-LOADTEST_PREFIX=loadtest-run-001 \
-docker compose exec -T mongo \
+docker compose exec \
+  -e LOADTEST_PREFIX=loadtest-run-001 \
+  -T mongo \
   mongosh -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" \
   --authenticationDatabase admin \
   --file /tmp/cleanup-synthetic-data.js
@@ -105,6 +115,17 @@ read-heavy 숙소 조회 부하다.
 - `10%` 내 예약 조회
 
 인증이 필요한 요청은 고객 계정 풀로 로그인한 뒤 세션 쿠키를 사용한다.
+결제 확인 API까지 호출한다. App 서버는 loadtest payment gateway를 켜야 외부 Toss를 호출하지 않는다.
+
+권장 mix:
+
+- `20%` 숙소 목록 조회
+- `15%` 숙소 상세 + 객실 타입 조회
+- `20%` offers 조회
+- `20%` 고객 예약 생성 + 결제 확인
+- `10%` 내 예약 조회
+- `12%` PMS 예약 목록 조회
+- `3%` PMS PENDING 예약 수동 확정
 
 ### `stayops-breakpoint-load.js`
 
@@ -134,17 +155,31 @@ destructive 실험용이다. breakpoint 이후 한계 이상의 부하를 가해
 cd loadtest/k6
 ```
 
+App 서버 부하 테스트 전 loadtest payment gateway를 켠다.
+
+```bash
+STAYOPS_PAYMENT_GATEWAY=loadtest
+STAYOPS_PAYMENT_LOADTEST_LATENCY_MS=200
+docker compose -f docker-compose.prod.yml up -d app
+```
+
 ### Smoke
 
 ```bash
-MODE=smoke k6 run stayops-cuj-load.js
+MODE=smoke \
+LOADTEST_RUN_ID=run-001 \
+CUSTOMER_COUNT=30 \
+OWNER_COUNT=10 \
+k6 run stayops-cuj-load.js
 ```
 
 ### CUJ baseline
 
 ```bash
+LOADTEST_RUN_ID=run-001 \
 CUJ_RATE=10 \
-CUSTOMER_COUNT=100 \
+CUSTOMER_COUNT=30 \
+OWNER_COUNT=10 \
 k6 run stayops-cuj-load.js
 ```
 
@@ -152,26 +187,32 @@ k6 run stayops-cuj-load.js
 
 ```bash
 MODE=step-load \
+LOADTEST_RUN_ID=run-001 \
 CUJ_STEP_RATES=5,10,20,40,80 \
-CUSTOMER_COUNT=100 \
+CUSTOMER_COUNT=30 \
+OWNER_COUNT=10 \
 k6 run stayops-cuj-load.js
 ```
 
 ### Breakpoint
 
 ```bash
+LOADTEST_RUN_ID=run-001 \
 BREAKPOINT_RATES=20,40,80,120,160,220 \
 BREAKPOINT_STAGE_MINUTES=5 \
-CUSTOMER_COUNT=100 \
+CUSTOMER_COUNT=30 \
+OWNER_COUNT=10 \
 k6 run stayops-breakpoint-load.js
 ```
 
 ### Mongo overload
 
 ```bash
+LOADTEST_RUN_ID=run-001 \
 OVERLOAD_RATES=160,240,320,480 \
 OVERLOAD_STAGE_MINUTES=3 \
-CUSTOMER_COUNT=100 \
+CUSTOMER_COUNT=30 \
+OWNER_COUNT=10 \
 k6 run stayops-mongo-overload.js
 ```
 
@@ -234,6 +275,8 @@ Mongo overload는 pass/fail보다 관측 실험이다.
 - app 오류 지속 시간
 - 정상 read/write 복구 시간
 - mongo1 복귀 후 secondary 합류 여부
+
+한계 이상 부하로 자연 마비가 재현되지 않으면, primary 중지/재시작 또는 `rs.stepDown()`은 별도 승인 후 수행한다.
 
 ## Verification
 
