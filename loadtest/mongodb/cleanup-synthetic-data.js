@@ -6,7 +6,7 @@ if (!prefix || !prefix.startsWith("loadtest-")) {
 
 const database = db.getSiblingDB(process.env.LOADTEST_DB || "stayops");
 const idRegex = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
-const emailRegex = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}|^loadtest-customer-`);
+const emailRegex = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(customer|owner)-`);
 
 const deletes = [
   ["payments", { _id: idRegex }],

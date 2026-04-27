@@ -5,7 +5,7 @@ const customerCount = parseInt(process.env.LOADTEST_CUSTOMER_COUNT || "30", 10);
 const inventoryDays = parseInt(process.env.LOADTEST_INVENTORY_DAYS || "60", 10);
 const reservationCount = parseInt(process.env.LOADTEST_RESERVATION_COUNT || "5000", 10);
 const batchSize = parseInt(process.env.LOADTEST_BATCH_SIZE || "500", 10);
-const passwordHash = process.env.LOADTEST_PASSWORD_HASH || "$2a$10$dXJ3SW6G7P50lGmMQgel3uGqGa7lL2kWGEf5bYLT9hEVwQH3.HkqK";
+const passwordHash = process.env.LOADTEST_PASSWORD_HASH || "$2a$10$n2sm6oAyceX3Q5cwTG05Je9k6rtLUbrX1s.cHmEeIEg59DuRs0AFu";
 
 const database = db.getSiblingDB(process.env.LOADTEST_DB || "stayops");
 const now = new Date();
@@ -71,7 +71,7 @@ for (let i = 1; i <= propertyCount; i += 1) {
 for (let i = 1; i <= customerCount; i += 1) {
   customers.push({
     _id: `${prefix}-customer-${String(i).padStart(4, "0")}`,
-    email: `loadtest-customer-${String(i).padStart(4, "0")}@example.com`,
+    email: `${prefix}-customer-${String(i).padStart(4, "0")}@example.com`,
     passwordHash,
     name: `Loadtest Customer ${i}`,
     role: "CUSTOMER",
@@ -310,4 +310,5 @@ database.loadtest_runs.insertOne({
 });
 
 print(`Load-test seed complete. prefix=${prefix}`);
-print(`Customer emails: loadtest-customer-0001@example.com ... loadtest-customer-${String(customerCount).padStart(4, "0")}@example.com`);
+print(`Customer emails: ${prefix}-customer-0001@example.com ... ${prefix}-customer-${String(customerCount).padStart(4, "0")}@example.com`);
+print(`Owner emails: ${prefix}-owner-0001@example.com ... ${prefix}-owner-${String(propertyCount).padStart(4, "0")}@example.com`);
