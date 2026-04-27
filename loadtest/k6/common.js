@@ -1,4 +1,12 @@
-export const BASE_URL = (__ENV.BASE_URL || "http://localhost:8080").replace(/\/$/, "");
+export const BASE_URL = (__ENV.BASE_URL || "https://api.learniverse.store").replace(/\/$/, "");
+
+export function envString(name, fallback) {
+  const raw = __ENV[name];
+  if (raw === undefined || raw === "") {
+    return fallback;
+  }
+  return raw;
+}
 
 export function envInt(name, fallback) {
   const raw = __ENV[name];
@@ -32,6 +40,10 @@ export function parseCsv(raw) {
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
+}
+
+export function buildSequentialList(prefix, count, suffix = "") {
+  return Array.from({ length: count }, (_, index) => `${prefix}${String(index + 1).padStart(4, "0")}${suffix}`);
 }
 
 export function parseIntCsv(raw, fallback = []) {
