@@ -1,9 +1,10 @@
 const runId = process.env.LOADTEST_RUN_ID || new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
 const prefix = process.env.LOADTEST_PREFIX || `loadtest-${runId}`;
-const propertyCount = parseInt(process.env.LOADTEST_PROPERTY_COUNT || "50", 10);
-const customerCount = parseInt(process.env.LOADTEST_CUSTOMER_COUNT || "100", 10);
-const inventoryDays = parseInt(process.env.LOADTEST_INVENTORY_DAYS || "180", 10);
-const reservationCount = parseInt(process.env.LOADTEST_RESERVATION_COUNT || "50000", 10);
+const propertyCount = parseInt(process.env.LOADTEST_PROPERTY_COUNT || "10", 10);
+const customerCount = parseInt(process.env.LOADTEST_CUSTOMER_COUNT || "30", 10);
+const inventoryDays = parseInt(process.env.LOADTEST_INVENTORY_DAYS || "60", 10);
+const reservationCount = parseInt(process.env.LOADTEST_RESERVATION_COUNT || "5000", 10);
+const batchSize = parseInt(process.env.LOADTEST_BATCH_SIZE || "500", 10);
 const passwordHash = process.env.LOADTEST_PASSWORD_HASH || "$2a$10$dXJ3SW6G7P50lGmMQgel3uGqGa7lL2kWGEf5bYLT9hEVwQH3.HkqK";
 
 const database = db.getSiblingDB(process.env.LOADTEST_DB || "stayops");
@@ -15,12 +16,26 @@ const createdIds = {
   customerCount,
   inventoryDays,
   reservationCount,
+  batchSize,
 };
 
-function batchInsert(collection, docs, batchSize = 1000) {
-  for (let i = 0; i < docs.length; i += batchSize) {
-    collection.insertMany(docs.slice(i, i + batchSize), { ordered: false });
+function insertBatch(collection, docs) {
+  if (docs.length === 0) {
+    return;
   }
+  collection.insertMany(docs, { ordered: false });
+  docs.length = 0;
+}
+
+function pushAndFlush(collection, docs, doc) {
+  docs.push(doc);
+  if (docs.length >= batchSize) {
+    insertBatch(collection, docs);
+  }
+}
+
+function long(value) {
+  return NumberLong(String(value));
 }
 
 function ymd(date) {
@@ -47,7 +62,7 @@ for (let i = 1; i <= propertyCount; i += 1) {
     propertyAccess: [{ propertyId: `${prefix}-property-${String(i).padStart(4, "0")}`, role: "OWNER" }],
     status: "ACTIVE",
     lastLoginAt: null,
-    version: NumberLong(0),
+    version: long(0),
     createdAt: now,
     updatedAt: now,
     _class: "com.stayops.member.infrastructure.persistence.MemberDocument",
@@ -63,23 +78,25 @@ for (let i = 1; i <= customerCount; i += 1) {
     propertyAccess: [],
     status: "ACTIVE",
     lastLoginAt: null,
-    version: NumberLong(0),
+    version: long(0),
     createdAt: now,
     updatedAt: now,
     _class: "com.stayops.member.infrastructure.persistence.MemberDocument",
   });
 }
-batchInsert(database.members, owners.concat(customers));
+insertBatch(database.members, owners);
+insertBatch(database.members, customers);
 
 const properties = [];
 const roomTypes = [];
 const rooms = [];
 const inventories = [];
 const channels = [];
+const propertySummaries = [];
 for (let p = 1; p <= propertyCount; p += 1) {
   const propertyNo = String(p).padStart(4, "0");
   const propertyId = `${prefix}-property-${propertyNo}`;
-  properties.push({
+  pushAndFlush(database.properties, properties, {
     _id: propertyId,
     ownerId: `${prefix}-owner-${propertyNo}`,
     name: `Loadtest Hotel ${propertyNo}`,
@@ -100,13 +117,13 @@ for (let p = 1; p <= propertyCount; p += 1) {
     status: "ACTIVE",
     timezone: "Asia/Seoul",
     currency: "KRW",
-    version: NumberLong(0),
+    version: long(0),
     createdAt: now,
     updatedAt: now,
     _class: "com.stayops.property.infrastructure.persistence.PropertyDocument",
   });
 
-  channels.push({
+  pushAndFlush(database.channels, channels, {
     _id: `${prefix}-channel-${propertyNo}-direct`,
     propertyId,
     code: "DIRECT",
@@ -115,16 +132,18 @@ for (let p = 1; p <= propertyCount; p += 1) {
     commissionRate: NumberDecimal("0.0"),
     connectionInfo: null,
     status: "ACTIVE",
-    version: NumberLong(0),
+    version: long(0),
     createdAt: now,
     updatedAt: now,
     _class: "com.stayops.channel.infrastructure.persistence.ChannelDocument",
   });
 
   const roomTypeCount = 3 + (p % 3);
+  const summaryRoomTypeIds = [];
   for (let r = 1; r <= roomTypeCount; r += 1) {
     const roomTypeId = `${prefix}-rt-${propertyNo}-${r}`;
-    roomTypes.push({
+    summaryRoomTypeIds.push(roomTypeId);
+    pushAndFlush(database.room_types, roomTypes, {
       _id: roomTypeId,
       propertyId,
       name: `Loadtest RoomType ${r}`,
@@ -135,7 +154,7 @@ for (let p = 1; p <= propertyCount; p += 1) {
         currency: "KRW",
       },
       amenities: ["Wi-Fi", "TV", "AC"],
-      version: NumberLong(0),
+      version: long(0),
       createdAt: now,
       updatedAt: now,
       _class: "com.stayops.room.infrastructure.persistence.RoomTypeDocument",
@@ -143,7 +162,7 @@ for (let p = 1; p <= propertyCount; p += 1) {
 
     const roomCount = 6 + r;
     for (let room = 1; room <= roomCount; room += 1) {
-      rooms.push({
+      pushAndFlush(database.rooms, rooms, {
         _id: `${prefix}-room-${propertyNo}-${r}-${room}`,
         propertyId,
         roomTypeId,
@@ -151,7 +170,7 @@ for (let p = 1; p <= propertyCount; p += 1) {
         floor: r,
         status: "AVAILABLE",
         memo: null,
-        version: NumberLong(0),
+        version: long(0),
         createdAt: now,
         updatedAt: now,
         _class: "com.stayops.room.infrastructure.persistence.RoomDocument",
@@ -160,7 +179,7 @@ for (let p = 1; p <= propertyCount; p += 1) {
 
     for (let day = 0; day < inventoryDays; day += 1) {
       const date = ymd(addDays(day));
-      inventories.push({
+      pushAndFlush(database.room_inventories, inventories, {
         _id: `${prefix}-inv-${propertyNo}-${r}-${date}`,
         propertyId,
         roomTypeId,
@@ -168,27 +187,27 @@ for (let p = 1; p <= propertyCount; p += 1) {
         totalCount: roomCount,
         reservedCount: 0,
         blockedCount: 0,
-        version: NumberLong(0),
+        version: long(0),
         createdAt: now,
         updatedAt: now,
         _class: "com.stayops.inventory.infrastructure.persistence.RoomInventoryDocument",
       });
     }
   }
+  propertySummaries.push({ id: propertyId, roomTypeIds: summaryRoomTypeIds });
 }
-batchInsert(database.properties, properties);
-batchInsert(database.channels, channels);
-batchInsert(database.room_types, roomTypes);
-batchInsert(database.rooms, rooms);
-batchInsert(database.room_inventories, inventories);
+insertBatch(database.properties, properties);
+insertBatch(database.channels, channels);
+insertBatch(database.room_types, roomTypes);
+insertBatch(database.rooms, rooms);
+insertBatch(database.room_inventories, inventories);
 
 const guests = [];
 const reservations = [];
 const payments = [];
 for (let i = 1; i <= reservationCount; i += 1) {
-  const property = properties[i % properties.length];
-  const availableRoomTypes = roomTypes.filter((roomType) => roomType.propertyId === property._id);
-  const roomType = availableRoomTypes[i % availableRoomTypes.length];
+  const property = propertySummaries[i % propertySummaries.length];
+  const roomTypeId = property.roomTypeIds[i % property.roomTypeIds.length];
   const customer = customers[i % customers.length];
   const guestId = `${prefix}-guest-${String(i).padStart(6, "0")}`;
   const reservationId = `${prefix}-reservation-${String(i).padStart(6, "0")}`;
@@ -198,28 +217,28 @@ for (let i = 1; i <= reservationCount; i += 1) {
   const amountValue = 90000 + (i % 5) * 20000;
   const amount = NumberDecimal(String(amountValue));
 
-  guests.push({
+  pushAndFlush(database.guests, guests, {
     _id: guestId,
-    propertyId: property._id,
+    propertyId: property.id,
     name: `Loadtest Guest ${i}`,
     phone: `019${String(i).padStart(8, "0").slice(-8)}`,
     email: `${prefix}-guest-${String(i).padStart(6, "0")}@example.com`,
     tier: "NEW",
     memo: null,
     totalVisits: 1,
-    totalSpendAmount: NumberLong(amountValue),
+    totalSpendAmount: long(amountValue),
     lastVisitDate: checkIn,
     averageStayNights: 1,
-    version: NumberLong(0),
+    version: long(0),
     createdAt: now,
     updatedAt: now,
     _class: "com.stayops.guest.infrastructure.persistence.GuestDocument",
   });
 
-  reservations.push({
+  pushAndFlush(database.reservations, reservations, {
     _id: reservationId,
-    propertyId: property._id,
-    roomTypeId: roomType._id,
+    propertyId: property.id,
+    roomTypeId,
     roomId: null,
     guestId,
     guestInfo: {
@@ -246,13 +265,13 @@ for (let i = 1; i <= reservationCount; i += 1) {
     },
     memberId: customer._id,
     expiresAt: i % 4 === 0 ? addDays(1) : null,
-    version: NumberLong(0),
+    version: long(0),
     createdAt: now,
     updatedAt: now,
     _class: "com.stayops.reservation.infrastructure.persistence.ReservationDocument",
   });
 
-  payments.push({
+  pushAndFlush(database.payments, payments, {
     _id: paymentId,
     reservationId,
     memberId: customer._id,
@@ -264,15 +283,19 @@ for (let i = 1; i <= reservationCount; i += 1) {
     method: i % 4 === 0 ? null : "CARD",
     failReason: null,
     approvedAt: i % 4 === 0 ? null : now,
-    version: NumberLong(0),
+    version: long(0),
     createdAt: now,
     updatedAt: now,
     _class: "com.stayops.payment.infrastructure.persistence.PaymentDocument",
   });
+
+  if (i % (batchSize * 10) === 0) {
+    print(`Seed progress: reservations/payments ${i}/${reservationCount}`);
+  }
 }
-batchInsert(database.guests, guests);
-batchInsert(database.reservations, reservations);
-batchInsert(database.payments, payments);
+insertBatch(database.guests, guests);
+insertBatch(database.reservations, reservations);
+insertBatch(database.payments, payments);
 
 database.loadtest_runs.insertOne({
   _id: prefix,

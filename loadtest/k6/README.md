@@ -28,12 +28,14 @@
 
 부하 테스트 전 운영 MongoDB에 synthetic data를 넣는다. 모든 데이터는 `loadtest-<runId>` prefix를 사용한다.
 
-기본 규모:
+2GiB MongoDB 인스턴스 기준 기본 규모:
 
-- 숙소 50개
-- 고객 계정 100개
-- 재고 180일
-- 기존 예약 / 결제 50,000건
+- 숙소 10개
+- 고객 계정 30개
+- 재고 60일
+- 기존 예약 / 결제 5,000건
+
+안정 확인 후 `10,000 -> 20,000 -> 50,000` 순서로 올린다.
 
 mongo1에서 실행:
 
@@ -47,10 +49,11 @@ docker compose cp /path/to/stayops/loadtest/mongodb/seed-synthetic-data.js mongo
 docker compose cp /path/to/stayops/loadtest/mongodb/cleanup-synthetic-data.js mongo:/tmp/cleanup-synthetic-data.js
 
 LOADTEST_RUN_ID=run-001 \
-LOADTEST_PROPERTY_COUNT=50 \
-LOADTEST_CUSTOMER_COUNT=100 \
-LOADTEST_INVENTORY_DAYS=180 \
-LOADTEST_RESERVATION_COUNT=50000 \
+LOADTEST_PROPERTY_COUNT=10 \
+LOADTEST_CUSTOMER_COUNT=30 \
+LOADTEST_INVENTORY_DAYS=60 \
+LOADTEST_RESERVATION_COUNT=5000 \
+LOADTEST_BATCH_SIZE=500 \
 docker compose exec -T mongo \
   mongosh -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" \
   --authenticationDatabase admin \
