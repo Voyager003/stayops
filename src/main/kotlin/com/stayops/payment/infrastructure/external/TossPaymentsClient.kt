@@ -5,12 +5,14 @@ import com.stayops.payment.domain.service.PaymentConfirmResult
 import com.stayops.payment.domain.service.PaymentGateway
 import com.stayops.payment.domain.service.PaymentInquiryResult
 import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
 import java.math.BigDecimal
 import java.time.OffsetDateTime
 
 @Component
+@ConditionalOnProperty(name = ["stayops.payment.gateway"], havingValue = "toss", matchIfMissing = true)
 class TossPaymentsClient(
     @Qualifier("tossRestClient") private val restClient: RestClient
 ) : PaymentGateway {
