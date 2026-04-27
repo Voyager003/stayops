@@ -215,7 +215,9 @@ function resolveRoomTypes(propertyIds) {
 
 function loginSessions(emails, password, path, tagName) {
   return emails.map((email) => {
+    const jar = new http.CookieJar();
     const response = http.post(`${BASE_URL}${path}`, JSON.stringify({ email, password }), {
+      jar,
       headers: jsonHeaders("setup", tagName),
       tags: { name: tagName },
     });
@@ -225,7 +227,7 @@ function loginSessions(emails, password, path, tagName) {
     }
     return {
       email,
-      cookie: extractSessionCookie(response),
+      cookie: extractSessionCookie(response, jar),
     };
   });
 }
@@ -265,12 +267,26 @@ function collectPendingReservations(ownerSessions) {
   return pending;
 }
 
-function extractSessionCookie(response) {
+function extractSessionCookie(response, jar) {
   const session = response.cookies && response.cookies.SESSION && response.cookies.SESSION[0];
-  if (!session || !session.value) {
+  if (session && session.value) {
+    return `SESSION=${session.value}`;
+  }
+
+  const jarSession = jar && jar.cookiesForURL(BASE_URL).SESSION;
+  if (Array.isArray(jarSession) && jarSession[0]) {
+    return `SESSION=${jarSession[0]}`;
+  }
+  if (typeof jarSession === "string" && jarSession) {
+    return `SESSION=${jarSession}`;
+  }
+
+  const setCookie = response.headers && (response.headers["Set-Cookie"] || response.headers["set-cookie"]);
+  const match = typeof setCookie === "string" ? setCookie.match(/(?:^|,\s*)SESSION=([^;]+)/) : null;
+  if (!match || !match[1]) {
     fail("Setup failed. SESSION cookie was not returned.");
   }
-  return `SESSION=${session.value}`;
+  return `SESSION=${match[1]}`;
 }
 
 function runSearchFlow() {
