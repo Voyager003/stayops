@@ -12,12 +12,16 @@ import {
   parseCsv,
   parseIntCsv,
   pickRandom,
-  pickWeighted,
 } from "./common.js";
 import {
   assertStayWindowWithinInventory,
+  buildBookableRoomTypes,
+  buildWeightedFlowSchedule,
+  countUniqueReservationCombinations,
   pickUniquePendingReservation,
-  selectStayWindowOffsets,
+  selectDuplicateReservationPair,
+  selectScheduledFlow,
+  selectUniqueReservationCombination,
 } from "./cuj-policy.js";
 
 const RUN_ID = envString("LOADTEST_RUN_ID", "run-001");
@@ -33,6 +37,8 @@ const HOT_PROPERTY_COUNT = envInt("HOT_PROPERTY_COUNT", 10);
 const THINK_TIME = envFloat("CUJ_THINK_TIME", 0.5);
 const LOADTEST_INVENTORY_DAYS = envInt("LOADTEST_INVENTORY_DAYS", 60);
 const LOG_UNEXPECTED_RESPONSES = envString("LOG_UNEXPECTED_RESPONSES", "false") === "true";
+const RESERVATION_SEQUENCE_OFFSET = envInt("RESERVATION_SEQUENCE_OFFSET", 0);
+const CUJ_FLOW_SCHEDULE_SLOTS = envInt("CUJ_FLOW_SCHEDULE_SLOTS", 100);
 
 const SEARCH_RATE = envFloat("SEARCH_RATE", 0.20);
 const DETAIL_RATE = envFloat("DETAIL_RATE", 0.15);
@@ -51,6 +57,7 @@ assertStayWindowWithinInventory({
   inventoryDays: LOADTEST_INVENTORY_DAYS,
 });
 const NORMALIZED = normalizeCujWeights();
+const FLOW_SCHEDULE = buildCujFlowSchedule();
 
 export function buildThresholds() {
   return {
@@ -113,6 +120,28 @@ export function buildPmsConfirmOptions({ iterations, vus, maxDuration }) {
   };
 }
 
+export function buildDuplicateReservationOptions({ iterations, vus, maxDuration }) {
+  return {
+    thresholds: {
+      ...buildThresholds(),
+      "http_req_duration{name:duplicate-reservation-create-initial}": ["p(95)<2500"],
+      "http_req_duration{name:duplicate-reservation-create-retry}": ["p(95)<2500"],
+    },
+    scenarios: {
+      duplicate_reservation: {
+        executor: "shared-iterations",
+        vus,
+        iterations,
+        maxDuration,
+      },
+    },
+  };
+}
+
+export function configureDuplicateReservationResponses() {
+  http.setResponseCallback(http.expectedStatuses({ min: 200, max: 399 }, 409));
+}
+
 export function setupCujData() {
   const propertyResponse = http.get(`${BASE_URL}/api/v1/customer/properties`, {
     tags: { name: "customer-properties-list-setup" },
@@ -141,17 +170,26 @@ export function setupCujData() {
   const propertyIds = hotPropertyIds.length > 0 ? hotPropertyIds : properties.slice(0, HOT_PROPERTY_COUNT).map((p) => p.id).filter(Boolean);
   const roomTypesByPropertyId = resolveRoomTypes(propertyIds);
   const bookablePropertyIds = Object.keys(roomTypesByPropertyId);
-  if (bookablePropertyIds.length === 0) {
+  const bookableRoomTypes = buildBookableRoomTypes(roomTypesByPropertyId);
+  if (bookablePropertyIds.length === 0 || bookableRoomTypes.length === 0) {
     fail("Setup failed. no property with room types available.");
   }
 
   const customerSessions = loginSessions(CUSTOMER_EMAILS, CUSTOMER_PASSWORD, "/api/v1/customer/auth/login", "customer-login");
   const ownerSessions = loginOwnerSessions(OWNER_EMAILS, OWNER_PASSWORD, bookablePropertyIds);
   const pendingReservations = collectPendingReservations(ownerSessions);
+  const uniqueReservationCapacity = countUniqueReservationCombinations({
+    customerSessions,
+    bookableRoomTypes,
+    checkInOffsets: CHECK_IN_OFFSETS,
+    nightsPool: NIGHTS_POOL,
+  });
 
   return {
     propertyIds: bookablePropertyIds,
     roomTypesByPropertyId,
+    bookableRoomTypes,
+    uniqueReservationCapacity,
     customerSessions,
     ownerSessions,
     pendingReservations,
@@ -159,15 +197,8 @@ export function setupCujData() {
 }
 
 export function runCujIteration(data) {
-  const flow = pickWeighted([
-    { weight: NORMALIZED.search, value: "search" },
-    { weight: NORMALIZED.detail, value: "detail" },
-    { weight: NORMALIZED.offers, value: "offers" },
-    { weight: NORMALIZED.createReservation, value: "createReservation" },
-    { weight: NORMALIZED.myReservations, value: "myReservations" },
-    { weight: NORMALIZED.pmsList, value: "pmsList" },
-    { weight: NORMALIZED.pmsConfirm, value: "pmsConfirm" },
-  ]);
+  const selected = selectScheduledFlow(FLOW_SCHEDULE, currentIterationInTest());
+  const flow = selected.value;
 
   if (flow === "search") {
     runSearchFlow();
@@ -176,7 +207,7 @@ export function runCujIteration(data) {
   } else if (flow === "offers") {
     runOffersFlow(data);
   } else if (flow === "createReservation") {
-    runReservationCreateAndPaymentFlow(data);
+    runReservationCreateAndPaymentFlow(data, selected.sequence);
   } else if (flow === "myReservations") {
     runMyReservationsFlow(data);
   } else if (flow === "pmsList") {
@@ -190,6 +221,11 @@ export function runCujIteration(data) {
 
 export function runPmsConfirmOnceIteration(data) {
   runPmsConfirmFlow(data);
+  sleep(THINK_TIME);
+}
+
+export function runDuplicateReservationIteration(data) {
+  runDuplicateReservationFlow(data, currentIterationInTest());
   sleep(THINK_TIME);
 }
 
@@ -225,6 +261,21 @@ function normalizeCujWeights() {
     pmsList: PMS_LIST_RATE / total,
     pmsConfirm: PMS_CONFIRM_RATE / total,
   };
+}
+
+function buildCujFlowSchedule() {
+  return buildWeightedFlowSchedule(
+    [
+      { weight: NORMALIZED.search, value: "search" },
+      { weight: NORMALIZED.detail, value: "detail" },
+      { weight: NORMALIZED.offers, value: "offers" },
+      { weight: NORMALIZED.createReservation, value: "createReservation" },
+      { weight: NORMALIZED.myReservations, value: "myReservations" },
+      { weight: NORMALIZED.pmsList, value: "pmsList" },
+      { weight: NORMALIZED.pmsConfirm, value: "pmsConfirm" },
+    ],
+    CUJ_FLOW_SCHEDULE_SLOTS,
+  );
 }
 
 function resolveRoomTypes(propertyIds) {
@@ -399,13 +450,29 @@ function runOffersFlow(data) {
   });
 }
 
-function runReservationCreateAndPaymentFlow(data) {
-  const session = pickSession(data.customerSessions);
-  const propertyId = pickRandom(data.propertyIds);
-  const roomTypeId = pickRandom(data.roomTypesByPropertyId[propertyId]);
-  const stay = buildReservationStayWindow();
-  const guests = pickRandom(GUESTS_POOL);
-  const sequence = `${Date.now()}-${__VU}-${__ITER}`;
+function runReservationCreateAndPaymentFlow(data, flowSequence) {
+  const sequence = currentReservationSequence(flowSequence);
+  const combination = selectUniqueReservationCombination({
+    sequence,
+    customerSessions: data.customerSessions,
+    bookableRoomTypes: data.bookableRoomTypes,
+    checkInOffsets: CHECK_IN_OFFSETS,
+    nightsPool: NIGHTS_POOL,
+    guestsPool: GUESTS_POOL,
+  });
+  if (!combination) {
+    fail(
+      `Reservation combination capacity exhausted. sequence=${sequence}, capacity=${data.uniqueReservationCapacity}. ` +
+        "Increase CUSTOMER_COUNT/HOT_PROPERTY_COUNT/CHECK_IN_OFFSETS/NIGHTS_POOL or cleanup/reseed with a new LOADTEST_RUN_ID.",
+    );
+  }
+
+  const session = combination.session;
+  const propertyId = combination.propertyId;
+  const roomTypeId = combination.roomTypeId;
+  const stay = buildReservationStayWindow(combination);
+  const guests = combination.guests;
+  const requestId = `${Date.now()}-${__VU}-${__ITER}`;
 
   const createResponse = http.post(
     `${BASE_URL}/api/v1/customer/reservations`,
@@ -415,9 +482,9 @@ function runReservationCreateAndPaymentFlow(data) {
       checkIn: stay.checkIn,
       checkOut: stay.checkOut,
       numberOfGuests: guests,
-      guestName: `loadtest guest ${sequence}`,
+      guestName: `loadtest guest ${requestId}`,
       guestPhone: `010${String(__VU).padStart(4, "0")}${String(__ITER % 10000).padStart(4, "0")}`,
-      guestEmail: `loadtest-guest-${sequence}@example.com`,
+      guestEmail: `loadtest-guest-${requestId}@example.com`,
     }),
     {
       headers: authJsonHeaders(session, "customer", "customer-reservation-create"),
@@ -445,6 +512,61 @@ function runReservationCreateAndPaymentFlow(data) {
   );
 
   checkExpectedStatus(confirmResponse, 202, "confirm payment status is 202", "customer-confirm-payment");
+}
+
+function runDuplicateReservationFlow(data, flowSequence) {
+  const sequence = currentReservationSequence(flowSequence);
+  const pair = selectDuplicateReservationPair({
+    sequence,
+    customerSessions: data.customerSessions,
+    bookableRoomTypes: data.bookableRoomTypes,
+    checkInOffsets: CHECK_IN_OFFSETS,
+    nightsPool: NIGHTS_POOL,
+    guestsPool: GUESTS_POOL,
+  });
+  if (!pair) {
+    fail(
+      `Duplicate reservation combination capacity exhausted. sequence=${sequence}, capacity=${data.uniqueReservationCapacity}. ` +
+        "Increase CUSTOMER_COUNT/HOT_PROPERTY_COUNT/CHECK_IN_OFFSETS/NIGHTS_POOL or cleanup/reseed with a new LOADTEST_RUN_ID.",
+    );
+  }
+
+  const firstResponse = createReservation(pair.initial, "duplicate-reservation-create-initial");
+  const created = checkExpectedStatus(firstResponse, 201, "duplicate initial create status is 201", "duplicate-reservation-create-initial");
+  if (!created) {
+    return;
+  }
+
+  const duplicateResponse = createReservation(pair.duplicate, "duplicate-reservation-create-retry");
+  checkExpectedStatus(
+    duplicateResponse,
+    409,
+    "duplicate retry status is 409",
+    "duplicate-reservation-create-retry",
+  );
+}
+
+function createReservation(combination, tagName) {
+  const stay = buildReservationStayWindow(combination);
+  const requestId = `${tagName}-${Date.now()}-${__VU}-${__ITER}`;
+
+  return http.post(
+    `${BASE_URL}/api/v1/customer/reservations`,
+    JSON.stringify({
+      propertyId: combination.propertyId,
+      roomTypeId: combination.roomTypeId,
+      checkIn: stay.checkIn,
+      checkOut: stay.checkOut,
+      numberOfGuests: combination.guests,
+      guestName: `loadtest guest ${requestId}`,
+      guestPhone: `010${String(__VU).padStart(4, "0")}${String(__ITER % 10000).padStart(4, "0")}`,
+      guestEmail: `loadtest-guest-${requestId}@example.com`,
+    }),
+    {
+      headers: authJsonHeaders(combination.session, "customer", tagName),
+      tags: { name: tagName },
+    },
+  );
 }
 
 function runMyReservationsFlow(data) {
@@ -502,15 +624,9 @@ function pickSession(sessions) {
   return sessions[(__VU + __ITER) % sessions.length];
 }
 
-function buildReservationStayWindow() {
-  const sequence = __VU * 1000000 + __ITER;
-  const stay = selectStayWindowOffsets({
-    sequence,
-    checkInOffsets: CHECK_IN_OFFSETS,
-    nightsPool: NIGHTS_POOL,
-  });
-  const checkIn = addDaysFromNow(stay.checkInOffset);
-  const checkOut = addDaysFromNow(stay.checkInOffset + stay.nights);
+function buildReservationStayWindow(combination) {
+  const checkIn = addDaysFromNow(combination.checkInOffset);
+  const checkOut = addDaysFromNow(combination.checkInOffset + combination.nights);
   return {
     checkIn: formatDate(checkIn),
     checkOut: formatDate(checkOut),
@@ -520,6 +636,10 @@ function buildReservationStayWindow() {
 function currentIterationInTest() {
   const iterationInTest = exec && exec.scenario && exec.scenario.iterationInTest;
   return Number.isInteger(iterationInTest) ? iterationInTest : __ITER;
+}
+
+function currentReservationSequence(flowSequence) {
+  return RESERVATION_SEQUENCE_OFFSET + flowSequence;
 }
 
 function addDaysFromNow(days) {

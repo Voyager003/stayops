@@ -16,6 +16,8 @@
 - 내 예약 조회
 - PMS 예약 목록 조회
 - PMS PENDING 예약 수동 확정은 별도 one-shot 모드에서 실행
+- 중복 예약 거절은 별도 duplicate-reservation 모드에서 실행
+- stress 테스트
 - breakpoint 탐색
 - MongoDB overload 실험
 
@@ -107,7 +109,7 @@ read-heavy 숙소 조회 부하다.
 
 ### `stayops-cuj-load.js`
 
-고객 핵심 여정 baseline / step-load 용도다.
+고객 핵심 여정 smoke / average-load / stress / step-load 용도다.
 
 기본 mix:
 
@@ -121,9 +123,19 @@ read-heavy 숙소 조회 부하다.
 인증이 필요한 요청은 고객 계정 풀로 로그인한 뒤 세션 쿠키를 사용한다.
 결제 확인 API까지 호출한다. App 서버는 loadtest payment gateway를 켜야 외부 Toss를 호출하지 않는다.
 
+`CUJ_RATE`는 HTTP RPS가 아니라 초당 핵심 사용자 여정 iteration 목표값이다. 각 iteration이 선택한 flow에 따라
+HTTP 요청 수가 1개 또는 2개 이상이 될 수 있으므로 실제 HTTP RPS는 k6 결과의 `http_reqs`로 확인한다.
+
+예약 생성은 서버의 중복 기준인 `memberId + roomTypeId + checkIn + checkOut` 조합이 반복되지 않도록
+재현 가능한 weighted schedule과 예약 전용 sequence를 사용한다. 같은 `LOADTEST_RUN_ID`로 write-heavy 테스트를
+반복 실행할 때는 cleanup/reseed를 먼저 수행하거나 `RESERVATION_SEQUENCE_OFFSET`으로 이미 사용한 조합 범위를 건너뛴다.
+
 baseline / step-load 기본값에서는 PMS 수동 확정을 실행하지 않는다. 같은 PENDING 예약을 반복 확정하면
 비즈니스 상태 충돌이 발생하므로, PMS 확정은 `MODE=pms-confirm`에서 각 pending 예약을 한 번씩만 확정한다.
 실패 응답 본문을 k6 터미널에 남겨야 할 때는 `LOG_UNEXPECTED_RESPONSES=true`를 추가한다.
+
+중복 예약은 baseline / stress / breakpoint에 섞지 않는다. `MODE=duplicate-reservation`에서만 첫 예약 `201`,
+동일 조건 재시도 `409 DUPLICATE_RESERVATION`을 기대 성공으로 검증한다.
 
 ### `stayops-breakpoint-load.js`
 
@@ -195,12 +207,51 @@ OWNER_COUNT=10 \
 k6 run stayops-cuj-load.js
 ```
 
+이전 baseline에서 만든 예약 데이터를 유지하고 다음 예약 조합부터 이어서 쓰려면:
+
+```bash
+LOADTEST_RUN_ID=run-001 \
+RESERVATION_SEQUENCE_OFFSET=2000 \
+CUJ_RATE=10 \
+CUSTOMER_COUNT=30 \
+OWNER_COUNT=10 \
+k6 run stayops-cuj-load.js
+```
+
+### CUJ stress
+
+`CUJ_RATE`의 150%를 기본 stress 부하로 사용한다. `CUJ_RATE=10`이면 목표 rate는 `15`다.
+
+```bash
+MODE=stress \
+LOADTEST_RUN_ID=run-001 \
+CUJ_RATE=10 \
+STRESS_RATE_MULTIPLIER=1.5 \
+CUSTOMER_COUNT=30 \
+OWNER_COUNT=10 \
+k6 run stayops-cuj-load.js
+```
+
 ### CUJ step-load
 
 ```bash
 MODE=step-load \
 LOADTEST_RUN_ID=run-001 \
 CUJ_STEP_RATES=5,10,20,40,80 \
+CUSTOMER_COUNT=30 \
+OWNER_COUNT=10 \
+k6 run stayops-cuj-load.js
+```
+
+### Duplicate reservation
+
+비즈니스 거절 성능 전용 테스트다. 첫 예약 생성은 `201`, 같은 고객 / room type / check-in / check-out 재요청은 `409`가 정상이다.
+
+```bash
+MODE=duplicate-reservation \
+LOADTEST_RUN_ID=run-001 \
+DUPLICATE_RESERVATION_ITERATIONS=30 \
+DUPLICATE_RESERVATION_VUS=5 \
 CUSTOMER_COUNT=30 \
 OWNER_COUNT=10 \
 k6 run stayops-cuj-load.js
