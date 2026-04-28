@@ -15,7 +15,7 @@
 - 결제 확인 API 호출
 - 내 예약 조회
 - PMS 예약 목록 조회
-- PMS PENDING 예약 수동 확정
+- PMS PENDING 예약 수동 확정은 별도 one-shot 모드에서 실행
 - breakpoint 탐색
 - MongoDB overload 실험
 
@@ -42,6 +42,9 @@ loadtest 전용 mock payment gateway를 사용한다. 기본값은 `toss`이며 
 - 고객 계정 30개
 - 재고 60일
 - 기존 예약 / 결제 5,000건
+
+k6 예약 생성 날짜는 seed inventory 범위 안에서만 선택된다. 기본값 기준 `CHECK_IN_OFFSETS=3,5,7,14,21,30,45`,
+`NIGHTS_POOL=1,2,3`, `LOADTEST_INVENTORY_DAYS=60`을 사용한다.
 
 안정 확인 후 `10,000 -> 20,000 -> 50,000` 순서로 올린다.
 
@@ -108,24 +111,19 @@ read-heavy 숙소 조회 부하다.
 
 기본 mix:
 
-- `25%` 숙소 목록 조회
-- `20%` 숙소 상세 + 객실 타입 조회
-- `25%` offers 조회
-- `20%` 예약 생성
-- `10%` 내 예약 조회
-
-인증이 필요한 요청은 고객 계정 풀로 로그인한 뒤 세션 쿠키를 사용한다.
-결제 확인 API까지 호출한다. App 서버는 loadtest payment gateway를 켜야 외부 Toss를 호출하지 않는다.
-
-권장 mix:
-
 - `20%` 숙소 목록 조회
 - `15%` 숙소 상세 + 객실 타입 조회
 - `20%` offers 조회
 - `20%` 고객 예약 생성 + 결제 확인
 - `10%` 내 예약 조회
 - `12%` PMS 예약 목록 조회
-- `3%` PMS PENDING 예약 수동 확정
+
+인증이 필요한 요청은 고객 계정 풀로 로그인한 뒤 세션 쿠키를 사용한다.
+결제 확인 API까지 호출한다. App 서버는 loadtest payment gateway를 켜야 외부 Toss를 호출하지 않는다.
+
+baseline / step-load 기본값에서는 PMS 수동 확정을 실행하지 않는다. 같은 PENDING 예약을 반복 확정하면
+비즈니스 상태 충돌이 발생하므로, PMS 확정은 `MODE=pms-confirm`에서 각 pending 예약을 한 번씩만 확정한다.
+실패 응답 본문을 k6 터미널에 남겨야 할 때는 `LOG_UNEXPECTED_RESPONSES=true`를 추가한다.
 
 ### `stayops-breakpoint-load.js`
 
@@ -172,6 +170,20 @@ CUSTOMER_COUNT=30 \
 OWNER_COUNT=10 \
 k6 run stayops-cuj-load.js
 ```
+
+### PMS confirm one-shot
+
+```bash
+MODE=pms-confirm \
+LOADTEST_RUN_ID=run-001 \
+PMS_CONFIRM_ITERATIONS=100 \
+PMS_CONFIRM_VUS=10 \
+CUSTOMER_COUNT=30 \
+OWNER_COUNT=10 \
+k6 run stayops-cuj-load.js
+```
+
+`PMS_CONFIRM_ITERATIONS`는 확정할 PENDING 예약 수 이하로 둔다. 초과분은 요청을 보내지 않고 종료한다.
 
 ### CUJ baseline
 

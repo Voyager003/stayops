@@ -38,6 +38,10 @@ function long(value) {
   return NumberLong(String(value));
 }
 
+function persistedVersion() {
+  return long(1);
+}
+
 function ymd(date) {
   return date.toISOString().slice(0, 10);
 }
@@ -62,7 +66,7 @@ for (let i = 1; i <= propertyCount; i += 1) {
     propertyAccess: [{ propertyId: `${prefix}-property-${String(i).padStart(4, "0")}`, role: "OWNER" }],
     status: "ACTIVE",
     lastLoginAt: null,
-    version: long(0),
+    version: persistedVersion(),
     createdAt: now,
     updatedAt: now,
     _class: "com.stayops.member.infrastructure.persistence.MemberDocument",
@@ -78,7 +82,7 @@ for (let i = 1; i <= customerCount; i += 1) {
     propertyAccess: [],
     status: "ACTIVE",
     lastLoginAt: null,
-    version: long(0),
+    version: persistedVersion(),
     createdAt: now,
     updatedAt: now,
     _class: "com.stayops.member.infrastructure.persistence.MemberDocument",
@@ -117,7 +121,7 @@ for (let p = 1; p <= propertyCount; p += 1) {
     status: "ACTIVE",
     timezone: "Asia/Seoul",
     currency: "KRW",
-    version: long(0),
+    version: persistedVersion(),
     createdAt: now,
     updatedAt: now,
     _class: "com.stayops.property.infrastructure.persistence.PropertyDocument",
@@ -132,7 +136,7 @@ for (let p = 1; p <= propertyCount; p += 1) {
     commissionRate: NumberDecimal("0.0"),
     connectionInfo: null,
     status: "ACTIVE",
-    version: long(0),
+    version: persistedVersion(),
     createdAt: now,
     updatedAt: now,
     _class: "com.stayops.channel.infrastructure.persistence.ChannelDocument",
@@ -154,7 +158,7 @@ for (let p = 1; p <= propertyCount; p += 1) {
         currency: "KRW",
       },
       amenities: ["Wi-Fi", "TV", "AC"],
-      version: long(0),
+      version: persistedVersion(),
       createdAt: now,
       updatedAt: now,
       _class: "com.stayops.room.infrastructure.persistence.RoomTypeDocument",
@@ -170,7 +174,7 @@ for (let p = 1; p <= propertyCount; p += 1) {
         floor: r,
         status: "AVAILABLE",
         memo: null,
-        version: long(0),
+        version: persistedVersion(),
         createdAt: now,
         updatedAt: now,
         _class: "com.stayops.room.infrastructure.persistence.RoomDocument",
@@ -187,7 +191,7 @@ for (let p = 1; p <= propertyCount; p += 1) {
         totalCount: roomCount,
         reservedCount: 0,
         blockedCount: 0,
-        version: long(0),
+        version: persistedVersion(),
         createdAt: now,
         updatedAt: now,
         _class: "com.stayops.inventory.infrastructure.persistence.RoomInventoryDocument",
@@ -230,7 +234,7 @@ for (let i = 1; i <= reservationCount; i += 1) {
     totalSpendAmount: long(amountValue),
     lastVisitDate: checkIn,
     averageStayNights: 1,
-    version: long(0),
+    version: persistedVersion(),
     createdAt: now,
     updatedAt: now,
     _class: "com.stayops.guest.infrastructure.persistence.GuestDocument",
@@ -266,7 +270,7 @@ for (let i = 1; i <= reservationCount; i += 1) {
     },
     memberId: customerId,
     expiresAt: i % 4 === 0 ? addDays(1) : null,
-    version: long(0),
+    version: persistedVersion(),
     createdAt: now,
     updatedAt: now,
     _class: "com.stayops.reservation.infrastructure.persistence.ReservationDocument",
@@ -284,7 +288,7 @@ for (let i = 1; i <= reservationCount; i += 1) {
     method: i % 4 === 0 ? null : "CARD",
     failReason: null,
     approvedAt: i % 4 === 0 ? null : now,
-    version: long(0),
+    version: persistedVersion(),
     createdAt: now,
     updatedAt: now,
     _class: "com.stayops.payment.infrastructure.persistence.PaymentDocument",
