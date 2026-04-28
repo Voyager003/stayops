@@ -1,17 +1,34 @@
 import { envInt, parseIntCsv } from "./common.js";
-import { buildArrivalRateOptions, buildSmokeOptions, runCujIteration, setupCujData } from "./cuj-flow.js";
+import {
+  buildArrivalRateOptions,
+  buildPmsConfirmOptions,
+  buildSmokeOptions,
+  runCujIteration,
+  runPmsConfirmOnceIteration,
+  setupCujData,
+} from "./cuj-flow.js";
 
 const MODE = __ENV.MODE || "baseline";
 const CUJ_RATE = envInt("CUJ_RATE", 10);
 const CUJ_PRE_ALLOCATED_VUS = envInt("CUJ_PRE_ALLOCATED_VUS", 30);
 const CUJ_MAX_VUS = envInt("CUJ_MAX_VUS", 150);
 const CUJ_STEP_RATES = parseIntCsv(__ENV.CUJ_STEP_RATES || "5,10,20,40,80");
+const PMS_CONFIRM_ITERATIONS = envInt("PMS_CONFIRM_ITERATIONS", 100);
+const PMS_CONFIRM_VUS = envInt("PMS_CONFIRM_VUS", 10);
 
 export const options = buildOptions();
 
 function buildOptions() {
   if (MODE === "smoke") {
     return buildSmokeOptions();
+  }
+
+  if (MODE === "pms-confirm") {
+    return buildPmsConfirmOptions({
+      iterations: PMS_CONFIRM_ITERATIONS,
+      vus: PMS_CONFIRM_VUS,
+      maxDuration: "10m",
+    });
   }
 
   if (MODE === "step-load") {
@@ -40,5 +57,10 @@ export function setup() {
 }
 
 export default function (data) {
+  if (MODE === "pms-confirm") {
+    runPmsConfirmOnceIteration(data);
+    return;
+  }
+
   runCujIteration(data);
 }

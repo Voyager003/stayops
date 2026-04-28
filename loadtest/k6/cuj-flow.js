@@ -1,5 +1,6 @@
 import http from "k6/http";
 import { check, fail, sleep } from "k6";
+import exec from "k6/execution";
 import {
   BASE_URL,
   buildSequentialList,
@@ -13,6 +14,11 @@ import {
   pickRandom,
   pickWeighted,
 } from "./common.js";
+import {
+  assertStayWindowWithinInventory,
+  pickUniquePendingReservation,
+  selectStayWindowOffsets,
+} from "./cuj-policy.js";
 
 const RUN_ID = envString("LOADTEST_RUN_ID", "run-001");
 const PREFIX = envString("LOADTEST_PREFIX", `loadtest-${RUN_ID}`);
@@ -25,6 +31,8 @@ const CUSTOMER_PASSWORD = envString("CUSTOMER_PASSWORD", "password123");
 const OWNER_PASSWORD = envString("OWNER_PASSWORD", CUSTOMER_PASSWORD);
 const HOT_PROPERTY_COUNT = envInt("HOT_PROPERTY_COUNT", 10);
 const THINK_TIME = envFloat("CUJ_THINK_TIME", 0.5);
+const LOADTEST_INVENTORY_DAYS = envInt("LOADTEST_INVENTORY_DAYS", 60);
+const LOG_UNEXPECTED_RESPONSES = envString("LOG_UNEXPECTED_RESPONSES", "false") === "true";
 
 const SEARCH_RATE = envFloat("SEARCH_RATE", 0.20);
 const DETAIL_RATE = envFloat("DETAIL_RATE", 0.15);
@@ -32,11 +40,16 @@ const OFFERS_RATE = envFloat("OFFERS_RATE", 0.20);
 const RESERVATION_CREATE_RATE = envFloat("RESERVATION_CREATE_RATE", 0.20);
 const MY_RESERVATIONS_RATE = envFloat("MY_RESERVATIONS_RATE", 0.10);
 const PMS_LIST_RATE = envFloat("PMS_LIST_RATE", 0.12);
-const PMS_CONFIRM_RATE = envFloat("PMS_CONFIRM_RATE", 0.03);
+const PMS_CONFIRM_RATE = envFloat("PMS_CONFIRM_RATE", 0);
 
-const CHECK_IN_OFFSETS = parseIntCsv(__ENV.CHECK_IN_OFFSETS || "3,5,7,14,21,30,45,60");
+const CHECK_IN_OFFSETS = parseIntCsv(__ENV.CHECK_IN_OFFSETS || "3,5,7,14,21,30,45");
 const NIGHTS_POOL = parseIntCsv(__ENV.NIGHTS_POOL || "1,2,3");
 const GUESTS_POOL = parseIntCsv(__ENV.GUESTS_POOL || "1,2,3,4");
+assertStayWindowWithinInventory({
+  checkInOffsets: CHECK_IN_OFFSETS,
+  nightsPool: NIGHTS_POOL,
+  inventoryDays: LOADTEST_INVENTORY_DAYS,
+});
 const NORMALIZED = normalizeCujWeights();
 
 export function buildThresholds() {
@@ -81,6 +94,20 @@ export function buildSmokeOptions() {
         executor: "constant-vus",
         vus: 1,
         duration: "30s",
+      },
+    },
+  };
+}
+
+export function buildPmsConfirmOptions({ iterations, vus, maxDuration }) {
+  return {
+    thresholds: buildThresholds(),
+    scenarios: {
+      pms_confirm_once: {
+        executor: "shared-iterations",
+        vus,
+        iterations,
+        maxDuration,
       },
     },
   };
@@ -158,6 +185,11 @@ export function runCujIteration(data) {
     runPmsConfirmFlow(data);
   }
 
+  sleep(THINK_TIME);
+}
+
+export function runPmsConfirmOnceIteration(data) {
+  runPmsConfirmFlow(data);
   sleep(THINK_TIME);
 }
 
@@ -267,6 +299,33 @@ function collectPendingReservations(ownerSessions) {
   return pending;
 }
 
+function checkExpectedStatus(response, expectedStatus, checkName, context) {
+  const ok = check(response, {
+    [checkName]: (r) => r.status === expectedStatus,
+  });
+  if (!ok) {
+    logUnexpectedResponse(context, response, expectedStatus);
+  }
+  return ok;
+}
+
+function logUnexpectedResponse(context, response, expectedStatus) {
+  if (!LOG_UNEXPECTED_RESPONSES) {
+    return;
+  }
+
+  const body = typeof response.body === "string" ? response.body.slice(0, 500) : "";
+  console.error(
+    JSON.stringify({
+      experimentId: EXPERIMENT_ID,
+      context,
+      expectedStatus,
+      actualStatus: response.status,
+      body,
+    }),
+  );
+}
+
 function extractSessionCookie(response, jar) {
   const session = response.cookies && response.cookies.SESSION && response.cookies.SESSION[0];
   if (session && session.value) {
@@ -295,8 +354,8 @@ function runSearchFlow() {
     headers: loadtestHeaders("customer", "customer-properties-list"),
   });
 
+  checkExpectedStatus(response, 200, "property list status is 200", "customer-properties-list");
   check(response, {
-    "property list status is 200": (r) => r.status === 200,
     "property list returns array": (r) => r.status === 200 && Array.isArray(r.json()),
   });
 }
@@ -308,17 +367,15 @@ function runDetailFlow(data) {
     headers: loadtestHeaders("customer", "customer-property-detail"),
   });
 
-  check(propertyResponse, {
-    "property detail status is 200": (r) => r.status === 200,
-  });
+  checkExpectedStatus(propertyResponse, 200, "property detail status is 200", "customer-property-detail");
 
   const roomTypeResponse = http.get(`${BASE_URL}/api/v1/customer/properties/${propertyId}/room-types`, {
     tags: { name: "customer-room-types" },
     headers: loadtestHeaders("customer", "customer-room-types"),
   });
 
+  checkExpectedStatus(roomTypeResponse, 200, "room types status is 200", "customer-room-types");
   check(roomTypeResponse, {
-    "room types status is 200": (r) => r.status === 200,
     "room types returns array": (r) => r.status === 200 && Array.isArray(r.json()),
   });
 }
@@ -336,8 +393,8 @@ function runOffersFlow(data) {
     },
   );
 
+  checkExpectedStatus(response, 200, "offers status is 200", "customer-property-offers");
   check(response, {
-    "offers status is 200": (r) => r.status === 200,
     "offers returns array": (r) => r.status === 200 && Array.isArray(r.json()),
   });
 }
@@ -368,9 +425,7 @@ function runReservationCreateAndPaymentFlow(data) {
     },
   );
 
-  const created = check(createResponse, {
-    "reservation create status is 201": (r) => r.status === 201,
-  });
+  const created = checkExpectedStatus(createResponse, 201, "reservation create status is 201", "customer-reservation-create");
   if (!created) {
     return;
   }
@@ -389,9 +444,7 @@ function runReservationCreateAndPaymentFlow(data) {
     },
   );
 
-  check(confirmResponse, {
-    "confirm payment status is 202": (r) => r.status === 202,
-  });
+  checkExpectedStatus(confirmResponse, 202, "confirm payment status is 202", "customer-confirm-payment");
 }
 
 function runMyReservationsFlow(data) {
@@ -401,8 +454,8 @@ function runMyReservationsFlow(data) {
     headers: authHeaders(session, "customer", "customer-my-reservations"),
   });
 
+  checkExpectedStatus(response, 200, "my reservations status is 200", "customer-my-reservations");
   check(response, {
-    "my reservations status is 200": (r) => r.status === 200,
     "my reservations returns array": (r) => r.status === 200 && Array.isArray(r.json()),
   });
 }
@@ -414,9 +467,7 @@ function runPmsReservationsListFlow(data) {
     headers: authHeaders(session, "pms", "pms-reservations-list"),
   });
 
-  check(response, {
-    "pms reservations list status is 200": (r) => r.status === 200,
-  });
+  checkExpectedStatus(response, 200, "pms reservations list status is 200", "pms-reservations-list");
 }
 
 function runPmsConfirmFlow(data) {
@@ -424,7 +475,11 @@ function runPmsConfirmFlow(data) {
     runPmsReservationsListFlow(data);
     return;
   }
-  const target = data.pendingReservations[(__VU + __ITER) % data.pendingReservations.length];
+  const target = pickUniquePendingReservation(data.pendingReservations, currentIterationInTest());
+  if (!target) {
+    runPmsReservationsListFlow(data);
+    return;
+  }
   const response = http.post(
     `${BASE_URL}/api/v1/properties/${target.propertyId}/reservations/${target.reservationId}/confirm`,
     null,
@@ -437,9 +492,7 @@ function runPmsConfirmFlow(data) {
     },
   );
 
-  check(response, {
-    "pms reservation confirm status is 200": (r) => r.status === 200,
-  });
+  checkExpectedStatus(response, 200, "pms reservation confirm status is 200", "pms-reservation-confirm");
 }
 
 function pickSession(sessions) {
@@ -451,12 +504,22 @@ function pickSession(sessions) {
 
 function buildReservationStayWindow() {
   const sequence = __VU * 1000000 + __ITER;
-  const checkIn = addDaysFromNow(3 + (sequence % 3650));
-  const checkOut = addDaysFromNow(3 + (sequence % 3650) + pickRandom(NIGHTS_POOL));
+  const stay = selectStayWindowOffsets({
+    sequence,
+    checkInOffsets: CHECK_IN_OFFSETS,
+    nightsPool: NIGHTS_POOL,
+  });
+  const checkIn = addDaysFromNow(stay.checkInOffset);
+  const checkOut = addDaysFromNow(stay.checkInOffset + stay.nights);
   return {
     checkIn: formatDate(checkIn),
     checkOut: formatDate(checkOut),
   };
+}
+
+function currentIterationInTest() {
+  const iterationInTest = exec && exec.scenario && exec.scenario.iterationInTest;
+  return Number.isInteger(iterationInTest) ? iterationInTest : __ITER;
 }
 
 function addDaysFromNow(days) {
