@@ -9,14 +9,14 @@ const idRegex = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
 const emailRegex = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(customer|owner)-`);
 
 const deletes = [
-  ["payments", { _id: idRegex }],
-  ["payment_outbox_messages", { _id: idRegex }],
-  ["reservations", { _id: idRegex }],
-  ["guests", { _id: idRegex }],
-  ["room_inventories", { _id: idRegex }],
-  ["rooms", { _id: idRegex }],
-  ["room_types", { _id: idRegex }],
-  ["channels", { _id: idRegex }],
+  ["payment_outbox_messages", { $or: [{ _id: idRegex }, { memberId: idRegex }] }],
+  ["payments", { $or: [{ _id: idRegex }, { memberId: idRegex }] }],
+  ["reservations", { $or: [{ _id: idRegex }, { memberId: idRegex }, { propertyId: idRegex }] }],
+  ["guests", { $or: [{ _id: idRegex }, { propertyId: idRegex }] }],
+  ["room_inventories", { $or: [{ _id: idRegex }, { propertyId: idRegex }] }],
+  ["rooms", { $or: [{ _id: idRegex }, { propertyId: idRegex }] }],
+  ["room_types", { $or: [{ _id: idRegex }, { propertyId: idRegex }] }],
+  ["channels", { $or: [{ _id: idRegex }, { propertyId: idRegex }] }],
   ["properties", { _id: idRegex }],
   ["members", { $or: [{ _id: idRegex }, { email: emailRegex }] }],
   ["loadtest_runs", { _id: prefix }],
