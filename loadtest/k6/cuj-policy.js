@@ -18,6 +18,26 @@ export function assertStayWindowWithinInventory({ checkInOffsets, nightsPool, in
   }
 }
 
+export function assertStayWindowsDisjoint({ seedStartOffset, seedDaySpan, seedNights = 1, checkInOffsets, nightsPool }) {
+  assertPositiveInteger(seedStartOffset, "seedStartOffset");
+  assertPositiveInteger(seedDaySpan, "seedDaySpan");
+  assertPositiveInteger(seedNights, "seedNights");
+  assertNonEmptyArray(checkInOffsets, "checkInOffsets");
+  assertNonEmptyArray(nightsPool, "nightsPool");
+
+  const writeKeys = new Set(checkInOffsets.flatMap((offset) => nightsPool.map((nights) => stayKey(offset, nights))));
+  for (let index = 0; index < seedDaySpan; index += 1) {
+    const seedOffset = seedStartOffset + index;
+    const key = stayKey(seedOffset, seedNights);
+    if (writeKeys.has(key)) {
+      throw new Error(
+        `Seed reservation window overlaps k6 write window: checkInOffset=${seedOffset}, nights=${seedNights}. ` +
+          "Move LOADTEST_SEED_RESERVATION_START_OFFSET/DAY_SPAN or CHECK_IN_OFFSETS/NIGHTS_POOL.",
+      );
+    }
+  }
+}
+
 export function selectStayWindowOffsets({ sequence, checkInOffsets, nightsPool }) {
   if (!Array.isArray(checkInOffsets) || checkInOffsets.length === 0) {
     throw new Error("CHECK_IN_OFFSETS must contain at least one offset.");
@@ -31,6 +51,40 @@ export function selectStayWindowOffsets({ sequence, checkInOffsets, nightsPool }
     checkInOffset: checkInOffsets[normalizedSequence % checkInOffsets.length],
     nights: nightsPool[Math.floor(normalizedSequence / checkInOffsets.length) % nightsPool.length],
   };
+}
+
+export function estimateRampingArrivalIterations({ startRate, stages }) {
+  if (!Number.isFinite(startRate) || startRate < 0) {
+    throw new Error("startRate must be a non-negative number.");
+  }
+  assertNonEmptyArray(stages, "stages");
+
+  let previousRate = startRate;
+  let iterations = 0;
+  for (const stage of stages) {
+    if (!Number.isFinite(stage.target) || stage.target < 0) {
+      throw new Error("stage.target must be a non-negative number.");
+    }
+    const durationSeconds = parseDurationSeconds(stage.duration);
+    iterations += ((previousRate + stage.target) / 2) * durationSeconds;
+    previousRate = stage.target;
+  }
+
+  return Math.ceil(iterations);
+}
+
+export function countScheduledFlowOccurrences(schedule, value, totalIterations) {
+  assertNonEmptyArray(schedule, "schedule");
+  if (!Number.isInteger(totalIterations) || totalIterations < 0) {
+    throw new Error("totalIterations must be a non-negative integer.");
+  }
+
+  const occurrencesPerCycle = schedule.filter((item) => item === value).length;
+  const fullCycles = Math.floor(totalIterations / schedule.length);
+  const remainder = totalIterations % schedule.length;
+  const remainderOccurrences = schedule.slice(0, remainder).filter((item) => item === value).length;
+
+  return fullCycles * occurrencesPerCycle + remainderOccurrences;
 }
 
 export function buildWeightedFlowSchedule(weightedItems, slotCount = 100) {
@@ -131,6 +185,26 @@ export function countUniqueReservationCombinations({ customerSessions, bookableR
   return customerSessions.length * bookableRoomTypes.length * checkInOffsets.length * nightsPool.length;
 }
 
+export function assertReservationCapacity({ capacity, requiredCreates, sequenceOffset = 0 }) {
+  if (!Number.isInteger(capacity) || capacity < 0) {
+    throw new Error("capacity must be a non-negative integer.");
+  }
+  if (!Number.isInteger(requiredCreates) || requiredCreates < 0) {
+    throw new Error("requiredCreates must be a non-negative integer.");
+  }
+  if (!Number.isInteger(sequenceOffset) || sequenceOffset < 0) {
+    throw new Error("sequenceOffset must be a non-negative integer.");
+  }
+
+  const requiredEndExclusive = sequenceOffset + requiredCreates;
+  if (requiredEndExclusive > capacity) {
+    throw new Error(
+      `Reservation combination capacity exhausted. requiredEndExclusive=${requiredEndExclusive}, capacity=${capacity}. ` +
+        "Increase CUSTOMER_COUNT/HOT_PROPERTY_COUNT/CHECK_IN_OFFSETS/NIGHTS_POOL, lower test rate/duration, or cleanup/reseed.",
+    );
+  }
+}
+
 export function selectUniqueReservationCombination({
   sequence,
   customerSessions,
@@ -216,4 +290,38 @@ function assertNonEmptyArray(value, name) {
   if (!Array.isArray(value) || value.length === 0) {
     throw new Error(`${name} must contain at least one item.`);
   }
+}
+
+function assertPositiveInteger(value, name) {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer.`);
+  }
+}
+
+function stayKey(checkInOffset, nights) {
+  return `${checkInOffset}:${nights}`;
+}
+
+function parseDurationSeconds(duration) {
+  if (typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
+    return duration;
+  }
+
+  const match = typeof duration === "string" ? duration.trim().match(/^(\d+(?:\.\d+)?)(ms|s|m|h)$/) : null;
+  if (!match) {
+    throw new Error(`Unsupported duration: ${duration}`);
+  }
+
+  const value = Number.parseFloat(match[1]);
+  const unit = match[2];
+  if (unit === "ms") {
+    return value / 1000;
+  }
+  if (unit === "s") {
+    return value;
+  }
+  if (unit === "m") {
+    return value * 60;
+  }
+  return value * 3600;
 }

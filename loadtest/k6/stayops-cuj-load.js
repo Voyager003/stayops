@@ -5,6 +5,8 @@ import {
   buildPmsConfirmOptions,
   buildSmokeOptions,
   configureDuplicateReservationResponses,
+  estimateReservationCreatesForArrivalPlan,
+  estimateReservationCreatesForIterationCount,
   runCujIteration,
   runDuplicateReservationIteration,
   runPmsConfirmOnceIteration,
@@ -23,71 +25,95 @@ const PMS_CONFIRM_ITERATIONS = envInt("PMS_CONFIRM_ITERATIONS", 100);
 const PMS_CONFIRM_VUS = envInt("PMS_CONFIRM_VUS", 10);
 const DUPLICATE_RESERVATION_ITERATIONS = envInt("DUPLICATE_RESERVATION_ITERATIONS", 30);
 const DUPLICATE_RESERVATION_VUS = envInt("DUPLICATE_RESERVATION_VUS", 5);
+const SMOKE_EXPECTED_ITERATIONS = envInt("SMOKE_EXPECTED_ITERATIONS", 100);
 
 if (MODE === "duplicate-reservation") {
   configureDuplicateReservationResponses();
 }
 
-export const options = buildOptions();
+const RUN_PLAN = buildRunPlan();
 
-function buildOptions() {
+export const options = RUN_PLAN.options;
+
+function buildRunPlan() {
   if (MODE === "smoke") {
-    return buildSmokeOptions();
+    return {
+      options: buildSmokeOptions(),
+      plannedReservationCreates: estimateReservationCreatesForIterationCount(SMOKE_EXPECTED_ITERATIONS),
+    };
   }
 
   if (MODE === "pms-confirm") {
-    return buildPmsConfirmOptions({
-      iterations: PMS_CONFIRM_ITERATIONS,
-      vus: PMS_CONFIRM_VUS,
-      maxDuration: "10m",
-    });
+    return {
+      options: buildPmsConfirmOptions({
+        iterations: PMS_CONFIRM_ITERATIONS,
+        vus: PMS_CONFIRM_VUS,
+        maxDuration: "10m",
+      }),
+      plannedReservationCreates: 0,
+    };
   }
 
   if (MODE === "duplicate-reservation") {
-    return buildDuplicateReservationOptions({
-      iterations: DUPLICATE_RESERVATION_ITERATIONS,
-      vus: DUPLICATE_RESERVATION_VUS,
-      maxDuration: "10m",
-    });
+    return {
+      options: buildDuplicateReservationOptions({
+        iterations: DUPLICATE_RESERVATION_ITERATIONS,
+        vus: DUPLICATE_RESERVATION_VUS,
+        maxDuration: "10m",
+      }),
+      plannedReservationCreates: DUPLICATE_RESERVATION_ITERATIONS,
+    };
   }
 
   if (MODE === "stress") {
     const stressRate = Math.ceil(CUJ_RATE * STRESS_RATE_MULTIPLIER);
-    return buildArrivalRateOptions({
-      startRate: 1,
-      preAllocatedVUs: STRESS_PRE_ALLOCATED_VUS,
-      maxVUs: STRESS_MAX_VUS,
-      stages: [
-        { target: stressRate, duration: "5m" },
-        { target: stressRate, duration: "35m" },
-        { target: 0, duration: "5m" },
-      ],
-    });
+    const stages = [
+      { target: stressRate, duration: "5m" },
+      { target: stressRate, duration: "35m" },
+      { target: 0, duration: "5m" },
+    ];
+    return {
+      options: buildArrivalRateOptions({
+        startRate: 1,
+        preAllocatedVUs: STRESS_PRE_ALLOCATED_VUS,
+        maxVUs: STRESS_MAX_VUS,
+        stages,
+      }),
+      plannedReservationCreates: estimateReservationCreatesForArrivalPlan({ startRate: 1, stages }),
+    };
   }
 
   if (MODE === "step-load") {
-    return buildArrivalRateOptions({
-      startRate: CUJ_STEP_RATES[0],
-      preAllocatedVUs: CUJ_PRE_ALLOCATED_VUS,
-      maxVUs: CUJ_MAX_VUS,
-      stages: CUJ_STEP_RATES.map((rate) => ({ target: rate, duration: "5m" })).concat([{ target: 0, duration: "1m" }]),
-    });
+    const stages = CUJ_STEP_RATES.map((rate) => ({ target: rate, duration: "5m" })).concat([{ target: 0, duration: "1m" }]);
+    return {
+      options: buildArrivalRateOptions({
+        startRate: CUJ_STEP_RATES[0],
+        preAllocatedVUs: CUJ_PRE_ALLOCATED_VUS,
+        maxVUs: CUJ_MAX_VUS,
+        stages,
+      }),
+      plannedReservationCreates: estimateReservationCreatesForArrivalPlan({ startRate: CUJ_STEP_RATES[0], stages }),
+    };
   }
 
-  return buildArrivalRateOptions({
-    startRate: 1,
-    preAllocatedVUs: CUJ_PRE_ALLOCATED_VUS,
-    maxVUs: CUJ_MAX_VUS,
-    stages: [
-      { target: CUJ_RATE, duration: "2m" },
-      { target: CUJ_RATE, duration: "10m" },
-      { target: 0, duration: "1m" },
-    ],
-  });
+  const stages = [
+    { target: CUJ_RATE, duration: "2m" },
+    { target: CUJ_RATE, duration: "10m" },
+    { target: 0, duration: "1m" },
+  ];
+  return {
+    options: buildArrivalRateOptions({
+      startRate: 1,
+      preAllocatedVUs: CUJ_PRE_ALLOCATED_VUS,
+      maxVUs: CUJ_MAX_VUS,
+      stages,
+    }),
+    plannedReservationCreates: estimateReservationCreatesForArrivalPlan({ startRate: 1, stages }),
+  };
 }
 
 export function setup() {
-  return setupCujData();
+  return setupCujData({ plannedReservationCreates: RUN_PLAN.plannedReservationCreates });
 }
 
 export default function (data) {

@@ -6,6 +6,10 @@ import {
   buildBookableRoomTypes,
   buildWeightedFlowSchedule,
   countUniqueReservationCombinations,
+  assertReservationCapacity,
+  assertStayWindowsDisjoint,
+  countScheduledFlowOccurrences,
+  estimateRampingArrivalIterations,
   pickUniquePendingReservation,
   selectDuplicateReservationPair,
   selectScheduledFlow,
@@ -32,6 +36,32 @@ test("assertStayWindowWithinInventory rejects stays outside seeded inventory", (
         inventoryDays: 60,
       }),
     /exceeds seeded inventory range/,
+  );
+});
+
+test("assertStayWindowsDisjoint accepts seed reservations outside the k6 write window", () => {
+  assert.doesNotThrow(() =>
+    assertStayWindowsDisjoint({
+      seedStartOffset: 50,
+      seedDaySpan: 8,
+      seedNights: 1,
+      checkInOffsets: [3, 5, 7, 14, 21, 30, 45],
+      nightsPool: [1, 2, 3],
+    }),
+  );
+});
+
+test("assertStayWindowsDisjoint rejects seed reservations that occupy k6 write slots", () => {
+  assert.throws(
+    () =>
+      assertStayWindowsDisjoint({
+        seedStartOffset: 45,
+        seedDaySpan: 4,
+        seedNights: 1,
+        checkInOffsets: [3, 5, 7, 14, 21, 30, 45],
+        nightsPool: [1, 2, 3],
+      }),
+    /overlaps k6 write window/,
   );
 });
 
@@ -146,6 +176,88 @@ test("selectScheduledFlow returns compact per-flow sequences without spending sl
   }
 
   assert.deepEqual(createSequences, [0, 1, 2, 3]);
+});
+
+test("estimateRampingArrivalIterations calculates planned baseline iterations", () => {
+  assert.equal(
+    estimateRampingArrivalIterations({
+      startRate: 1,
+      stages: [
+        { target: 10, duration: "2m" },
+        { target: 10, duration: "10m" },
+        { target: 0, duration: "1m" },
+      ],
+    }),
+    6960,
+  );
+});
+
+test("countScheduledFlowOccurrences counts planned create flows from the deterministic schedule", () => {
+  assert.equal(countScheduledFlowOccurrences(["search", "createReservation", "detail", "createReservation"], "createReservation", 10), 5);
+});
+
+test("assertReservationCapacity rejects plans that would reuse success reservation slots", () => {
+  assert.throws(
+    () =>
+      assertReservationCapacity({
+        capacity: 10,
+        requiredCreates: 6,
+        sequenceOffset: 5,
+      }),
+    /Reservation combination capacity exhausted/,
+  );
+});
+
+test("default-sized synthetic data has enough success slots for breakpoint and overload plans", () => {
+  const defaultCheckInOffsets = Array.from({ length: 43 }, (_, index) => index + 3);
+  const capacity = countUniqueReservationCombinations({
+    customerSessions: Array.from({ length: 30 }, (_, index) => ({ email: `c${index}` })),
+    bookableRoomTypes: Array.from({ length: 40 }, (_, index) => ({ propertyId: `p${index}`, roomTypeId: `rt${index}` })),
+    checkInOffsets: defaultCheckInOffsets,
+    nightsPool: [1, 2, 3],
+  });
+  const breakpointIterations = estimateRampingArrivalIterations({
+    startRate: 20,
+    stages: [
+      { target: 20, duration: "5m" },
+      { target: 40, duration: "5m" },
+      { target: 80, duration: "5m" },
+      { target: 120, duration: "5m" },
+      { target: 160, duration: "5m" },
+      { target: 220, duration: "5m" },
+      { target: 0, duration: "1m" },
+    ],
+  });
+  const overloadIterations = estimateRampingArrivalIterations({
+    startRate: 160,
+    stages: [
+      { target: 160, duration: "3m" },
+      { target: 240, duration: "3m" },
+      { target: 320, duration: "3m" },
+      { target: 480, duration: "3m" },
+      { target: 0, duration: "1m" },
+    ],
+  });
+  const schedule = buildWeightedFlowSchedule(
+    [
+      { weight: 0.2, value: "search" },
+      { weight: 0.15, value: "detail" },
+      { weight: 0.2, value: "offers" },
+      { weight: 0.2, value: "createReservation" },
+      { weight: 0.1, value: "myReservations" },
+      { weight: 0.12, value: "pmsList" },
+    ],
+    100,
+  );
+
+  assertReservationCapacity({
+    capacity,
+    requiredCreates: countScheduledFlowOccurrences(schedule, "createReservation", breakpointIterations),
+  });
+  assertReservationCapacity({
+    capacity,
+    requiredCreates: countScheduledFlowOccurrences(schedule, "createReservation", overloadIterations),
+  });
 });
 
 test("selectDuplicateReservationPair reuses the duplicate-check key for the second create request", () => {

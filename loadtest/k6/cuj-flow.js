@@ -15,9 +15,12 @@ import {
 } from "./common.js";
 import {
   assertStayWindowWithinInventory,
+  assertReservationCapacity,
   buildBookableRoomTypes,
   buildWeightedFlowSchedule,
+  countScheduledFlowOccurrences,
   countUniqueReservationCombinations,
+  estimateRampingArrivalIterations,
   pickUniquePendingReservation,
   selectDuplicateReservationPair,
   selectScheduledFlow,
@@ -48,7 +51,8 @@ const MY_RESERVATIONS_RATE = envFloat("MY_RESERVATIONS_RATE", 0.10);
 const PMS_LIST_RATE = envFloat("PMS_LIST_RATE", 0.12);
 const PMS_CONFIRM_RATE = envFloat("PMS_CONFIRM_RATE", 0);
 
-const CHECK_IN_OFFSETS = parseIntCsv(__ENV.CHECK_IN_OFFSETS || "3,5,7,14,21,30,45");
+const DEFAULT_CHECK_IN_OFFSETS = "3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45";
+const CHECK_IN_OFFSETS = parseIntCsv(__ENV.CHECK_IN_OFFSETS || DEFAULT_CHECK_IN_OFFSETS);
 const NIGHTS_POOL = parseIntCsv(__ENV.NIGHTS_POOL || "1,2,3");
 const GUESTS_POOL = parseIntCsv(__ENV.GUESTS_POOL || "1,2,3,4");
 assertStayWindowWithinInventory({
@@ -142,7 +146,7 @@ export function configureDuplicateReservationResponses() {
   http.setResponseCallback(http.expectedStatuses({ min: 200, max: 399 }, 409));
 }
 
-export function setupCujData() {
+export function setupCujData({ plannedReservationCreates = 0 } = {}) {
   const propertyResponse = http.get(`${BASE_URL}/api/v1/customer/properties`, {
     tags: { name: "customer-properties-list-setup" },
     headers: loadtestHeaders("setup", "customer-properties-list"),
@@ -184,6 +188,11 @@ export function setupCujData() {
     checkInOffsets: CHECK_IN_OFFSETS,
     nightsPool: NIGHTS_POOL,
   });
+  assertReservationCapacity({
+    capacity: uniqueReservationCapacity,
+    requiredCreates: plannedReservationCreates,
+    sequenceOffset: RESERVATION_SEQUENCE_OFFSET,
+  });
 
   return {
     propertyIds: bookablePropertyIds,
@@ -194,6 +203,15 @@ export function setupCujData() {
     ownerSessions,
     pendingReservations,
   };
+}
+
+export function estimateReservationCreatesForArrivalPlan({ startRate, stages }) {
+  const plannedIterations = estimateRampingArrivalIterations({ startRate, stages });
+  return estimateReservationCreatesForIterationCount(plannedIterations);
+}
+
+export function estimateReservationCreatesForIterationCount(iterationCount) {
+  return countScheduledFlowOccurrences(FLOW_SCHEDULE, "createReservation", iterationCount);
 }
 
 export function runCujIteration(data) {

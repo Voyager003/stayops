@@ -6,6 +6,12 @@ const inventoryDays = parseInt(process.env.LOADTEST_INVENTORY_DAYS || "60", 10);
 const reservationCount = parseInt(process.env.LOADTEST_RESERVATION_COUNT || "5000", 10);
 const batchSize = parseInt(process.env.LOADTEST_BATCH_SIZE || "500", 10);
 const passwordHash = process.env.LOADTEST_PASSWORD_HASH || "$2a$10$n2sm6oAyceX3Q5cwTG05Je9k6rtLUbrX1s.cHmEeIEg59DuRs0AFu";
+const seedReservationStartOffset = parseInt(process.env.LOADTEST_SEED_RESERVATION_START_OFFSET || "50", 10);
+const seedReservationDaySpan = parseInt(process.env.LOADTEST_SEED_RESERVATION_DAY_SPAN || "8", 10);
+const seedReservationNights = parseInt(process.env.LOADTEST_SEED_RESERVATION_NIGHTS || "1", 10);
+const defaultWriteCheckInOffsets = "3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45";
+const writeCheckInOffsets = parseIntCsv(process.env.LOADTEST_WRITE_CHECK_IN_OFFSETS || process.env.CHECK_IN_OFFSETS || defaultWriteCheckInOffsets);
+const writeNightsPool = parseIntCsv(process.env.LOADTEST_WRITE_NIGHTS_POOL || process.env.NIGHTS_POOL || "1,2,3");
 
 const database = db.getSiblingDB(process.env.LOADTEST_DB || "stayops");
 const now = new Date();
@@ -17,6 +23,9 @@ const createdIds = {
   inventoryDays,
   reservationCount,
   batchSize,
+  seedReservationStartOffset,
+  seedReservationDaySpan,
+  seedReservationNights,
 };
 
 function insertBatch(collection, docs) {
@@ -52,6 +61,51 @@ function addDays(days) {
   return date;
 }
 
+function parseIntCsv(raw) {
+  if (!raw) {
+    return [];
+  }
+  return raw
+    .split(",")
+    .map((value) => parseInt(value.trim(), 10))
+    .filter((value) => !Number.isNaN(value));
+}
+
+function stayKey(checkInOffset, nights) {
+  return `${checkInOffset}:${nights}`;
+}
+
+function assertPositiveInteger(value, name) {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer.`);
+  }
+}
+
+function assertSeedReservationWindow() {
+  assertPositiveInteger(seedReservationStartOffset, "LOADTEST_SEED_RESERVATION_START_OFFSET");
+  assertPositiveInteger(seedReservationDaySpan, "LOADTEST_SEED_RESERVATION_DAY_SPAN");
+  assertPositiveInteger(seedReservationNights, "LOADTEST_SEED_RESERVATION_NIGHTS");
+
+  const lastSeedCheckoutOffset = seedReservationStartOffset + seedReservationDaySpan - 1 + seedReservationNights;
+  if (lastSeedCheckoutOffset > inventoryDays) {
+    throw new Error(
+      `Seed reservation window exceeds inventory: lastSeedCheckoutOffset=${lastSeedCheckoutOffset}, inventoryDays=${inventoryDays}.`,
+    );
+  }
+
+  const writeKeys = new Set(writeCheckInOffsets.flatMap((offset) => writeNightsPool.map((nights) => stayKey(offset, nights))));
+  for (let index = 0; index < seedReservationDaySpan; index += 1) {
+    const seedOffset = seedReservationStartOffset + index;
+    const key = stayKey(seedOffset, seedReservationNights);
+    if (writeKeys.has(key)) {
+      throw new Error(
+        `Seed reservation window overlaps k6 write window: checkInOffset=${seedOffset}, nights=${seedReservationNights}.`,
+      );
+    }
+  }
+}
+
+assertSeedReservationWindow();
 print(`Seeding load-test synthetic data: ${JSON.stringify(createdIds)}`);
 
 const owners = [];
@@ -217,8 +271,9 @@ for (let i = 1; i <= reservationCount; i += 1) {
   const guestId = `${prefix}-guest-${String(i).padStart(6, "0")}`;
   const reservationId = `${prefix}-reservation-${String(i).padStart(6, "0")}`;
   const paymentId = `${prefix}-payment-${String(i).padStart(6, "0")}`;
-  const checkIn = ymd(addDays(3 + (i % Math.max(inventoryDays - 3, 1))));
-  const checkOut = ymd(addDays(4 + (i % Math.max(inventoryDays - 3, 1))));
+  const reservationOffset = seedReservationStartOffset + ((i - 1) % seedReservationDaySpan);
+  const checkIn = ymd(addDays(reservationOffset));
+  const checkOut = ymd(addDays(reservationOffset + seedReservationNights));
   const amountValue = 90000 + (i % 5) * 20000;
   const amount = NumberDecimal(String(amountValue));
 
@@ -252,7 +307,7 @@ for (let i = 1; i <= reservationCount; i += 1) {
       email: `${prefix}-guest-${String(i).padStart(6, "0")}@example.com`,
     },
     dateRange: { checkIn, checkOut },
-    nightCount: 1,
+    nightCount: seedReservationNights,
     numberOfGuests: 1 + (i % 4),
     status: i % 4 === 0 ? "PENDING" : "CONFIRMED",
     channel: {

@@ -45,8 +45,17 @@ loadtest 전용 mock payment gateway를 사용한다. 기본값은 `toss`이며 
 - 재고 60일
 - 기존 예약 / 결제 5,000건
 
-k6 예약 생성 날짜는 seed inventory 범위 안에서만 선택된다. 기본값 기준 `CHECK_IN_OFFSETS=3,5,7,14,21,30,45`,
-`NIGHTS_POOL=1,2,3`, `LOADTEST_INVENTORY_DAYS=60`을 사용한다.
+k6 예약 생성 날짜는 seed inventory 범위 안에서만 선택된다. 기본값 기준 신규 예약 write window는
+`CHECK_IN_OFFSETS=3..45`, `NIGHTS_POOL=1,2,3`, `LOADTEST_INVENTORY_DAYS=60`을 사용한다.
+
+기존 예약 / 결제 seed 데이터는 기본값 기준 `LOADTEST_SEED_RESERVATION_START_OFFSET=50`,
+`LOADTEST_SEED_RESERVATION_DAY_SPAN=8`, `LOADTEST_SEED_RESERVATION_NIGHTS=1`로 생성된다. 즉 기존 예약은
+50~57일 뒤, k6 신규 예약은 최대 45일 뒤 3박까지 사용하므로 `memberId + roomTypeId + checkIn + checkOut`
+중복 기준이 서로 겹치지 않는다.
+
+baseline / stress / breakpoint는 시작 시 계획된 예약 생성 수와 사용 가능한 예약 조합 수를 비교한다.
+부족하면 setup 단계에서 실패한다. 이 경우 `CUSTOMER_COUNT`, `HOT_PROPERTY_COUNT`, `CHECK_IN_OFFSETS`,
+`NIGHTS_POOL`을 늘리거나 테스트 rate / duration을 줄인다.
 
 안정 확인 후 `10,000 -> 20,000 -> 50,000` 순서로 올린다.
 
@@ -68,6 +77,11 @@ docker compose exec \
   -e LOADTEST_INVENTORY_DAYS=60 \
   -e LOADTEST_RESERVATION_COUNT=5000 \
   -e LOADTEST_BATCH_SIZE=500 \
+  -e LOADTEST_SEED_RESERVATION_START_OFFSET=50 \
+  -e LOADTEST_SEED_RESERVATION_DAY_SPAN=8 \
+  -e LOADTEST_SEED_RESERVATION_NIGHTS=1 \
+  -e LOADTEST_WRITE_CHECK_IN_OFFSETS=3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45 \
+  -e LOADTEST_WRITE_NIGHTS_POOL=1,2,3 \
   -T mongo \
   mongosh -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" \
   --authenticationDatabase admin \
@@ -129,6 +143,7 @@ HTTP 요청 수가 1개 또는 2개 이상이 될 수 있으므로 실제 HTTP R
 예약 생성은 서버의 중복 기준인 `memberId + roomTypeId + checkIn + checkOut` 조합이 반복되지 않도록
 재현 가능한 weighted schedule과 예약 전용 sequence를 사용한다. 같은 `LOADTEST_RUN_ID`로 write-heavy 테스트를
 반복 실행할 때는 cleanup/reseed를 먼저 수행하거나 `RESERVATION_SEQUENCE_OFFSET`으로 이미 사용한 조합 범위를 건너뛴다.
+반복 실행에서 이전 테스트가 만든 PENDING 예약이 남아 있으면 정상 baseline에서도 `409 DUPLICATE_RESERVATION`이 발생할 수 있다.
 
 baseline / step-load 기본값에서는 PMS 수동 확정을 실행하지 않는다. 같은 PENDING 예약을 반복 확정하면
 비즈니스 상태 충돌이 발생하므로, PMS 확정은 `MODE=pms-confirm`에서 각 pending 예약을 한 번씩만 확정한다.
@@ -326,6 +341,7 @@ CloudWatch:
 안정적으로 감당 가능한 부하는 아래 기준을 만족하는 최대 RPS로 본다.
 
 - `http_req_failed < 1%`
+- baseline / stress의 `DUPLICATE_RESERVATION`은 0건
 - `dropped_iterations = 0`
 - 주요 API p95 `< 1.5s ~ 2.5s`
 - App 5xx가 지속적으로 증가하지 않음
