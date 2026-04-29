@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
+import org.springframework.data.mongodb.core.MongoTemplate
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
@@ -20,7 +21,8 @@ import java.time.LocalDate
 @Import(TestcontainersConfiguration::class)
 class MongoReservationRepositoryTest @Autowired constructor(
     private val reservationRepository: ReservationRepository,
-    private val mongoDataRepository: ReservationMongoDataRepository
+    private val mongoDataRepository: ReservationMongoDataRepository,
+    private val mongoTemplate: MongoTemplate
 ) {
 
     @BeforeEach
@@ -38,8 +40,10 @@ class MongoReservationRepositoryTest @Autowired constructor(
         channelCode: String = "DIRECT",
         commissionRate: BigDecimal = BigDecimal.ZERO,
         memberId: String? = null,
-        expiresAt: Instant? = null
-    ) = Reservation.create(
+        expiresAt: Instant? = null,
+        createdAt: Instant? = null
+    ): Reservation {
+        val reservation = Reservation.create(
         id = id,
         propertyId = propertyId,
         roomTypeId = roomTypeId,
@@ -55,7 +59,31 @@ class MongoReservationRepositoryTest @Autowired constructor(
         ),
         memberId = memberId,
         expiresAt = expiresAt
-    )
+        )
+        return if (createdAt == null) {
+            reservation
+        } else {
+            Reservation.reconstitute(
+                id = reservation.id,
+                propertyId = reservation.propertyId,
+                roomTypeId = reservation.roomTypeId,
+                roomId = reservation.roomId,
+                guestId = reservation.guestId,
+                guestInfo = reservation.guestInfo,
+                dateRange = reservation.dateRange,
+                nightCount = reservation.nightCount,
+                numberOfGuests = reservation.numberOfGuests,
+                status = reservation.status,
+                channel = reservation.channel,
+                pricing = reservation.pricing,
+                memberId = reservation.memberId,
+                expiresAt = reservation.expiresAt,
+                version = reservation.version,
+                createdAt = createdAt,
+                updatedAt = createdAt
+            )
+        }
+    }
 
     @Nested
     inner class `save 및 findById` {
@@ -230,6 +258,50 @@ class MongoReservationRepositoryTest @Autowired constructor(
             )
 
             assertThat(exists).isEqualTo(true)
+        }
+    }
+
+    @Nested
+    inner class `findPageByMemberId` {
+        @Test
+        fun `memberId 예약을 최신 생성순으로 페이지 조회한다`() {
+            reservationRepository.save(newReservation(
+                id = "old",
+                memberId = "member-1",
+                createdAt = Instant.parse("2026-04-01T00:00:00Z")
+            ))
+            reservationRepository.save(newReservation(
+                id = "new",
+                memberId = "member-1",
+                createdAt = Instant.parse("2026-04-03T00:00:00Z")
+            ))
+            reservationRepository.save(newReservation(
+                id = "middle",
+                memberId = "member-1",
+                createdAt = Instant.parse("2026-04-02T00:00:00Z")
+            ))
+            reservationRepository.save(newReservation(
+                id = "other-member",
+                memberId = "member-2",
+                createdAt = Instant.parse("2026-04-04T00:00:00Z")
+            ))
+
+            val result = reservationRepository.findPageByMemberId("member-1", page = 0, size = 2)
+
+            assertThat(result.content.map { it.id }).containsExactly("new", "middle")
+            assertThat(result.totalElements).isEqualTo(3)
+            assertThat(result.page).isEqualTo(0)
+            assertThat(result.size).isEqualTo(2)
+            assertThat(result.totalPages).isEqualTo(2)
+        }
+
+        @Test
+        fun `memberId와 createdAt 복합 인덱스를 생성한다`() {
+            val indexes = mongoTemplate.indexOps(ReservationDocument::class.java).indexInfo
+
+            assertThat(indexes).anySatisfy { index ->
+                assertThat(index.indexFields.map { it.key }).containsExactly("memberId", "createdAt")
+            }
         }
     }
 

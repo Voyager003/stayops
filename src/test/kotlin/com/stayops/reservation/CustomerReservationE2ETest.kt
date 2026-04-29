@@ -167,9 +167,9 @@ class CustomerReservationE2ETest @Autowired constructor(
 
             // 3. 마이페이지 조회
             val myReservations = customerReservationApplication.getMyReservations("customer-e2e")
-            assertThat(myReservations).hasSize(1)
-            assertThat(myReservations[0].reservation.id).isEqualTo(reservationResult.reservation.id)
-            assertThat(myReservations[0].payment?.status).isEqualTo(ReservationPaymentStatus.APPROVED)
+            assertThat(myReservations.content).hasSize(1)
+            assertThat(myReservations.content[0].reservation.id).isEqualTo(reservationResult.reservation.id)
+            assertThat(myReservations.content[0].payment?.status).isEqualTo(ReservationPaymentStatus.APPROVED)
 
             // 4. 예약 취소 + 환불
             every { paymentGateway.cancel("toss_pk_e2e", any(), any()) } returns PaymentCancelResult("toss_pk_e2e")

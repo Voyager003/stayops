@@ -87,6 +87,17 @@ class MongoPaymentRepositoryTest @Autowired constructor(
             assertThat(found).isNotNull
             assertThat(found!!.id).isEqualTo("pay-1")
         }
+
+        @Test
+        fun `reservationId 목록으로 Payment 목록을 조회한다`() {
+            paymentRepository.save(newPayment(id = "pay-1", reservationId = "rsv-1"))
+            paymentRepository.save(newPayment(id = "pay-2", reservationId = "rsv-2"))
+            paymentRepository.save(newPayment(id = "pay-3", reservationId = "rsv-3"))
+
+            val result = paymentRepository.findByReservationIds(listOf("rsv-1", "rsv-3"))
+
+            assertThat(result.map { it.id }).containsExactlyInAnyOrder("pay-1", "pay-3")
+        }
     }
 
     @Nested

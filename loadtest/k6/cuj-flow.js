@@ -142,6 +142,30 @@ export function buildDuplicateReservationOptions({ iterations, vus, maxDuration 
   };
 }
 
+export function buildMyReservationsOptions({ rate, preAllocatedVUs, maxVUs, stages }) {
+  return {
+    thresholds: {
+      http_req_failed: ["rate<0.01"],
+      checks: ["rate>0.99"],
+      "http_req_duration{name:customer-my-reservations}": ["p(95)<1500"],
+    },
+    scenarios: {
+      my_reservations_read: {
+        executor: "ramping-arrival-rate",
+        startRate: 1,
+        timeUnit: "1s",
+        preAllocatedVUs,
+        maxVUs,
+        stages: stages || [
+          { target: rate, duration: "2m" },
+          { target: rate, duration: "10m" },
+          { target: 0, duration: "1m" },
+        ],
+      },
+    },
+  };
+}
+
 export function configureDuplicateReservationResponses() {
   http.setResponseCallback(http.expectedStatuses({ min: 200, max: 399 }, 409));
 }
@@ -244,6 +268,11 @@ export function runPmsConfirmOnceIteration(data) {
 
 export function runDuplicateReservationIteration(data) {
   runDuplicateReservationFlow(data, currentIterationInTest());
+  sleep(THINK_TIME);
+}
+
+export function runMyReservationsIteration(data) {
+  runMyReservationsFlow(data);
   sleep(THINK_TIME);
 }
 
@@ -589,14 +618,14 @@ function createReservation(combination, tagName) {
 
 function runMyReservationsFlow(data) {
   const session = pickSession(data.customerSessions);
-  const response = http.get(`${BASE_URL}/api/v1/customer/reservations`, {
+  const response = http.get(`${BASE_URL}/api/v1/customer/reservations?page=0&size=20`, {
     tags: { name: "customer-my-reservations" },
     headers: authHeaders(session, "customer", "customer-my-reservations"),
   });
 
   checkExpectedStatus(response, 200, "my reservations status is 200", "customer-my-reservations");
   check(response, {
-    "my reservations returns array": (r) => r.status === 200 && Array.isArray(r.json()),
+    "my reservations returns page": (r) => r.status === 200 && Array.isArray(r.json().content),
   });
 }
 

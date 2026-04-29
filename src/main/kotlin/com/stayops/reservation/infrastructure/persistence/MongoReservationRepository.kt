@@ -46,6 +46,11 @@ class MongoReservationRepository(
                 Document(mapOf("propertyId" to 1, "guestId" to 1))
             )
         )
+        indexOps.createIndex(
+            CompoundIndexDefinition(
+                Document(mapOf("memberId" to 1, "createdAt" to -1))
+            )
+        )
     }
 
     override fun save(reservation: Reservation): Reservation =
@@ -81,6 +86,25 @@ class MongoReservationRepository(
 
     override fun findByMemberId(memberId: String): List<Reservation> =
         mongo.findByMemberId(memberId).map { it.toDomain() }
+
+    override fun findPageByMemberId(memberId: String, page: Int, size: Int): PagedResult<Reservation> {
+        val query = Query(Criteria.where("memberId").`is`(memberId))
+        val totalElements = mongoTemplate.count(query, ReservationDocument::class.java)
+
+        val pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
+        query.with(pageable)
+
+        val content = mongoTemplate.find(query, ReservationDocument::class.java).map { it.toDomain() }
+        val totalPages = if (totalElements == 0L) 0 else ((totalElements - 1) / size + 1).toInt()
+
+        return PagedResult(
+            content = content,
+            totalElements = totalElements,
+            page = page,
+            size = size,
+            totalPages = totalPages
+        )
+    }
 
     override fun countByPropertyIdAndCreatedDate(propertyId: String, date: LocalDate): Int {
         val zone = ZoneId.of("Asia/Seoul")

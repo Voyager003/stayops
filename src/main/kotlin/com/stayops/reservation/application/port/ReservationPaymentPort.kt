@@ -12,6 +12,8 @@ interface ReservationPaymentPort {
 
     fun findByReservationId(reservationId: String): ReservationPaymentSnapshot?
 
+    fun findByReservationIds(reservationIds: List<String>): List<ReservationPaymentSnapshot>
+
     fun findByMemberId(memberId: String): List<ReservationPaymentSnapshot>
 
     fun requestConfirm(

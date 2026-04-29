@@ -5,6 +5,7 @@ import com.stayops.reservation.application.service.CustomerReservationResult
 import com.stayops.reservation.application.port.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.ReservationStatus
 import java.math.BigDecimal
+import java.time.Instant
 import java.time.LocalDate
 
 data class CustomerReservationResponse(
@@ -46,7 +47,8 @@ data class MyReservationResponse(
     val nightCount: Int,
     val numberOfGuests: Int,
     val guestName: String,
-    val totalAmount: BigDecimal
+    val totalAmount: BigDecimal,
+    val createdAt: Instant
 ) {
     companion object {
         fun from(result: CustomerReservationReadResult) = MyReservationResponse(
@@ -64,7 +66,16 @@ data class MyReservationResponse(
             nightCount = result.reservation.nightCount,
             numberOfGuests = result.reservation.numberOfGuests,
             guestName = result.reservation.guestInfo.name,
-            totalAmount = result.reservation.pricing.totalAmount.amount
+            totalAmount = result.reservation.pricing.totalAmount.amount,
+            createdAt = result.reservation.createdAt
         )
     }
 }
+
+data class PagedMyReservationResponse(
+    val content: List<MyReservationResponse>,
+    val totalElements: Long,
+    val page: Int,
+    val size: Int,
+    val totalPages: Int
+)

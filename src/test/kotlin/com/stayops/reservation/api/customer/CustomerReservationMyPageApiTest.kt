@@ -8,6 +8,7 @@ import com.stayops.reservation.application.port.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.*
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
+import com.stayops.shared.domain.PagedResult
 import com.stayops.shared.exception.GlobalExceptionHandler
 import com.stayops.member.infrastructure.security.CustomerAuthChecker
 import io.mockk.clearAllMocks
@@ -71,26 +72,36 @@ class CustomerReservationMyPageApiTest {
     inner class `내_예약_목록` {
 
         @Test
-        fun `예약 목록을 반환한다`() {
+        fun `예약 목록을 페이지로 반환한다`() {
             mockCustomer()
-            every { customerReservationApplication.getMyReservations("member-1") } returns listOf(
-                CustomerReservationReadResult(sampleReservation("rsv-1"), samplePayment("rsv-1")),
-                CustomerReservationReadResult(
-                    sampleReservation("rsv-2").confirm(),
-                    samplePayment("rsv-2").copy(status = ReservationPaymentStatus.APPROVED, paymentKey = "pk-2")
-                )
+            every { customerReservationApplication.getMyReservations("member-1", 1, 20) } returns PagedResult(
+                content = listOf(
+                    CustomerReservationReadResult(sampleReservation("rsv-1"), samplePayment("rsv-1")),
+                    CustomerReservationReadResult(
+                        sampleReservation("rsv-2").confirm(),
+                        samplePayment("rsv-2").copy(status = ReservationPaymentStatus.APPROVED, paymentKey = "pk-2")
+                    )
+                ),
+                totalElements = 42,
+                page = 1,
+                size = 20,
+                totalPages = 3
             )
 
-            mockMvc.get("/api/v1/customer/reservations")
+            mockMvc.get("/api/v1/customer/reservations?page=1&size=20")
                 .andExpect {
                     status { isOk() }
-                    jsonPath("$.length()") { value(2) }
-                    jsonPath("$[0].reservationId") { value("rsv-1") }
-                    jsonPath("$[0].paymentStatus") { value("PENDING") }
-                    jsonPath("$[0].confirmationStatus") { value("PAYMENT_WAITING") }
-                    jsonPath("$[1].status") { value("CONFIRMED") }
-                    jsonPath("$[1].paymentStatus") { value("APPROVED") }
-                    jsonPath("$[1].confirmationStatus") { value("CONFIRMED") }
+                    jsonPath("$.content.length()") { value(2) }
+                    jsonPath("$.content[0].reservationId") { value("rsv-1") }
+                    jsonPath("$.content[0].paymentStatus") { value("PENDING") }
+                    jsonPath("$.content[0].confirmationStatus") { value("PAYMENT_WAITING") }
+                    jsonPath("$.content[1].status") { value("CONFIRMED") }
+                    jsonPath("$.content[1].paymentStatus") { value("APPROVED") }
+                    jsonPath("$.content[1].confirmationStatus") { value("CONFIRMED") }
+                    jsonPath("$.totalElements") { value(42) }
+                    jsonPath("$.page") { value(1) }
+                    jsonPath("$.size") { value(20) }
+                    jsonPath("$.totalPages") { value(3) }
                 }
         }
     }
