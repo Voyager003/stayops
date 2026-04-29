@@ -39,6 +39,9 @@ class MongoPaymentRepository(
     override fun findByReservationId(reservationId: String): Payment? =
         mongo.findByReservationId(reservationId)?.toDomain()
 
+    override fun findByReservationIds(reservationIds: List<String>): List<Payment> =
+        if (reservationIds.isEmpty()) emptyList() else mongo.findByReservationIdIn(reservationIds).map { it.toDomain() }
+
     override fun findByMemberId(memberId: String): List<Payment> =
         mongo.findByMemberId(memberId).map { it.toDomain() }
 
@@ -48,6 +51,7 @@ class MongoPaymentRepository(
 
 interface PaymentMongoDataRepository : MongoRepository<PaymentDocument, String> {
     fun findByReservationId(reservationId: String): PaymentDocument?
+    fun findByReservationIdIn(reservationIds: List<String>): List<PaymentDocument>
     fun findByMemberId(memberId: String): List<PaymentDocument>
     fun findByOrderId(orderId: String): PaymentDocument?
 }

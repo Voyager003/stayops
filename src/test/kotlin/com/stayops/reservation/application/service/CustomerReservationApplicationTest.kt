@@ -20,6 +20,7 @@ import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
+import com.stayops.shared.domain.PagedResult
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.ForbiddenException
@@ -165,15 +166,23 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             clearAllMocks()
             val reservation = pendingReservation()
             val payment = pendingPayment().requestConfirm("pk-1")
-            every { reservationRepository.findByMemberId("member-1") } returns listOf(reservation)
-            every { reservationPaymentPort.findByMemberId("member-1") } returns listOf(payment)
+            every { reservationRepository.findPageByMemberId("member-1", 0, 20) } returns PagedResult(
+                content = listOf(reservation),
+                totalElements = 1,
+                page = 0,
+                size = 20,
+                totalPages = 1
+            )
+            every { reservationPaymentPort.findByReservationIds(listOf("rsv-1")) } returns listOf(payment)
 
-            val result = service.getMyReservations("member-1")
+            val result = service.getMyReservations("member-1", page = 0, size = 20)
 
             then("예약과 결제 상태를 함께 반환한다") {
-                result.size shouldBe 1
-                result[0].reservation.id shouldBe "rsv-1"
-                result[0].payment?.status shouldBe ReservationPaymentStatus.CONFIRM_REQUESTED
+                result.content.size shouldBe 1
+                result.content[0].reservation.id shouldBe "rsv-1"
+                result.content[0].payment?.status shouldBe ReservationPaymentStatus.CONFIRM_REQUESTED
+                result.totalElements shouldBe 1
+                verify(exactly = 0) { reservationPaymentPort.findByMemberId(any()) }
             }
         }
 

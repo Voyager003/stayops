@@ -43,6 +43,9 @@ class PaymentReservationAdapter(
     override fun findByReservationId(reservationId: String): ReservationPaymentSnapshot? =
         paymentRepository.findByReservationId(reservationId)?.toSnapshot()
 
+    override fun findByReservationIds(reservationIds: List<String>): List<ReservationPaymentSnapshot> =
+        paymentRepository.findByReservationIds(reservationIds).map { it.toSnapshot() }
+
     override fun findByMemberId(memberId: String): List<ReservationPaymentSnapshot> =
         paymentRepository.findByMemberId(memberId).map { it.toSnapshot() }
 

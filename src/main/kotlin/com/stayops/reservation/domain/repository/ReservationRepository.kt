@@ -16,6 +16,7 @@ interface ReservationRepository {
     fun findByPropertyIdAndGuestId(propertyId: String, guestId: String): List<Reservation>
     fun findByPropertyIdAndChannelCode(propertyId: String, channelCode: String): List<Reservation>
     fun findByMemberId(memberId: String): List<Reservation>
+    fun findPageByMemberId(memberId: String, page: Int, size: Int): PagedResult<Reservation>
     fun search(propertyId: String, criteria: ReservationSearchCriteria, page: Int, size: Int): PagedResult<Reservation>
     fun searchByPropertyIds(propertyIds: List<String>, criteria: ReservationSearchCriteria, page: Int, size: Int): PagedResult<Reservation>
     fun countByPropertyIdAndCreatedDate(propertyId: String, date: LocalDate): Int

@@ -17,6 +17,7 @@ import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
+import com.stayops.shared.domain.PagedResult
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.ForbiddenException
@@ -151,13 +152,20 @@ class CustomerReservationApplication(
     }
 
     @Transactional(readOnly = true)
-    fun getMyReservations(memberId: String): List<CustomerReservationReadResult> {
-        val reservations = reservationRepository.findByMemberId(memberId)
-        val paymentsByReservationId = reservationPaymentPort.findByMemberId(memberId)
+    fun getMyReservations(memberId: String, page: Int = 0, size: Int = 20): PagedResult<CustomerReservationReadResult> {
+        val reservations = reservationRepository.findPageByMemberId(memberId, page, size)
+        val reservationIds = reservations.content.map { it.id }
+        val paymentsByReservationId = reservationPaymentPort.findByReservationIds(reservationIds)
             .associateBy { it.reservationId }
-        return reservations.map { reservation ->
-            CustomerReservationReadResult(reservation, paymentsByReservationId[reservation.id])
-        }
+        return PagedResult(
+            content = reservations.content.map { reservation ->
+                CustomerReservationReadResult(reservation, paymentsByReservationId[reservation.id])
+            },
+            totalElements = reservations.totalElements,
+            page = reservations.page,
+            size = reservations.size,
+            totalPages = reservations.totalPages
+        )
     }
 
     @Transactional(readOnly = true)
