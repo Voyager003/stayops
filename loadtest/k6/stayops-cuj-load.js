@@ -2,6 +2,7 @@ import { envFloat, envInt, parseIntCsv } from "./common.js";
 import {
   buildArrivalRateOptions,
   buildDuplicateReservationOptions,
+  buildMyReservationsOptions,
   buildPmsConfirmOptions,
   buildSmokeOptions,
   configureDuplicateReservationResponses,
@@ -9,6 +10,7 @@ import {
   estimateReservationCreatesForIterationCount,
   runCujIteration,
   runDuplicateReservationIteration,
+  runMyReservationsIteration,
   runPmsConfirmOnceIteration,
   setupCujData,
 } from "./cuj-flow.js";
@@ -26,6 +28,9 @@ const PMS_CONFIRM_VUS = envInt("PMS_CONFIRM_VUS", 10);
 const DUPLICATE_RESERVATION_ITERATIONS = envInt("DUPLICATE_RESERVATION_ITERATIONS", 30);
 const DUPLICATE_RESERVATION_VUS = envInt("DUPLICATE_RESERVATION_VUS", 5);
 const SMOKE_EXPECTED_ITERATIONS = envInt("SMOKE_EXPECTED_ITERATIONS", 100);
+const MY_RESERVATIONS_RATE_ONLY = envInt("MY_RESERVATIONS_RATE_ONLY", CUJ_RATE);
+const MY_RESERVATIONS_PRE_ALLOCATED_VUS = envInt("MY_RESERVATIONS_PRE_ALLOCATED_VUS", CUJ_PRE_ALLOCATED_VUS);
+const MY_RESERVATIONS_MAX_VUS = envInt("MY_RESERVATIONS_MAX_VUS", CUJ_MAX_VUS);
 
 if (MODE === "duplicate-reservation") {
   configureDuplicateReservationResponses();
@@ -62,6 +67,17 @@ function buildRunPlan() {
         maxDuration: "10m",
       }),
       plannedReservationCreates: DUPLICATE_RESERVATION_ITERATIONS,
+    };
+  }
+
+  if (MODE === "my-reservations") {
+    return {
+      options: buildMyReservationsOptions({
+        rate: MY_RESERVATIONS_RATE_ONLY,
+        preAllocatedVUs: MY_RESERVATIONS_PRE_ALLOCATED_VUS,
+        maxVUs: MY_RESERVATIONS_MAX_VUS,
+      }),
+      plannedReservationCreates: 0,
     };
   }
 
@@ -124,6 +140,11 @@ export default function (data) {
 
   if (MODE === "duplicate-reservation") {
     runDuplicateReservationIteration(data);
+    return;
+  }
+
+  if (MODE === "my-reservations") {
+    runMyReservationsIteration(data);
     return;
   }
 
