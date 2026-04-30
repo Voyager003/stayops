@@ -1,5 +1,11 @@
 import { envInt, parseIntCsv } from "./common.js";
-import { buildArrivalRateOptions, estimateReservationCreatesForArrivalPlan, runCujIteration, setupCujData } from "./cuj-flow.js";
+import {
+  buildArrivalRateOptions,
+  buildBreakpointThresholds,
+  estimateReservationCreatesForArrivalPlan,
+  runCujIteration,
+  setupCujData,
+} from "./cuj-flow.js";
 
 const BREAKPOINT_RATES = parseIntCsv(__ENV.BREAKPOINT_RATES || "20,40,80,120,160,220");
 const BREAKPOINT_STAGE_DURATION = `${envInt("BREAKPOINT_STAGE_MINUTES", 5)}m`;
@@ -15,6 +21,7 @@ export const options = buildArrivalRateOptions({
   preAllocatedVUs: BREAKPOINT_PRE_ALLOCATED_VUS,
   maxVUs: BREAKPOINT_MAX_VUS,
   stages,
+  thresholds: buildBreakpointThresholds(),
 });
 
 const plannedReservationCreates = estimateReservationCreatesForArrivalPlan({ startRate: BREAKPOINT_RATES[0], stages });

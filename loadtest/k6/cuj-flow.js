@@ -81,9 +81,35 @@ export function buildThresholds() {
   };
 }
 
-export function buildArrivalRateOptions({ startRate, stages, preAllocatedVUs, maxVUs }) {
+export function buildBreakpointThresholds() {
+  const abortDelay = envString("BREAKPOINT_ABORT_DELAY", "2m");
+  const softFailedRate = envFloat("BREAKPOINT_SOFT_HTTP_FAILED_RATE", 0.01);
+  const abortFailedRate = envFloat("BREAKPOINT_ABORT_HTTP_FAILED_RATE", 0.05);
+  const softCheckRate = envFloat("BREAKPOINT_SOFT_CHECK_RATE", 0.99);
+  const abortCheckRate = envFloat("BREAKPOINT_ABORT_CHECK_RATE", 0.95);
+  const abortP95Ms = envInt("BREAKPOINT_ABORT_P95_MS", 5000);
+  const abortDroppedIterations = envInt("BREAKPOINT_ABORT_DROPPED_ITERATIONS", 1);
+
   return {
-    thresholds: buildThresholds(),
+    ...buildThresholds(),
+    http_req_failed: [
+      `rate<${softFailedRate}`,
+      { threshold: `rate<${abortFailedRate}`, abortOnFail: true, delayAbortEval: abortDelay },
+    ],
+    checks: [
+      `rate>${softCheckRate}`,
+      { threshold: `rate>${abortCheckRate}`, abortOnFail: true, delayAbortEval: abortDelay },
+    ],
+    http_req_duration: [{ threshold: `p(95)<${abortP95Ms}`, abortOnFail: true, delayAbortEval: abortDelay }],
+    dropped_iterations: [
+      { threshold: `count<${abortDroppedIterations}`, abortOnFail: true, delayAbortEval: abortDelay },
+    ],
+  };
+}
+
+export function buildArrivalRateOptions({ startRate, stages, preAllocatedVUs, maxVUs, thresholds = buildThresholds() }) {
+  return {
+    thresholds,
     scenarios: {
       production_critical_journey: {
         executor: "ramping-arrival-rate",

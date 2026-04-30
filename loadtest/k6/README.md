@@ -162,6 +162,21 @@ baseline / step-load 기본값에서는 PMS 수동 확정을 실행하지 않는
 
 각 단계는 기본 5분이다.
 
+breakpoint는 수동으로 서버가 완전히 멈출 때까지 밀어붙이는 테스트가 아니다. 각 단계를 관찰하다가
+hard abort 기준이 유예 시간 동안 계속 깨지면 k6가 자동 중단한다. 이때 직전 안정 단계는 failover 테스트의
+기준 부하 후보가 되고, 중단된 단계는 위험 구간으로 본다.
+
+기본 hard abort 기준:
+
+- 전체 `http_req_failed >= 5%`가 `2m` 이상 지속
+- 전체 check 성공률 `< 95%`가 `2m` 이상 지속
+- 전체 HTTP p95 `>= 5s`가 `2m` 이상 지속
+- `dropped_iterations > 0`가 `2m` 이상 지속
+
+endpoint별 p95, `http_req_failed < 1%`, `checks > 99%`는 결과 판정용 soft threshold로 유지한다.
+일시적인 GC, 네트워크 지연, 짧은 spike로 한계점을 과소평가하지 않기 위해 즉시 중단하지 않고
+`BREAKPOINT_ABORT_DELAY` 기본 `2m`를 둔다.
+
 ### `stayops-mongo-overload.js`
 
 destructive 실험용이다. breakpoint 이후 한계 이상의 부하를 가해 mongo1 primary 장애를 유도한다.
@@ -278,10 +293,35 @@ k6 run stayops-cuj-load.js
 LOADTEST_RUN_ID=run-001 \
 BREAKPOINT_RATES=20,40,80,120,160,220 \
 BREAKPOINT_STAGE_MINUTES=5 \
+BREAKPOINT_ABORT_DELAY=2m \
+BREAKPOINT_ABORT_HTTP_FAILED_RATE=0.05 \
+BREAKPOINT_ABORT_CHECK_RATE=0.95 \
+BREAKPOINT_ABORT_P95_MS=5000 \
+BREAKPOINT_ABORT_DROPPED_ITERATIONS=1 \
 CUSTOMER_COUNT=30 \
 OWNER_COUNT=10 \
 k6 run stayops-breakpoint-load.js
 ```
+
+낮은 부하로 자동 중단 설정만 먼저 검증하려면:
+
+```bash
+LOADTEST_RUN_ID=run-001 \
+BREAKPOINT_RATES=5,10 \
+BREAKPOINT_STAGE_MINUTES=1 \
+CUSTOMER_COUNT=30 \
+OWNER_COUNT=10 \
+k6 run stayops-breakpoint-load.js
+```
+
+breakpoint 결과 해석:
+
+- 안정 구간: `http_req_failed < 1%`, `dropped_iterations = 0`, 주요 API p95 기준 만족
+- 위험 구간: p95 급등, dropped iteration 발생, App/MongoDB CPU 또는 memory가 지속 상승
+- 중단 구간: hard abort 기준이 유예 시간 이상 지속된 단계
+
+failover/recovery 테스트는 breakpoint의 안정 구간 `60~70%` 부하에서 먼저 실행하고, 이후 위험 구간 직전
+`80~90%` 부하에서 반복한다.
 
 ### Mongo overload
 
