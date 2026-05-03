@@ -62,7 +62,7 @@ baseline / stress / breakpoint는 시작 시 계획된 예약 생성 수와 사�
 mongo1에서 실행:
 
 ```bash
-cd ~/stayops/infra/mongodb
+cd ~/stayops/infra/production/mongodb-rss
 set -a
 source .env
 set +a
