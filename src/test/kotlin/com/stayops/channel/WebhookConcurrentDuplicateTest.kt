@@ -10,7 +10,9 @@ import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
+import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money
+import com.stayops.shared.domain.MutableClock
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -24,6 +26,7 @@ import org.springframework.data.mongodb.core.query.Query
 import java.math.BigDecimal
 import java.net.HttpURLConnection
 import java.net.URI
+import java.time.Clock
 import java.time.LocalDate
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
@@ -51,7 +54,7 @@ import javax.crypto.spec.SecretKeySpec
  * - 나머지 4개 스레드는 unique index 위반 → DuplicateKeyException → false → 처리 건너뜀
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class WebhookConcurrentDuplicateTest @Autowired constructor(
     @LocalServerPort private val port: Int,
     private val propertyRepository: PropertyRepository,
@@ -59,18 +62,22 @@ class WebhookConcurrentDuplicateTest @Autowired constructor(
     private val roomRepository: RoomRepository,
     private val channelRepository: ChannelRepository,
     private val inventoryApplication: RoomInventoryApplication,
-    private val mongoTemplate: MongoTemplate
+    private val mongoTemplate: MongoTemplate,
+    private val clock: Clock
 ) {
 
     private val propertyId = "prop-wh-concurrent"
     private val roomTypeId = "rt-wh-concurrent"
     private val channelCode = "TEST_OTA_CONCURRENT"
-    // INVENTORY_HORIZON_DAYS = 90이므로 호라이즌 내부 날짜 사용
-    private val checkIn = LocalDate.of(2026, 6, 15)
-    private val checkOut = LocalDate.of(2026, 6, 16)
+    private lateinit var checkIn: LocalDate
+    private lateinit var checkOut: LocalDate
 
     @BeforeEach
     fun setUp() {
+        (clock as MutableClock).set(FixedTestClockConfig.DEFAULT_INSTANT)
+        checkIn = LocalDate.now(clock).plusDays(14)
+        checkOut = checkIn.plusDays(1)
+
         mongoTemplate.collectionNames.forEach { name ->
             mongoTemplate.getCollection(name).deleteMany(org.bson.Document())
         }
@@ -98,7 +105,7 @@ class WebhookConcurrentDuplicateTest @Autowired constructor(
         // Room → 1개, 재고 초기화 후 unblock
         roomRepository.save(Room.create("room-wh-c-1", propertyId, roomTypeId, "101", 1))
         inventoryApplication.syncInventoryForRoomType(propertyId, roomTypeId)
-        inventoryApplication.bulkBlock(
+        val processed = inventoryApplication.bulkBlock(
             propertyId = propertyId,
             roomTypeId = roomTypeId,
             startDate = checkIn,
@@ -107,6 +114,7 @@ class WebhookConcurrentDuplicateTest @Autowired constructor(
             action = "UNBLOCK",
             count = 1
         )
+        assertThat(processed).isGreaterThan(0)
 
         // OTA Channel
         channelRepository.save(

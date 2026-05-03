@@ -11,7 +11,9 @@ import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
+import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money
+import com.stayops.shared.domain.MutableClock
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -26,12 +28,13 @@ import org.springframework.data.mongodb.core.query.Query
 import java.math.BigDecimal
 import java.net.HttpURLConnection
 import java.net.URI
+import java.time.Clock
 import java.time.LocalDate
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class WebhookE2ETest @Autowired constructor(
     @LocalServerPort private val port: Int,
     private val propertyRepository: PropertyRepository,
@@ -39,14 +42,19 @@ class WebhookE2ETest @Autowired constructor(
     private val roomRepository: RoomRepository,
     private val channelRepository: ChannelRepository,
     private val inventoryApplication: RoomInventoryApplication,
-    private val mongoTemplate: MongoTemplate
+    private val mongoTemplate: MongoTemplate,
+    private val clock: Clock
 ) {
 
-    private val checkIn = LocalDate.of(2026, 5, 1)
-    private val checkOut = LocalDate.of(2026, 5, 2)
+    private lateinit var checkIn: LocalDate
+    private lateinit var checkOut: LocalDate
 
     @BeforeEach
     fun setUp() {
+        (clock as MutableClock).set(FixedTestClockConfig.DEFAULT_INSTANT)
+        checkIn = LocalDate.now(clock).plusDays(7)
+        checkOut = checkIn.plusDays(1)
+
         mongoTemplate.collectionNames.forEach { name ->
             mongoTemplate.getCollection(name).deleteMany(org.bson.Document())
         }
@@ -76,7 +84,7 @@ class WebhookE2ETest @Autowired constructor(
         inventoryApplication.syncInventoryForRoomType("prop-wh", "rt-wh")
 
         // Unblock inventory for test dates
-        inventoryApplication.bulkBlock(
+        val processed = inventoryApplication.bulkBlock(
             propertyId = "prop-wh",
             roomTypeId = "rt-wh",
             startDate = checkIn,
@@ -85,6 +93,7 @@ class WebhookE2ETest @Autowired constructor(
             action = "UNBLOCK",
             count = 1
         )
+        assertThat(processed).isGreaterThan(0)
 
         // OTA Channel
         channelRepository.save(

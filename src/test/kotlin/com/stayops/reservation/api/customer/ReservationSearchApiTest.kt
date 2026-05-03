@@ -153,8 +153,8 @@ class ReservationSearchApiTest {
                 reservedCount = 0,
                 blockedCount = 0,
                 version = 0L,
-                createdAt = java.time.Instant.now(),
-                updatedAt = java.time.Instant.now()
+                createdAt = java.time.Instant.parse("2026-04-01T00:00:00Z"),
+                updatedAt = java.time.Instant.parse("2026-04-01T00:00:00Z")
             )
             every {
                 reservationSearchApplication.getAvailability("prop-1", "rt-1", date, date.plusDays(2))

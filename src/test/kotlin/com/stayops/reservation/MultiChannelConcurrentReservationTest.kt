@@ -15,6 +15,7 @@ import com.stayops.reservation.infrastructure.persistence.ReservationMongoDataRe
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.infrastructure.persistence.RoomTypeDocument
 import com.stayops.room.infrastructure.persistence.RoomTypeMongoDataRepository
+import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -23,6 +24,8 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import java.math.BigDecimal
+import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
@@ -49,22 +52,25 @@ import java.util.concurrent.atomic.AtomicInteger
  * - R-2-a에서 도입한 ConflictException 변환이 충돌을 도메인 예외로 표현
  */
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class MultiChannelConcurrentReservationTest @Autowired constructor(
     private val reservationApplication: ReservationApplication,
     private val reservationMongoDataRepository: ReservationMongoDataRepository,
     private val roomTypeMongoDataRepository: RoomTypeMongoDataRepository,
     private val channelMongoDataRepository: ChannelMongoDataRepository,
     private val inventoryMongoDataRepository: RoomInventoryMongoDataRepository,
-    private val guestMongoDataRepository: GuestMongoDataRepository
+    private val guestMongoDataRepository: GuestMongoDataRepository,
+    private val clock: Clock
 ) {
 
     private val propertyId = "prop-multi"
     private val roomTypeId = "rt-multi"
-    private val date = LocalDate.of(2026, 8, 1)
+    private lateinit var date: LocalDate
 
     @BeforeEach
     fun setUp() {
+        date = LocalDate.now(clock).plusDays(7)
+
         reservationMongoDataRepository.deleteAll()
         inventoryMongoDataRepository.deleteAll()
         roomTypeMongoDataRepository.deleteAll()
@@ -107,12 +113,13 @@ class MultiChannelConcurrentReservationTest @Autowired constructor(
         }
 
         // Inventory: 마지막 1실 (totalCount=1, reservedCount=0, blockedCount=0)
+        val now = Instant.now(clock)
         val inventory = RoomInventory.reconstitute(
             id = "inv-multi", propertyId = propertyId, roomTypeId = roomTypeId,
             date = date, totalCount = 1, reservedCount = 0, blockedCount = 0,
             version = null,
-            createdAt = java.time.Instant.now(),
-            updatedAt = java.time.Instant.now()
+            createdAt = now,
+            updatedAt = now
         )
         inventoryMongoDataRepository.save(RoomInventoryDocument.from(inventory))
     }

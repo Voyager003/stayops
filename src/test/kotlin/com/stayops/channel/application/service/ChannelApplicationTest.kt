@@ -133,8 +133,8 @@ class ChannelApplicationTest : BehaviorSpec({
             reservedCount = reservedCount,
             blockedCount = 0,
             version = 0L,
-            createdAt = Instant.now(),
-            updatedAt = Instant.now()
+            createdAt = fixedInstant,
+            updatedAt = fixedInstant
         )
 
     given("재고 비교 시") {

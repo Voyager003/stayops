@@ -3,6 +3,7 @@ package com.stayops.inventory.infrastructure.persistence
 import com.stayops.TestcontainersConfiguration
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
+import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.exception.ConflictException
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -12,15 +13,18 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.dao.DuplicateKeyException
+import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class MongoRoomInventoryRepositoryTest @Autowired constructor(
     private val inventoryRepository: RoomInventoryRepository,
-    private val mongoDataRepository: RoomInventoryMongoDataRepository
+    private val mongoDataRepository: RoomInventoryMongoDataRepository,
+    private val clock: Clock
 ) {
-    private val today = LocalDate.of(2026, 3, 12)
+    private val today = LocalDate.now(clock).plusDays(7)
 
     @BeforeEach
     fun setUp() {
@@ -43,8 +47,8 @@ class MongoRoomInventoryRepositoryTest @Autowired constructor(
         reservedCount = 0,
         blockedCount = blockedCount,
         version = null,
-        createdAt = java.time.Instant.now(),
-        updatedAt = java.time.Instant.now()
+        createdAt = Instant.now(clock),
+        updatedAt = Instant.now(clock)
     )
 
     @Nested

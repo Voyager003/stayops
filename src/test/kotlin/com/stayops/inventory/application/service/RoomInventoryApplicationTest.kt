@@ -57,8 +57,8 @@ class RoomInventoryApplicationTest : BehaviorSpec({
         reservedCount = reservedCount,
         blockedCount = blockedCount,
         version = 0L,
-        createdAt = Instant.now(),
-        updatedAt = Instant.now()
+        createdAt = fixedClock.instant(),
+        updatedAt = fixedClock.instant()
     )
 
     given("재고 자동 동기화 시") {

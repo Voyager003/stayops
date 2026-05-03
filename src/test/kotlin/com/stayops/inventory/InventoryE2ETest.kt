@@ -8,7 +8,9 @@ import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
+import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money
+import com.stayops.shared.domain.MutableClock
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -17,22 +19,27 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.data.mongodb.core.MongoTemplate
+import java.time.Clock
 import java.time.LocalDate
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class InventoryE2ETest @Autowired constructor(
     private val propertyRepository: PropertyRepository,
     private val roomTypeRepository: RoomTypeRepository,
     private val roomRepository: RoomRepository,
     private val inventoryApplication: RoomInventoryApplication,
-    private val mongoTemplate: MongoTemplate
+    private val mongoTemplate: MongoTemplate,
+    private val clock: Clock
 ) {
 
-    private val today = LocalDate.now()
+    private lateinit var today: LocalDate
 
     @BeforeEach
     fun setUp() {
+        (clock as MutableClock).set(FixedTestClockConfig.DEFAULT_INSTANT)
+        today = LocalDate.now(clock)
+
         mongoTemplate.collectionNames.forEach { name ->
             mongoTemplate.getCollection(name).deleteMany(org.bson.Document())
         }

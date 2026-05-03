@@ -4,11 +4,13 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
+import java.time.Instant
 import java.time.LocalDate
 
 class RoomInventoryTest : BehaviorSpec({
 
     val today = LocalDate.of(2026, 3, 12)
+    val fixedInstant = Instant.parse("2026-03-12T00:00:00Z")
 
     fun newInventory(
         totalCount: Int = 5,
@@ -23,8 +25,8 @@ class RoomInventoryTest : BehaviorSpec({
         reservedCount = reservedCount,
         blockedCount = blockedCount,
         version = 0,
-        createdAt = java.time.Instant.now(),
-        updatedAt = java.time.Instant.now()
+        createdAt = fixedInstant,
+        updatedAt = fixedInstant
     )
 
     given("재고 생성 시") {
