@@ -1,9 +1,13 @@
 package com.stayops.shared.exception
 
+import com.mongodb.MongoSocketReadException
+import com.mongodb.MongoTimeoutException
+import com.mongodb.ServerAddress
 import com.stayops.payment.domain.service.PaymentGatewayException
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import org.springframework.http.HttpHeaders
 
 class GlobalExceptionHandlerTest : BehaviorSpec({
 
@@ -133,6 +137,39 @@ class GlobalExceptionHandlerTest : BehaviorSpec({
             }
             then("코드가 PAYMENT_UNKNOWN_ERROR이다") {
                 response.body!!.code shouldBe "PAYMENT_UNKNOWN_ERROR"
+            }
+        }
+    }
+
+    given("MongoDB server selection timeout 발생 시") {
+        val exception = MongoTimeoutException("Timed out after 5000 ms while waiting for a server")
+
+        `when`("핸들러가 처리하면") {
+            val response = handler.handleUnexpectedException(exception)
+
+            then("HTTP 503을 반환한다") {
+                response.statusCode.value() shouldBe 503
+            }
+            then("일시적 장애 코드와 Retry-After 헤더를 포함한다") {
+                response.body!!.code shouldBe "TEMPORARILY_UNAVAILABLE"
+                response.body!!.message shouldBe "일시적으로 서비스를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요."
+                response.headers.getFirst(HttpHeaders.RETRY_AFTER) shouldBe "3"
+            }
+        }
+    }
+
+    given("MongoDB socket read 실패 발생 시") {
+        val exception = MongoSocketReadException("Prematurely reached end of stream", ServerAddress("mongo1", 27017))
+
+        `when`("핸들러가 처리하면") {
+            val response = handler.handleUnexpectedException(exception)
+
+            then("HTTP 503을 반환한다") {
+                response.statusCode.value() shouldBe 503
+            }
+            then("일시적 장애 코드와 Retry-After 헤더를 포함한다") {
+                response.body!!.code shouldBe "TEMPORARILY_UNAVAILABLE"
+                response.headers.getFirst(HttpHeaders.RETRY_AFTER) shouldBe "3"
             }
         }
     }
