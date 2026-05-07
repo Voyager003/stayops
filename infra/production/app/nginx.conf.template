@@ -1,0 +1,68 @@
+server {
+    listen 80;
+    server_name ${API_DOMAIN};
+
+    location = /health {
+        proxy_pass http://app:8080/actuator/health;
+        proxy_set_header Host $host;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name ${API_DOMAIN};
+
+    ssl_certificate /etc/letsencrypt/live/${API_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${API_DOMAIN}/privkey.pem;
+
+    client_max_body_size 10m;
+
+    location = /actuator/prometheus {
+        return 404;
+    }
+
+    location = /mock-ota {
+        return 308 /mock-ota/;
+    }
+
+    location ~ ^/mock-ota/api/v1/(simulate|ari/clear) {
+        auth_basic "Mock OTA control";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+        rewrite ^/mock-ota/(.*)$ /$1 break;
+        proxy_pass http://mock-ota-app:8081;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 60s;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
+    }
+
+    location /mock-ota/ {
+        rewrite ^/mock-ota/(.*)$ /$1 break;
+        proxy_pass http://mock-ota-app:8081;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 60s;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
+    }
+
+    location / {
+        proxy_pass http://app:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 60s;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
+    }
+}

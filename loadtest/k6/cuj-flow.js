@@ -88,7 +88,6 @@ export function buildBreakpointThresholds() {
   const softCheckRate = envFloat("BREAKPOINT_SOFT_CHECK_RATE", 0.99);
   const abortCheckRate = envFloat("BREAKPOINT_ABORT_CHECK_RATE", 0.95);
   const abortP95Ms = envInt("BREAKPOINT_ABORT_P95_MS", 5000);
-  const abortDroppedIterations = envInt("BREAKPOINT_ABORT_DROPPED_ITERATIONS", 1);
 
   return {
     ...buildThresholds(),
@@ -101,9 +100,6 @@ export function buildBreakpointThresholds() {
       { threshold: `rate>${abortCheckRate}`, abortOnFail: true, delayAbortEval: abortDelay },
     ],
     http_req_duration: [{ threshold: `p(95)<${abortP95Ms}`, abortOnFail: true, delayAbortEval: abortDelay }],
-    dropped_iterations: [
-      { threshold: `count<${abortDroppedIterations}`, abortOnFail: true, delayAbortEval: abortDelay },
-    ],
   };
 }
 

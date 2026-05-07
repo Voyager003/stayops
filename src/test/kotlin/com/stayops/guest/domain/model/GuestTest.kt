@@ -4,10 +4,10 @@ import com.stayops.shared.domain.Money
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
-import java.time.Instant
 import java.time.LocalDate
 
 class GuestTest : BehaviorSpec({
+    val visitDate = LocalDate.of(2026, 3, 12)
 
     fun newGuest(
         id: String = "guest-1",
@@ -126,8 +126,8 @@ class GuestTest : BehaviorSpec({
         }
 
         `when`("방문 횟수가 2이면") {
-            val guest = newGuest().recordVisit(Money.of(10_000), 1, LocalDate.now())
-                .recordVisit(Money.of(10_000), 1, LocalDate.now())
+            val guest = newGuest().recordVisit(Money.of(10_000), 1, visitDate)
+                .recordVisit(Money.of(10_000), 1, visitDate)
             then("tier는 BRONZE로 승급한다") {
                 guest.tier shouldBe GuestTier.BRONZE
             }
@@ -135,7 +135,7 @@ class GuestTest : BehaviorSpec({
 
         `when`("방문 횟수가 5이면") {
             var guest = newGuest()
-            repeat(5) { guest = guest.recordVisit(Money.of(10_000), 1, LocalDate.now()) }
+            repeat(5) { guest = guest.recordVisit(Money.of(10_000), 1, visitDate) }
             then("tier는 SILVER로 승급한다") {
                 guest.tier shouldBe GuestTier.SILVER
             }
@@ -143,7 +143,7 @@ class GuestTest : BehaviorSpec({
 
         `when`("방문 횟수가 10이면") {
             var guest = newGuest()
-            repeat(10) { guest = guest.recordVisit(Money.of(10_000), 1, LocalDate.now()) }
+            repeat(10) { guest = guest.recordVisit(Money.of(10_000), 1, visitDate) }
             then("tier는 GOLD로 승급한다") {
                 guest.tier shouldBe GuestTier.GOLD
             }
@@ -151,7 +151,7 @@ class GuestTest : BehaviorSpec({
 
         `when`("방문 횟수가 20이면") {
             var guest = newGuest()
-            repeat(20) { guest = guest.recordVisit(Money.of(10_000), 1, LocalDate.now()) }
+            repeat(20) { guest = guest.recordVisit(Money.of(10_000), 1, visitDate) }
             then("tier는 VIP로 승급한다") {
                 guest.tier shouldBe GuestTier.VIP
             }
@@ -159,7 +159,7 @@ class GuestTest : BehaviorSpec({
 
         `when`("방문 횟수가 10이지만 누적 지출이 500만원 이상이면") {
             var guest = newGuest()
-            repeat(10) { guest = guest.recordVisit(Money.of(500_000), 1, LocalDate.now()) }
+            repeat(10) { guest = guest.recordVisit(Money.of(500_000), 1, visitDate) }
             then("tier는 VIP로 승급한다") {
                 guest.tier shouldBe GuestTier.VIP
             }

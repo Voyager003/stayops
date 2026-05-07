@@ -5,6 +5,7 @@ import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.infrastructure.persistence.ReservationDocument
 import com.stayops.reservation.infrastructure.persistence.ReservationMongoDataRepository
 import com.stayops.settlement.application.service.SettlementQueryRepository
+import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -14,14 +15,16 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import java.math.BigDecimal
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class MongoSettlementQueryRepositoryTest @Autowired constructor(
     private val settlementQueryRepository: SettlementQueryRepository,
-    private val reservationMongoDataRepository: ReservationMongoDataRepository
+    private val reservationMongoDataRepository: ReservationMongoDataRepository,
+    private val clock: Clock
 ) {
 
     @BeforeEach
@@ -62,8 +65,8 @@ class MongoSettlementQueryRepositoryTest @Autowired constructor(
         memberId = null,
         expiresAt = null,
         version = 0L,
-        createdAt = Instant.now(),
-        updatedAt = Instant.now()
+        createdAt = Instant.now(clock),
+        updatedAt = Instant.now(clock)
     )
 
     @Nested

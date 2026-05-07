@@ -23,7 +23,9 @@ import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
+import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money
+import com.stayops.shared.domain.MutableClock
 import com.stayops.shared.exception.ConflictException
 import com.ninjasquad.springmockk.MockkBean
 import io.mockk.every
@@ -37,11 +39,12 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.data.mongodb.core.MongoTemplate
 import java.math.BigDecimal
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class CustomerReservationE2ETest @Autowired constructor(
     private val customerReservationApplication: CustomerReservationApplication,
     private val propertyRepository: PropertyRepository,
@@ -54,14 +57,19 @@ class CustomerReservationE2ETest @Autowired constructor(
     private val paymentRepository: PaymentRepository,
     private val reservationPaymentOutboxApplication: ReservationPaymentOutboxApplication,
     private val mongoTemplate: MongoTemplate,
+    private val clock: Clock,
     @MockkBean private val paymentGateway: PaymentGateway
 ) {
 
-    private val checkIn = LocalDate.of(2026, 5, 1)
-    private val checkOut = LocalDate.of(2026, 5, 3)
+    private lateinit var checkIn: LocalDate
+    private lateinit var checkOut: LocalDate
 
     @BeforeEach
     fun setUp() {
+        (clock as MutableClock).set(FixedTestClockConfig.DEFAULT_INSTANT)
+        checkIn = LocalDate.now(clock).plusDays(7)
+        checkOut = checkIn.plusDays(2)
+
         // Clean all documents (preserve indexes)
         mongoTemplate.collectionNames.forEach { name ->
             mongoTemplate.getCollection(name).deleteMany(org.bson.Document())
@@ -95,7 +103,7 @@ class CustomerReservationE2ETest @Autowired constructor(
         inventoryApplication.syncInventoryForRoomType("prop-e2e", "rt-e2e")
 
         // 기본 마감 상태에서 예약 대상 날짜를 오픈
-        inventoryApplication.bulkBlock(
+        val processed = inventoryApplication.bulkBlock(
             propertyId = "prop-e2e",
             roomTypeId = "rt-e2e",
             startDate = checkIn,
@@ -104,6 +112,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             action = "UNBLOCK",
             count = 3
         )
+        assertThat(processed).isGreaterThan(0)
 
         memberRepository.save(
             Member.create(
@@ -141,7 +150,7 @@ class CustomerReservationE2ETest @Autowired constructor(
                 paymentKey = "toss_pk_e2e",
                 orderId = reservationResult.payment.orderId,
                 method = "카드",
-                approvedAt = Instant.now(),
+                approvedAt = Instant.now(clock),
                 totalAmount = BigDecimal(200_000),
                 receiptUrl = null, cardNumber = null, cardCompany = null
             )
@@ -248,7 +257,7 @@ class CustomerReservationE2ETest @Autowired constructor(
                 paymentKey = "toss_pk_idempotent",
                 orderId = reservationResult.payment.orderId,
                 method = "카드",
-                approvedAt = Instant.now(),
+                approvedAt = Instant.now(clock),
                 totalAmount = BigDecimal(200_000),
                 receiptUrl = null, cardNumber = null, cardCompany = null
             )
@@ -312,7 +321,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             // 결제 확인
             every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
                 paymentKey = "toss_pk_inv", orderId = reservationResult.payment.orderId,
-                method = "카드", approvedAt = Instant.now(),
+                method = "카드", approvedAt = Instant.now(clock),
                 totalAmount = BigDecimal(200_000),
                 receiptUrl = null, cardNumber = null, cardCompany = null
             )

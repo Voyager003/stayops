@@ -5,6 +5,7 @@ import com.stayops.channel.domain.model.SyncTask
 import com.stayops.channel.domain.model.SyncTaskStatus
 import com.stayops.channel.domain.model.SyncTaskType
 import com.stayops.channel.domain.repository.SyncTaskRepository
+import com.stayops.shared.config.FixedTestClockConfig
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -12,13 +13,15 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
+import java.time.Clock
 import java.time.Instant
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class MongoSyncTaskRepositoryTest @Autowired constructor(
     private val syncTaskRepository: SyncTaskRepository,
-    private val mongoDataRepository: SyncTaskMongoDataRepository
+    private val mongoDataRepository: SyncTaskMongoDataRepository,
+    private val clock: Clock
 ) {
 
     @BeforeEach
@@ -35,7 +38,8 @@ class MongoSyncTaskRepositoryTest @Autowired constructor(
         propertyId = propertyId,
         channelCode = channelCode,
         type = SyncTaskType.AVAILABILITY_UPDATE,
-        payload = mapOf("roomTypeId" to "rt-1", "date" to "2026-03-20", "availableCount" to 3)
+        payload = mapOf("roomTypeId" to "rt-1", "date" to "2026-03-20", "availableCount" to 3),
+        now = clock.instant()
     )
 
     @Nested
@@ -60,7 +64,7 @@ class MongoSyncTaskRepositoryTest @Autowired constructor(
         fun `nextRetryAt이 null인 PENDING 태스크를 반환한다`() {
             syncTaskRepository.save(newTask(id = "task-1"))
 
-            val tasks = syncTaskRepository.findPendingTasksReadyForProcessing(Instant.now())
+            val tasks = syncTaskRepository.findPendingTasksReadyForProcessing(Instant.now(clock))
 
             assertThat(tasks).hasSize(1)
         }
@@ -68,11 +72,11 @@ class MongoSyncTaskRepositoryTest @Autowired constructor(
         @Test
         fun `nextRetryAt이 과거인 PENDING 태스크를 반환한다`() {
             val task = newTask(id = "task-2")
-                .startProcessing()
-                .fail("error")
+                .startProcessing(clock.instant())
+                .fail("error", clock.instant())
             syncTaskRepository.save(task)
 
-            val farFuture = Instant.now().plusSeconds(600)
+            val farFuture = Instant.now(clock).plusSeconds(600)
             val tasks = syncTaskRepository.findPendingTasksReadyForProcessing(farFuture)
 
             assertThat(tasks).hasSize(1)
@@ -81,11 +85,11 @@ class MongoSyncTaskRepositoryTest @Autowired constructor(
         @Test
         fun `nextRetryAt이 미래인 PENDING 태스크는 반환하지 않는다`() {
             val task = newTask(id = "task-3")
-                .startProcessing()
-                .fail("error")
+                .startProcessing(clock.instant())
+                .fail("error", clock.instant())
             syncTaskRepository.save(task)
 
-            val past = Instant.now().minusSeconds(600)
+            val past = Instant.now(clock).minusSeconds(600)
             val tasks = syncTaskRepository.findPendingTasksReadyForProcessing(past)
 
             assertThat(tasks).isEmpty()
@@ -93,10 +97,12 @@ class MongoSyncTaskRepositoryTest @Autowired constructor(
 
         @Test
         fun `COMPLETED 태스크는 반환하지 않는다`() {
-            val task = newTask(id = "task-4").startProcessing().complete()
+            val task = newTask(id = "task-4")
+                .startProcessing(clock.instant())
+                .complete(clock.instant())
             syncTaskRepository.save(task)
 
-            val tasks = syncTaskRepository.findPendingTasksReadyForProcessing(Instant.now())
+            val tasks = syncTaskRepository.findPendingTasksReadyForProcessing(Instant.now(clock))
 
             assertThat(tasks).isEmpty()
         }
@@ -108,7 +114,11 @@ class MongoSyncTaskRepositoryTest @Autowired constructor(
         fun `상태별 개수를 집계한다`() {
             syncTaskRepository.save(newTask(id = "t-1"))
             syncTaskRepository.save(newTask(id = "t-2"))
-            syncTaskRepository.save(newTask(id = "t-3").startProcessing().complete())
+            syncTaskRepository.save(
+                newTask(id = "t-3")
+                    .startProcessing(clock.instant())
+                    .complete(clock.instant())
+            )
 
             val counts = syncTaskRepository.countByPropertyIdAndChannelCodeGroupByStatus("prop-1", "AGODA")
 

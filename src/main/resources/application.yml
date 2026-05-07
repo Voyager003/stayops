@@ -29,3 +29,10 @@ ota:
   http:
     connect-timeout: 5s
     read-timeout: 10s
+
+stayops:
+  mongodb:
+    timeout:
+      server-selection-timeout: 5s
+      connect-timeout: 2s
+      read-timeout: 5s

@@ -3,6 +3,7 @@ package com.stayops.reservation.infrastructure.persistence
 import com.stayops.TestcontainersConfiguration
 import com.stayops.reservation.domain.model.*
 import com.stayops.reservation.domain.repository.ReservationRepository
+import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
 import org.assertj.core.api.Assertions.assertThat
@@ -14,15 +15,17 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.data.mongodb.core.MongoTemplate
 import java.math.BigDecimal
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class MongoReservationRepositoryTest @Autowired constructor(
     private val reservationRepository: ReservationRepository,
     private val mongoDataRepository: ReservationMongoDataRepository,
-    private val mongoTemplate: MongoTemplate
+    private val mongoTemplate: MongoTemplate,
+    private val clock: Clock
 ) {
 
     @BeforeEach
@@ -309,11 +312,12 @@ class MongoReservationRepositoryTest @Autowired constructor(
     inner class `countByPropertyIdAndCreatedDate` {
         @Test
         fun `해당 날짜에 생성된 예약 수를 반환한다`() {
-            reservationRepository.save(newReservation(id = "rsv-1"))
-            reservationRepository.save(newReservation(id = "rsv-2"))
-            reservationRepository.save(newReservation(id = "rsv-3", propertyId = "prop-2"))
+            val today = LocalDate.now(clock)
+            val createdAt = today.atStartOfDay(clock.zone).toInstant()
+            reservationRepository.save(newReservation(id = "rsv-1", createdAt = createdAt))
+            reservationRepository.save(newReservation(id = "rsv-2", createdAt = createdAt))
+            reservationRepository.save(newReservation(id = "rsv-3", propertyId = "prop-2", createdAt = createdAt))
 
-            val today = LocalDate.now()
             val count = reservationRepository.countByPropertyIdAndCreatedDate("prop-1", today)
 
             assertThat(count).isEqualTo(2)
@@ -321,9 +325,11 @@ class MongoReservationRepositoryTest @Autowired constructor(
 
         @Test
         fun `다른 날짜에 생성된 예약은 포함하지 않는다`() {
-            reservationRepository.save(newReservation(id = "rsv-1"))
+            val today = LocalDate.now(clock)
+            val createdAt = today.atStartOfDay(clock.zone).toInstant()
+            reservationRepository.save(newReservation(id = "rsv-1", createdAt = createdAt))
 
-            val tomorrow = LocalDate.now().plusDays(1)
+            val tomorrow = today.plusDays(1)
             val count = reservationRepository.countByPropertyIdAndCreatedDate("prop-1", tomorrow)
 
             assertThat(count).isEqualTo(0)

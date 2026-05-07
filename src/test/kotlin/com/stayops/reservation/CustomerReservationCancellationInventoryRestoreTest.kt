@@ -20,7 +20,9 @@ import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
+import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money
+import com.stayops.shared.domain.MutableClock
 import com.ninjasquad.springmockk.MockkBean
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -30,6 +32,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.data.mongodb.core.MongoTemplate
+import java.time.Clock
 import java.time.LocalDate
 
 /**
@@ -45,7 +48,7 @@ import java.time.LocalDate
  * - R-9-N #5: 예약 취소 시 모든 차감 재고 복원 (긍정 경로)
  */
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class CustomerReservationCancellationInventoryRestoreTest @Autowired constructor(
     private val customerReservationApplication: CustomerReservationApplication,
     private val propertyRepository: PropertyRepository,
@@ -57,21 +60,30 @@ class CustomerReservationCancellationInventoryRestoreTest @Autowired constructor
     private val reservationRepository: ReservationRepository,
     private val paymentRepository: PaymentRepository,
     private val mongoTemplate: MongoTemplate,
+    private val clock: Clock,
     @MockkBean private val paymentGateway: PaymentGateway
 ) {
 
     private val propertyId = "prop-cancel"
     private val roomTypeId = "rt-cancel"
     private val memberId = "customer-cancel"
-    private val night1 = LocalDate.of(2026, 7, 1)
-    private val night2 = LocalDate.of(2026, 7, 2)
-    private val night3 = LocalDate.of(2026, 7, 3)
-    private val night4 = LocalDate.of(2026, 7, 4) // 인접 날짜 (예약에 포함되지 않음)
-    private val checkIn = night1
-    private val checkOut = LocalDate.of(2026, 7, 4) // 3박 (night1, night2, night3)
+    private lateinit var night1: LocalDate
+    private lateinit var night2: LocalDate
+    private lateinit var night3: LocalDate
+    private lateinit var night4: LocalDate
+    private lateinit var checkIn: LocalDate
+    private lateinit var checkOut: LocalDate
 
     @BeforeEach
     fun setUp() {
+        (clock as MutableClock).set(FixedTestClockConfig.DEFAULT_INSTANT)
+        night1 = LocalDate.now(clock).plusDays(21)
+        night2 = night1.plusDays(1)
+        night3 = night1.plusDays(2)
+        night4 = night1.plusDays(3)
+        checkIn = night1
+        checkOut = night4
+
         // 모든 컬렉션 cleanup
         mongoTemplate.collectionNames.forEach { name ->
             mongoTemplate.getCollection(name).deleteMany(org.bson.Document())
@@ -102,7 +114,7 @@ class CustomerReservationCancellationInventoryRestoreTest @Autowired constructor
         inventoryApplication.syncInventoryForRoomType(propertyId, roomTypeId)
 
         // night1~night4 모두 unblock → 4일 모두 가용 1
-        inventoryApplication.bulkBlock(
+        val processed = inventoryApplication.bulkBlock(
             propertyId = propertyId,
             roomTypeId = roomTypeId,
             startDate = night1,
@@ -111,6 +123,7 @@ class CustomerReservationCancellationInventoryRestoreTest @Autowired constructor
             action = "UNBLOCK",
             count = 1
         )
+        assertThat(processed).isGreaterThan(0)
 
         // DIRECT Channel
         channelRepository.save(Channel.createDirect(id = "ch-cancel", propertyId = propertyId))

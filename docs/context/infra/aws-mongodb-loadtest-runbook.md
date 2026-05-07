@@ -22,7 +22,7 @@
 
 - base compose: `docker-compose.yml`
 - standalone override: `docker-compose.loadtest-standalone.yml`
-- standalone Prometheus config: `infra/app/prometheus.loadtest-standalone.yml`
+- standalone Prometheus config: `infra/production/app/prometheus.loadtest-standalone.yml`
 - k6 scripts:
   - `loadtest/k6/stayops-app-load.js`
   - `loadtest/k6/stayops-db-load.js`
@@ -80,14 +80,14 @@ docker compose -f docker-compose.yml -f docker-compose.loadtest-standalone.yml l
 
 ## Step 4. Observability stack 준비
 
-Prometheus / Grafana를 같이 쓸 경우, app host의 관측 스택은 `infra/app/docker-compose.yml` 기준으로 올린다.
+Prometheus / Grafana를 같이 쓸 경우, app host의 관측 스택은 `infra/production/app/docker-compose.yml` 기준으로 올린다.
 
 ```bash
-cd infra/app
+cd infra/production/app
 PROMETHEUS_CONFIG_PATH=./prometheus.loadtest-standalone.yml \
 MONGO_HOST=<MONGO_PRIVATE_IP> \
 MONGO_EXPORTER_HOST=<MONGO_PRIVATE_IP> \
-docker compose up -d prometheus grafana node-exporter
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d prometheus grafana node-exporter
 ```
 
 확인 포인트:

@@ -10,6 +10,8 @@ import com.stayops.room.infrastructure.persistence.RoomDocument
 import com.stayops.room.domain.model.RoomStatus
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
+import com.stayops.shared.config.FixedTestClockConfig
+import com.stayops.shared.domain.MutableClock
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -27,28 +29,33 @@ import org.springframework.web.context.WebApplicationContext
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import tools.jackson.databind.ObjectMapper
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class RoomInventoryApiTest @Autowired constructor(
     private val context: WebApplicationContext,
     private val objectMapper: ObjectMapper,
     private val inventoryMongoRepo: RoomInventoryMongoDataRepository,
     private val roomMongoRepo: RoomMongoDataRepository,
     private val inventoryApplication: RoomInventoryApplication,
-    private val redisTemplate: StringRedisTemplate
+    private val redisTemplate: StringRedisTemplate,
+    private val clock: Clock
 ) {
     private lateinit var mockMvc: MockMvc
 
     private val pid = "prop-1"
     private val roomTypeId = "rt-1"
-    private val today = LocalDate.now()
+    private lateinit var today: LocalDate
     private val baseUrl = "/api/v1/properties/$pid"
 
     @BeforeEach
     fun setUp() {
+        (clock as MutableClock).set(FixedTestClockConfig.DEFAULT_INSTANT)
+        today = LocalDate.now(clock)
+
         val admin = Member.create(
             id = "test-admin", email = "admin@test.com",
             passwordHash = "hashed", name = "테스트관리자", role = MemberRole.ADMIN
@@ -61,7 +68,7 @@ class RoomInventoryApiTest @Autowired constructor(
         redisTemplate.connectionFactory?.connection?.serverCommands()?.flushAll()
 
         // 테스트용 객실 3개 생성 + 재고 자동 생성 (기본 마감 — blockedCount=3)
-        val now = Instant.now()
+        val now = Instant.now(clock)
         listOf("101", "102", "103").forEach { num ->
             roomMongoRepo.save(
                 RoomDocument(

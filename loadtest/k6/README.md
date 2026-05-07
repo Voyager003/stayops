@@ -1,11 +1,10 @@
-# StayOps k6 Load Test
+# k6 부하 테스트
 
 ## Purpose
 
-이 부하 테스트는 고객 핵심 여정 기준으로 App 서버와 MongoDB replica set의 처리 한계를 찾고,
-한계 초과 부하에서 mongo1 장애와 recovery를 관측하기 위한 것이다.
+이 부하 테스트는 핵심 비즈니스 로직 기준으로 App 서버와 MongoDB replica set의 처리 한계를 찾고 mongo1 장애와 recovery를 관측하기 위함이다.
 
-이번 범위에 포함한다.
+다음을 이번 범위에 포함한다.
 
 - 고객 숙소 탐색
 - 숙소 상세 / 객실 타입 조회
@@ -21,22 +20,22 @@
 - breakpoint 탐색
 - MongoDB overload 실험
 
-이번 범위에서 제외한다.
+다음은 이번 범위에서 제외한다.
 
 - OTA random booking / webhook 유입
 - 실제 Toss API 대량 호출
 
-외부 결제 API는 대량 부하 테스트 결과를 왜곡하므로 App 서버는 `STAYOPS_PAYMENT_GATEWAY=loadtest`일 때
-loadtest 전용 mock payment gateway를 사용한다. 기본값은 `toss`이며 운영 결제 동작은 유지된다.
+외부 결제 API는 대량 부하 테스트 결과를 왜곡하므로 App 서버는 `STAYOPS_PAYMENT_GATEWAY=loadtest`일 때, loadtest 전용 mock payment gateway를 사용한다. 기본값은 `toss`이며 운영 결제 동작은 유지된다.
 
 ## Synthetic data
 
-부하 테스트 전 운영 MongoDB에 synthetic data를 넣는다. 모든 데이터는 `loadtest-<runId>` prefix를 사용한다.
-테스트 계정도 run prefix를 포함한다.
+
+부하 테스트 전 운영 MongoDB에 synthetic data를 넣는다. 모든 데이터는 `loadtest-<runId>` prefix를 사용하며, 테스트 계정도 run prefix를 포함한다.
+
+계정 비밀번호는 seed 스크립트와 k6 실행 환경에서 같은 테스트 전용 값을 사용한다. 운영 비밀번호는 문서에 기록하지 않는다.
 
 - 고객: `loadtest-run-001-customer-0001@example.com`
 - OWNER: `loadtest-run-001-owner-0001@example.com`
-- 비밀번호: `password123`
 
 2GiB MongoDB 인스턴스 기준 기본 규모:
 
@@ -45,24 +44,22 @@ loadtest 전용 mock payment gateway를 사용한다. 기본값은 `toss`이며 
 - 재고 60일
 - 기존 예약 / 결제 5,000건
 
-k6 예약 생성 날짜는 seed inventory 범위 안에서만 선택된다. 기본값 기준 신규 예약 write window는
-`CHECK_IN_OFFSETS=3..45`, `NIGHTS_POOL=1,2,3`, `LOADTEST_INVENTORY_DAYS=60`을 사용한다.
+k6 예약 생성 날짜는 seed inventory 범위 안에서만 선택된다. 기본값 기준 신규 예약 write window는 `CHECK_IN_OFFSETS=3..45`, `NIGHTS_POOL=1,2,3`, `LOADTEST_INVENTORY_DAYS=60`을 사용한다.
 
-기존 예약 / 결제 seed 데이터는 기본값 기준 `LOADTEST_SEED_RESERVATION_START_OFFSET=50`,
-`LOADTEST_SEED_RESERVATION_DAY_SPAN=8`, `LOADTEST_SEED_RESERVATION_NIGHTS=1`로 생성된다. 즉 기존 예약은
-50~57일 뒤, k6 신규 예약은 최대 45일 뒤 3박까지 사용하므로 `memberId + roomTypeId + checkIn + checkOut`
-중복 기준이 서로 겹치지 않는다.
+기존 예약 / 결제 seed 데이터는 기본값 기준 `LOADTEST_SEED_RESERVATION_START_OFFSET=50`, `LOADTEST_SEED_RESERVATION_DAY_SPAN=8`, `LOADTEST_SEED_RESERVATION_NIGHTS=1`로 생성된다.
+
+이로써 기존 예약은 50~57일 뒤, k6 신규 예약은 최대 45일 뒤 3박까지 사용하므로 `memberId + roomTypeId + checkIn + checkOut` 중복 기준이 서로 겹치지 않는다.
 
 baseline / stress / breakpoint는 시작 시 계획된 예약 생성 수와 사용 가능한 예약 조합 수를 비교한다.
-부족하면 setup 단계에서 실패한다. 이 경우 `CUSTOMER_COUNT`, `HOT_PROPERTY_COUNT`, `CHECK_IN_OFFSETS`,
-`NIGHTS_POOL`을 늘리거나 테스트 rate / duration을 줄인다.
 
-안정 확인 후 `10,000 -> 20,000 -> 50,000` 순서로 올린다.
+부족하면 setup 단계에서 실패한다. 이 경우 `CUSTOMER_COUNT`, `HOT_PROPERTY_COUNT`, `CHECK_IN_OFFSETS`, `NIGHTS_POOL`을 늘리거나 테스트 rate / duration을 줄인다.
 
-mongo1에서 실행:
+기본 seed 규모는 5,000건이다. 데이터셋 자체의 영향을 실험해야 할 때만 `LOADTEST_RESERVATION_COUNT`를 `10000 -> 20000 -> 50000` 순서로 올린다. 이 값은 부하 강도가 아니라 사전 적재 예약 / 결제 데이터 수다.
+
+mongo1(primary)에서 실행:
 
 ```bash
-cd ~/stayops/infra/mongodb
+cd ~/stayops/infra/production/mongodb-rss
 set -a
 source .env
 set +a
@@ -105,7 +102,7 @@ docker compose exec \
 
 ### `stayops-app-load.js`
 
-가벼운 앱 baseline 용도다.
+가벼운 앱 baseline(기준선) 테스트이다.
 
 - `GET /health`
 - `GET /api/v1/customer/properties`
@@ -125,82 +122,82 @@ read-heavy 숙소 조회 부하다.
 
 고객 핵심 여정 smoke / average-load / stress / step-load 용도다.
 
-기본 mix:
+기본 flow 선택 상대 가중치:
 
-- `20%` 숙소 목록 조회
-- `15%` 숙소 상세 + 객실 타입 조회
-- `20%` offers 조회
-- `20%` 고객 예약 생성 + 결제 확인
-- `10%` 내 예약 조회
-- `12%` PMS 예약 목록 조회
+- `0.20` 숙소 목록 조회
+- `0.15` 숙소 상세 + 객실 타입 조회
+- `0.20` offers 조회
+- `0.20` 고객 예약 생성 + 결제 확인
+- `0.10` 내 예약 조회
+- `0.12` PMS 예약 목록 조회
+- `0` PMS PENDING 예약 수동 확정
 
-인증이 필요한 요청은 고객 계정 풀로 로그인한 뒤 세션 쿠키를 사용한다.
-결제 확인 API까지 호출한다. App 서버는 loadtest payment gateway를 켜야 외부 Toss를 호출하지 않는다.
+인증이 필요한 요청은 고객 계정 풀로 로그인한 뒤 세션 쿠키를 사용하며, 결제 확인 API까지 호출한다.
 
-`CUJ_RATE`는 HTTP RPS가 아니라 초당 핵심 사용자 여정 iteration 목표값이다. 각 iteration이 선택한 flow에 따라
-HTTP 요청 수가 1개 또는 2개 이상이 될 수 있으므로 실제 HTTP RPS는 k6 결과의 `http_reqs`로 확인한다.
+App 서버는 loadtest payment gateway를 켜야 외부 Toss를 호출하지 않는다.
 
-예약 생성은 서버의 중복 기준인 `memberId + roomTypeId + checkIn + checkOut` 조합이 반복되지 않도록
-재현 가능한 weighted schedule과 예약 전용 sequence를 사용한다. 같은 `LOADTEST_RUN_ID`로 write-heavy 테스트를
-반복 실행할 때는 cleanup/reseed를 먼저 수행하거나 `RESERVATION_SEQUENCE_OFFSET`으로 이미 사용한 조합 범위를 건너뛴다.
+`CUJ_RATE`는 HTTP RPS가 아니라 초당 핵심 사용자 여정 iteration 목표값이다.
+
+각 iteration이 선택한 flow에 따라 HTTP 요청 수가 1개 또는 2개 이상이 될 수 있으므로 실제 HTTP RPS는 k6 결과의 `http_reqs`로 확인한다.
+
+이 때 가중치는 최종 HTTP RPS 비율이 아니며, 코드는 가중치를 normalize한 뒤 flow를 선택한다.
+
+예약 생성은 서버의 중복 기준인 `memberId + roomTypeId + checkIn + checkOut` 조합이 반복되지 않도록 재현 가능한 weighted schedule과 예약 전용 sequence를 사용한다.
+
+같은 `LOADTEST_RUN_ID`로 write-heavy 테스트를 반복 실행할 때는 cleanup/reseed를 먼저 수행하거나 `RESERVATION_SEQUENCE_OFFSET`으로 이미 사용한 조합 범위를 건너뛴다.
+
 반복 실행에서 이전 테스트가 만든 PENDING 예약이 남아 있으면 정상 baseline에서도 `409 DUPLICATE_RESERVATION`이 발생할 수 있다.
 
-baseline / step-load 기본값에서는 PMS 수동 확정을 실행하지 않는다. 같은 PENDING 예약을 반복 확정하면
-비즈니스 상태 충돌이 발생하므로, PMS 확정은 `MODE=pms-confirm`에서 각 pending 예약을 한 번씩만 확정한다.
+baseline / step-load 기본값에서는 PMS 수동 확정을 실행하지 않는다. 같은 PENDING 예약을 반복 확정하면 비즈니스 상태 충돌이 발생하므로, PMS 확정은 `MODE=pms-confirm`에서 각 pending 예약을 한 번씩만 확정한다.
+
 실패 응답 본문을 k6 터미널에 남겨야 할 때는 `LOG_UNEXPECTED_RESPONSES=true`를 추가한다.
 
-중복 예약은 baseline / stress / breakpoint에 섞지 않는다. `MODE=duplicate-reservation`에서만 첫 예약 `201`,
-동일 조건 재시도 `409 DUPLICATE_RESERVATION`을 기대 성공으로 검증한다.
+중복 예약은 baseline / stress / breakpoint에 섞지 않는다. `MODE=duplicate-reservation`에서만 첫 예약 `201`, 동일 조건 재시도 `409 DUPLICATE_RESERVATION`을 기대 성공으로 검증한다.
 
 ### `stayops-breakpoint-load.js`
 
-처리 한계 탐색용이다. 기본 RPS 단계:
+처리 한계(break-point) 탐색용이다.
+
+기본 CUJ/s 단계:
 
 ```text
 20 -> 40 -> 80 -> 120 -> 160 -> 220
 ```
 
-각 단계는 기본 5분이다.
+각 단계는 기본 5분이다. 각 단계를 관찰하다가 hard abort 기준이 유예 시간 동안 계속 깨지면 k6가 자동 중단한다.
 
-breakpoint는 수동으로 서버가 완전히 멈출 때까지 밀어붙이는 테스트가 아니다. 각 단계를 관찰하다가
-hard abort 기준이 유예 시간 동안 계속 깨지면 k6가 자동 중단한다. 이때 직전 안정 단계는 failover 테스트의
-기준 부하 후보가 되고, 중단된 단계는 위험 구간으로 본다.
+이때 직전 안정 단계는 failover 테스트의 기준 부하 후보가 되고, 중단된 단계는 위험 구간으로 본다.
 
 기본 hard abort 기준:
 
 - 전체 `http_req_failed >= 5%`가 `2m` 이상 지속
 - 전체 check 성공률 `< 95%`가 `2m` 이상 지속
 - 전체 HTTP p95 `>= 5s`가 `2m` 이상 지속
-- `dropped_iterations > 0`가 `2m` 이상 지속
+
+`dropped_iterations`는 breakpoint의 hard abort 기준으로 쓰지 않고 관측 지표로만 본다.
+
+목표 arrival rate를 일부 놓치는 현상만으로 서버 한계를 과소평가하지 않기 위함이다.
 
 endpoint별 p95, `http_req_failed < 1%`, `checks > 99%`는 결과 판정용 soft threshold로 유지한다.
-일시적인 GC, 네트워크 지연, 짧은 spike로 한계점을 과소평가하지 않기 위해 즉시 중단하지 않고
-`BREAKPOINT_ABORT_DELAY` 기본 `2m`를 둔다.
 
-### `stayops-mongo-overload.js`
+일시적인 GC, 네트워크 지연, 짧은 spike로 한계점을 과소평가하지 않기 위해 즉시 중단하지 않고 `BREAKPOINT_ABORT_DELAY` 기본 `2m`를 둔다.
 
-destructive 실험용이다. breakpoint 이후 한계 이상의 부하를 가해 mongo1 primary 장애를 유도한다.
-
-기본 RPS 단계:
-
-```text
-160 -> 240 -> 320 -> 480
-```
-
-실행 전 mongo1, mongo2, mongo3의 `rs.status()`와 Grafana 대시보드를 열어둔다.
-
-## Run examples
+## Examples
 
 ```bash
 cd loadtest/k6
 ```
 
-App 서버 부하 테스트 전 loadtest payment gateway를 켠다.
+App 서버 부하 테스트 전 loadtest payment gateway를 켠다. 아래 명령은 repo root 기준이다.
 
 ```bash
-STAYOPS_PAYMENT_GATEWAY=loadtest
-STAYOPS_PAYMENT_LOADTEST_LATENCY_MS=200
+cd ../..
+
+STAYOPS_PAYMENT_GATEWAY=loadtest \
+STAYOPS_PAYMENT_LOADTEST_LATENCY_MS=200 \
 docker compose -f docker-compose.prod.yml up -d app
+
+cd loadtest/k6
 ```
 
 ### Smoke
@@ -297,7 +294,6 @@ BREAKPOINT_ABORT_DELAY=2m \
 BREAKPOINT_ABORT_HTTP_FAILED_RATE=0.05 \
 BREAKPOINT_ABORT_CHECK_RATE=0.95 \
 BREAKPOINT_ABORT_P95_MS=5000 \
-BREAKPOINT_ABORT_DROPPED_ITERATIONS=1 \
 CUSTOMER_COUNT=30 \
 OWNER_COUNT=10 \
 k6 run stayops-breakpoint-load.js
@@ -316,23 +312,11 @@ k6 run stayops-breakpoint-load.js
 
 breakpoint 결과 해석:
 
-- 안정 구간: `http_req_failed < 1%`, `dropped_iterations = 0`, 주요 API p95 기준 만족
-- 위험 구간: p95 급등, dropped iteration 발생, App/MongoDB CPU 또는 memory가 지속 상승
+- 안정 구간: `http_req_failed < 1%`, 주요 API p95 기준 만족, `dropped_iterations`가 없거나 극소수
+- 위험 구간: p95/p99 급등, dropped iteration 급증, App/MongoDB CPU 또는 memory가 지속 상승
 - 중단 구간: hard abort 기준이 유예 시간 이상 지속된 단계
 
-failover/recovery 테스트는 breakpoint의 안정 구간 `60~70%` 부하에서 먼저 실행하고, 이후 위험 구간 직전
-`80~90%` 부하에서 반복한다.
-
-### Mongo overload
-
-```bash
-LOADTEST_RUN_ID=run-001 \
-OVERLOAD_RATES=160,240,320,480 \
-OVERLOAD_STAGE_MINUTES=3 \
-CUSTOMER_COUNT=30 \
-OWNER_COUNT=10 \
-k6 run stayops-mongo-overload.js
-```
+failover/recovery 테스트는 breakpoint의 안정 구간 `60~70%` 부하에서 먼저 실행하고, 이후 위험 구간 직전 `80~90%` 부하에서 반복한다.
 
 ## Metrics
 
@@ -341,7 +325,8 @@ k6:
 - `http_req_duration p95/p99`
 - `http_req_failed`
 - `dropped_iterations`
-- endpoint별 RPS
+- 전체 HTTP RPS: `http_reqs`
+- endpoint별 처리량은 k6 summary만으로는 제한적이므로 App의 `http_server_requests_seconds_count`를 함께 본다.
 
 App / JVM:
 
@@ -364,7 +349,7 @@ MongoDB:
 - mongo1/2/3 up
 - primary / secondary state
 - connections
-- opcounters
+- op-counters
 - replication lag
 - CPU / memory / disk I/O
 
@@ -378,18 +363,18 @@ CloudWatch:
 
 ## Pass / fail 기준
 
-안정적으로 감당 가능한 부하는 아래 기준을 만족하는 최대 RPS로 본다.
+안정적으로 감당 가능한 부하는 아래 기준을 만족하는 최대 CUJ/s와 그때의 실제 HTTP RPS로 본다.
 
 - `http_req_failed < 1%`
 - baseline / stress의 `DUPLICATE_RESERVATION`은 0건
-- `dropped_iterations = 0`
+- `dropped_iterations`가 없거나 결과 해석을 흔들지 않을 만큼 낮음
 - 주요 API p95 `< 1.5s ~ 2.5s`
 - App 5xx가 지속적으로 증가하지 않음
 - MongoDB primary가 정상 유지
 
 Mongo overload는 pass/fail보다 관측 실험이다.
 
-- mongo1이 죽는 시점의 RPS
+- Primary(mongo1)이 죽는 시점의 CUJ/s와 실제 HTTP RPS
 - secondary 승격 시간
 - app 오류 지속 시간
 - 정상 read/write 복구 시간

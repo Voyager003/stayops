@@ -26,7 +26,9 @@ import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
+import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money
+import com.stayops.shared.domain.MutableClock
 import com.ninjasquad.springmockk.MockkBean
 import io.mockk.every
 import org.assertj.core.api.Assertions.assertThat
@@ -38,6 +40,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.data.mongodb.core.MongoTemplate
 import java.math.BigDecimal
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 
@@ -49,7 +52,7 @@ import java.time.LocalDate
  * 2) 결제 승인 worker가 재고 부족을 감지하면 부분 차감 재고를 복원하고 보상 취소 Outbox를 만든다
  */
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class CustomerReservationTransactionRollbackTest @Autowired constructor(
     private val customerReservationApplication: CustomerReservationApplication,
     private val propertyRepository: PropertyRepository,
@@ -64,19 +67,26 @@ class CustomerReservationTransactionRollbackTest @Autowired constructor(
     private val paymentOutboxRepository: PaymentOutboxRepository,
     private val reservationPaymentOutboxApplication: ReservationPaymentOutboxApplication,
     private val mongoTemplate: MongoTemplate,
+    private val clock: Clock,
     @MockkBean private val paymentGateway: PaymentGateway
 ) {
 
     private val propertyId = "prop-rollback"
     private val roomTypeId = "rt-rollback"
     private val memberId = "customer-rollback"
-    private val night1 = LocalDate.of(2026, 6, 1)
-    private val night2 = LocalDate.of(2026, 6, 2)
-    private val checkIn = night1
-    private val checkOut = LocalDate.of(2026, 6, 3) // 2박 (night1, night2)
+    private lateinit var night1: LocalDate
+    private lateinit var night2: LocalDate
+    private lateinit var checkIn: LocalDate
+    private lateinit var checkOut: LocalDate
 
     @BeforeEach
     fun setUp() {
+        (clock as MutableClock).set(FixedTestClockConfig.DEFAULT_INSTANT)
+        night1 = LocalDate.now(clock).plusDays(14)
+        night2 = night1.plusDays(1)
+        checkIn = night1
+        checkOut = night1.plusDays(2)
+
         // 모든 컬렉션 cleanup
         mongoTemplate.collectionNames.forEach { name ->
             mongoTemplate.getCollection(name).deleteMany(org.bson.Document())
@@ -107,7 +117,7 @@ class CustomerReservationTransactionRollbackTest @Autowired constructor(
         inventoryApplication.syncInventoryForRoomType(propertyId, roomTypeId)
 
         // night1만 unblock → night1 가용 1, night2는 여전히 차단(가용 0)
-        inventoryApplication.bulkBlock(
+        val processed = inventoryApplication.bulkBlock(
             propertyId = propertyId,
             roomTypeId = roomTypeId,
             startDate = night1,
@@ -116,6 +126,7 @@ class CustomerReservationTransactionRollbackTest @Autowired constructor(
             action = "UNBLOCK",
             count = 1
         )
+        assertThat(processed).isGreaterThan(0)
 
         // DIRECT Channel
         channelRepository.save(Channel.createDirect(id = "ch-rb", propertyId = propertyId))

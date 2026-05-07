@@ -16,7 +16,9 @@ import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
+import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money
+import com.stayops.shared.domain.MutableClock
 import com.ninjasquad.springmockk.MockkBean
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -29,11 +31,12 @@ import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.data.mongodb.core.query.Update
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class PendingExpirationE2ETest @Autowired constructor(
     private val customerReservationApplication: CustomerReservationApplication,
     private val propertyRepository: PropertyRepository,
@@ -43,14 +46,19 @@ class PendingExpirationE2ETest @Autowired constructor(
     private val inventoryApplication: RoomInventoryApplication,
     private val memberRepository: MemberRepository,
     private val mongoTemplate: MongoTemplate,
+    private val clock: Clock,
     @MockkBean private val paymentGateway: PaymentGateway
 ) {
 
-    private val checkIn = LocalDate.of(2026, 5, 1)
-    private val checkOut = LocalDate.of(2026, 5, 2)
+    private lateinit var checkIn: LocalDate
+    private lateinit var checkOut: LocalDate
 
     @BeforeEach
     fun setUp() {
+        (clock as MutableClock).set(FixedTestClockConfig.DEFAULT_INSTANT)
+        checkIn = LocalDate.now(clock).plusDays(7)
+        checkOut = checkIn.plusDays(1)
+
         mongoTemplate.collectionNames.forEach { name ->
             mongoTemplate.getCollection(name).deleteMany(org.bson.Document())
         }
@@ -80,7 +88,7 @@ class PendingExpirationE2ETest @Autowired constructor(
         inventoryApplication.syncInventoryForRoomType("prop-exp", "rt-exp")
 
         // Unblock inventory for test dates
-        inventoryApplication.bulkBlock(
+        val processed = inventoryApplication.bulkBlock(
             propertyId = "prop-exp",
             roomTypeId = "rt-exp",
             startDate = checkIn,
@@ -89,6 +97,7 @@ class PendingExpirationE2ETest @Autowired constructor(
             action = "UNBLOCK",
             count = 1
         )
+        assertThat(processed).isGreaterThan(0)
 
         // DIRECT Channel
         channelRepository.save(Channel.createDirect(id = "ch-exp", propertyId = "prop-exp"))
@@ -139,7 +148,7 @@ class PendingExpirationE2ETest @Autowired constructor(
             // Manually set expiresAt to past via MongoTemplate
             mongoTemplate.updateFirst(
                 Query.query(Criteria.where("_id").`is`(reservationResult.reservation.id)),
-                Update.update("expiresAt", Instant.now().minusSeconds(3600)),
+                Update.update("expiresAt", Instant.now(clock).minusSeconds(3600)),
                 "reservations"
             )
 

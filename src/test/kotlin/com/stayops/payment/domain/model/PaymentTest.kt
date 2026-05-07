@@ -8,6 +8,7 @@ import io.kotest.matchers.shouldNotBe
 import java.time.Instant
 
 class PaymentTest : BehaviorSpec({
+    val fixedApprovedAt = Instant.parse("2026-04-01T12:00:00Z")
 
     fun pendingPayment() = Payment.create(
         id = "pay-1",
@@ -218,7 +219,7 @@ class PaymentTest : BehaviorSpec({
                     payment.approve(
                         paymentKey = "toss_pk_456",
                         method = "계좌이체",
-                        approvedAt = Instant.now()
+                        approvedAt = fixedApprovedAt
                     )
                 }
             }
@@ -291,7 +292,7 @@ class PaymentTest : BehaviorSpec({
                     payment.approve(
                         paymentKey = "toss_pk_789",
                         method = "카드",
-                        approvedAt = Instant.now()
+                        approvedAt = fixedApprovedAt
                     )
                 }
             }
@@ -322,7 +323,7 @@ class PaymentTest : BehaviorSpec({
                     payment.approve(
                         paymentKey = "toss_pk_456",
                         method = "계좌이체",
-                        approvedAt = Instant.now()
+                        approvedAt = fixedApprovedAt
                     )
                 }
             }

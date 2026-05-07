@@ -15,6 +15,7 @@ import com.stayops.reservation.infrastructure.persistence.ReservationMongoDataRe
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.infrastructure.persistence.RoomTypeDocument
 import com.stayops.room.infrastructure.persistence.RoomTypeMongoDataRepository
+import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -22,20 +23,23 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
+import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class ConcurrentReservationTest @Autowired constructor(
     private val reservationApplication: ReservationApplication,
     private val reservationMongoDataRepository: ReservationMongoDataRepository,
     private val roomTypeMongoDataRepository: RoomTypeMongoDataRepository,
     private val channelMongoDataRepository: ChannelMongoDataRepository,
     private val inventoryMongoDataRepository: RoomInventoryMongoDataRepository,
-    private val guestMongoDataRepository: GuestMongoDataRepository
+    private val guestMongoDataRepository: GuestMongoDataRepository,
+    private val clock: Clock
 ) {
 
     @BeforeEach
@@ -63,14 +67,15 @@ class ConcurrentReservationTest @Autowired constructor(
         val guest = Guest.create(id = "guest-1", propertyId = "prop-1", name = "홍길동", phone = "010-1234-5678")
         guestMongoDataRepository.save(GuestDocument.from(guest))
 
-        val date = LocalDate.of(2026, 5, 1)
+        val date = LocalDate.now(clock).plusDays(7)
+        val now = Instant.now(clock)
         val inventory = RoomInventory.reconstitute(
             id = "inv-1", propertyId = "prop-1", roomTypeId = "rt-1",
             date = date, totalCount = 1,
             reservedCount = 0, blockedCount = 0,
             version = null,
-            createdAt = java.time.Instant.now(),
-            updatedAt = java.time.Instant.now()
+            createdAt = now,
+            updatedAt = now
         )
         inventoryMongoDataRepository.save(RoomInventoryDocument.from(inventory))
 

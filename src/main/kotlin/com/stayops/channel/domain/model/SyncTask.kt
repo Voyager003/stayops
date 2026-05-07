@@ -22,25 +22,25 @@ data class SyncTask private constructor(
     val updatedAt: Instant
 ) {
 
-    fun startProcessing(): SyncTask {
+    fun startProcessing(now: Instant = Instant.now()): SyncTask {
         check(status == SyncTaskStatus.PENDING) {
             "PENDING 상태에서만 처리를 시작할 수 있습니다: $status"
         }
-        return copy(status = SyncTaskStatus.IN_PROGRESS, updatedAt = Instant.now())
+        return copy(status = SyncTaskStatus.IN_PROGRESS, updatedAt = now)
     }
 
-    fun complete(): SyncTask {
+    fun complete(now: Instant = Instant.now()): SyncTask {
         check(status == SyncTaskStatus.IN_PROGRESS) {
             "IN_PROGRESS 상태에서만 완료할 수 있습니다: $status"
         }
         return copy(
             status = SyncTaskStatus.COMPLETED,
             nextRetryAt = null,
-            updatedAt = Instant.now()
+            updatedAt = now
         )
     }
 
-    fun skip(reason: String): SyncTask {
+    fun skip(reason: String, now: Instant = Instant.now()): SyncTask {
         check(status == SyncTaskStatus.IN_PROGRESS) {
             "IN_PROGRESS 상태에서만 건너뛸 수 있습니다: $status"
         }
@@ -48,11 +48,11 @@ data class SyncTask private constructor(
             status = SyncTaskStatus.SKIPPED,
             lastError = reason,
             nextRetryAt = null,
-            updatedAt = Instant.now()
+            updatedAt = now
         )
     }
 
-    fun fail(errorMessage: String): SyncTask {
+    fun fail(errorMessage: String, now: Instant = Instant.now()): SyncTask {
         check(status == SyncTaskStatus.IN_PROGRESS) {
             "IN_PROGRESS 상태에서만 실패 처리할 수 있습니다: $status"
         }
@@ -62,13 +62,13 @@ data class SyncTask private constructor(
         return copy(
             status = if (reachedMax) SyncTaskStatus.FAILED else SyncTaskStatus.PENDING,
             retryCount = newRetryCount,
-            nextRetryAt = if (reachedMax) null else Instant.now() + backoffDelay(newRetryCount),
+            nextRetryAt = if (reachedMax) null else now + backoffDelay(newRetryCount),
             lastError = errorMessage,
-            updatedAt = Instant.now()
+            updatedAt = now
         )
     }
 
-    fun retry(): SyncTask {
+    fun retry(now: Instant = Instant.now()): SyncTask {
         check(status == SyncTaskStatus.FAILED) {
             "FAILED 상태에서만 수동 재시도할 수 있습니다: $status"
         }
@@ -77,7 +77,7 @@ data class SyncTask private constructor(
             retryCount = 0,
             nextRetryAt = null,
             lastError = null,
-            updatedAt = Instant.now()
+            updatedAt = now
         )
     }
 
@@ -93,9 +93,9 @@ data class SyncTask private constructor(
             propertyId: String,
             channelCode: String,
             type: SyncTaskType,
-            payload: Map<String, Any>
+            payload: Map<String, Any>,
+            now: Instant = Instant.now()
         ): SyncTask {
-            val now = Instant.now()
             return SyncTask(
                 id = id,
                 propertyId = propertyId,

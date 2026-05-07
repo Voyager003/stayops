@@ -1,0 +1,88 @@
+name: stayops-minimal-app
+
+services:
+  app:
+    image: ${STAYOPS_IMAGE:-ghcr.io/voyager003/stayops:latest}
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_MONGODB_URI: ${SPRING_MONGODB_URI}
+      SPRING_DATA_REDIS_HOST: redis
+      TOSS_SECRET_KEY: ${TOSS_SECRET_KEY}
+      STAYOPS_PAYMENT_GATEWAY: ${STAYOPS_PAYMENT_GATEWAY:-toss}
+      STAYOPS_PAYMENT_LOADTEST_LATENCY_MS: 0
+      MOCK_OTA_ENDPOINT: ${MOCK_OTA_ENDPOINT}
+    depends_on:
+      redis:
+        condition: service_healthy
+    expose:
+      - "8080"
+    restart: unless-stopped
+    networks:
+      - stayops-minimal-app
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - stayops-minimal-app
+
+  mock-ota-app:
+    image: ${MOCK_OTA_IMAGE:-ghcr.io/voyager003/stayops-mock-ota:latest}
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mock-ota-mongodb:27017/mock-ota
+      MOCK_OTA_PMS_WEBHOOK_URL: ${MOCK_OTA_PMS_WEBHOOK_URL}
+    depends_on:
+      mock-ota-mongodb:
+        condition: service_healthy
+    expose:
+      - "8081"
+    restart: unless-stopped
+    networks:
+      - stayops-minimal-app
+
+  mock-ota-mongodb:
+    image: mongo:8
+    volumes:
+      - mock_ota_mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - stayops-minimal-app
+
+  nginx:
+    image: nginx:alpine
+    environment:
+      API_DOMAIN: ${API_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ${MOCK_OTA_HTPASSWD_PATH:-./.htpasswd}:/etc/nginx/.htpasswd:ro
+    depends_on:
+      - app
+      - mock-ota-app
+    restart: unless-stopped
+    networks:
+      - stayops-minimal-app
+
+volumes:
+  redis_data:
+  mock_ota_mongodb_data:
+
+networks:
+  stayops-minimal-app:
+    driver: bridge

@@ -4,6 +4,7 @@ import com.stayops.TestcontainersConfiguration
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.model.GuestTier
 import com.stayops.guest.domain.repository.GuestRepository
+import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -14,13 +15,15 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.dao.DuplicateKeyException
+import java.time.Clock
 import java.time.LocalDate
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class MongoGuestRepositoryTest @Autowired constructor(
     private val guestRepository: GuestRepository,
-    private val mongoDataRepository: GuestMongoDataRepository
+    private val mongoDataRepository: GuestMongoDataRepository,
+    private val clock: Clock
 ) {
 
     @BeforeEach
@@ -125,7 +128,7 @@ class MongoGuestRepositoryTest @Autowired constructor(
             val guest1 = guestRepository.save(newGuest(id = "guest-1", phone = "010-1111-1111"))
             // BRONZE로 승급 (2회 방문)
             var bronzeGuest = guest1
-            repeat(2) { bronzeGuest = bronzeGuest.recordVisit(Money.of(10_000), 1, LocalDate.now()) }
+            repeat(2) { bronzeGuest = bronzeGuest.recordVisit(Money.of(10_000), 1, LocalDate.now(clock)) }
             guestRepository.save(bronzeGuest)
 
             guestRepository.save(newGuest(id = "guest-2", phone = "010-2222-2222"))

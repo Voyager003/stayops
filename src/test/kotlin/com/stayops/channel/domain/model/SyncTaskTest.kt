@@ -2,13 +2,13 @@ package com.stayops.channel.domain.model
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
-import io.kotest.matchers.longs.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import java.time.Instant
 
 class SyncTaskTest : BehaviorSpec({
 
+    val fixedNow = Instant.parse("2026-03-12T00:00:00Z")
     val samplePayload = mapOf("roomTypeId" to "rt-1", "date" to "2026-03-20", "availableCount" to 3)
 
     fun pendingTask(
@@ -20,7 +20,8 @@ class SyncTaskTest : BehaviorSpec({
         propertyId = propertyId,
         channelCode = channelCode,
         type = SyncTaskType.AVAILABILITY_UPDATE,
-        payload = samplePayload
+        payload = samplePayload,
+        now = fixedNow
     )
 
     // -- 생성 --
@@ -147,18 +148,18 @@ class SyncTaskTest : BehaviorSpec({
         val task = pendingTask().startProcessing()
 
         `when`("첫 번째 실패 후") {
-            val failed1 = task.fail("error")
+            val failed1 = task.fail("error", fixedNow)
             then("nextRetryAt이 약 30초 후이다") {
-                val delay = java.time.Duration.between(Instant.now(), failed1.nextRetryAt)
-                delay.seconds shouldBeGreaterThan 25L
+                failed1.nextRetryAt shouldBe fixedNow.plusSeconds(30)
             }
         }
 
         `when`("두 번째 실패 후") {
-            val failed2 = task.fail("error").startProcessing().fail("error")
+            val failed2 = task.fail("error", fixedNow)
+                .startProcessing(fixedNow.plusSeconds(30))
+                .fail("error", fixedNow.plusSeconds(30))
             then("nextRetryAt이 약 60초 후이다") {
-                val delay = java.time.Duration.between(Instant.now(), failed2.nextRetryAt)
-                delay.seconds shouldBeGreaterThan 55L
+                failed2.nextRetryAt shouldBe fixedNow.plusSeconds(90)
             }
         }
     }
