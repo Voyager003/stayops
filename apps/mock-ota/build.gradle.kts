@@ -43,3 +43,7 @@ kotlin {
 tasks.withType<Test> {
     useJUnitPlatform()
 }
+
+tasks.bootJar {
+    archiveFileName.set("stayops-mock-ota-0.0.1-SNAPSHOT.jar")
+}

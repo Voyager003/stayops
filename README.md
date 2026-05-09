@@ -40,21 +40,32 @@
 
 Mock OTA를 통해 PMS에서 OTA로 객실 재고를 동기화하는 흐름과, OTA에서 발생한 예약 Webhook을 PMS가 수신해 내부 예약과 재고에 반영하는 흐름을 구현했습니다.
 
+### 서버 모듈 구성
+
+```text
+apps/stayops-api   # PMS/CMS 백엔드 서버
+apps/mock-ota      # 외부 OTA 연동을 대체하는 Mock OTA 서버
+infra/             # 운영용/최소 실행용 Docker Compose 및 인프라 설정
+loadtest/          # k6 부하 테스트와 테스트 데이터 시드 스크립트
+```
+
+`stayops-api`와 `mock-ota`는 서로 다른 서버로 실행됩니다. 실제 운영 환경의 외부 OTA를 직접 연동할 수 없는 제약을 Mock OTA 서버로 분리해 재현했습니다.
+
 ## b. 빌드 및 실행법
 
 ### MongoDB, Redis 실행
 
 ```bash
 docker compose up -d mongodb mongo-init redis mongo-ota
-./gradlew :stayops-mock-ota:bootRun
-./gradlew bootRun
+./gradlew :apps:mock-ota:bootRun
+./gradlew :apps:stayops-api:bootRun
 ```
 
 ### 애플리케이션 실행
 
 ```bash
-./gradlew bootRun
-./gradlew :stayops-mock-ota:bootRun
+./gradlew :apps:stayops-api:bootRun
+./gradlew :apps:mock-ota:bootRun
 ```
 
 ### 빌드 및 테스트
