@@ -1,24 +1,128 @@
-# StayOps
+# Index
 
-호텔 및 숙소 운영을 위한 PMS·CMS 서비스
-
----
-
-## Tech Stack
-
-- Language: Kotlin 2.2
-- JDK 21
-- Spring Boot 4.0.3
-- Persistence: Spring Data MongoDB
-- DB: MongoDB (replica set)
-- Cache: Redis
-- Auth: JWT
-- Test: Kotest (BehaviorSpec) + MockK + Testcontainers
-- API Docs: springdoc-openapi (Swagger)
+- A. [프로젝트 소개](#a-프로젝트-소개)
+  - a. [프로젝트 설명](#a-프로젝트-설명)
+  - b. [빌드 및 실행법](#b-빌드-및-실행법)
+  - c. [사용 기술](#c-사용-기술)
+- B. [아키텍처](#b-아키텍처)
+  - a. [인프라 아키텍처](#a-인프라-아키텍처)
+  - b. [데이터 모델](#b-데이터 모델)
+- C. [프로젝트 달성 목표](#c-프로젝트-달성-목표)
+- D. [Swagger API](#c-프로젝트-달성-목표)
 
 ---
 
-## Functional Requirements
+# A. 프로젝트 소개
+
+## a. 프로젝트 설명
+
+`StayOps`는 숙박업의 객실·재고·예약·결제와 OTA 채널 동기화를 처리하는 PMS/CMS 백엔드 서버입니다.
+
+### 주요 용어
+
+- `PMS(Property Management System)` 는 숙소 내부 운영 시스템입니다. 객실, 재고, 예약, 고객, 결제, 정산처럼 숙소 운영의 기준 데이터를 관리합니다.
+
+- `OTA(Online Travel Agency)` 는 Booking.com, Agoda, Expedia처럼 숙소를 외부 고객에게 판매하는 온라인 예약 채널입니다.
+
+- `CMS(Channel Management System)/채널매니저`는 PMS와 여러 OTA 사이에서 객실 재고, 요금, 예약 정보를 동기화하는 시스템입니다. 여러 채널에서 같은 객실을 동시에 판매할 때 오버부킹을 방지하는 역할을 합니다.
+
+### 실제 운영 환경의 동작 방식
+
+실제 운영 환경에서는 PMS가 객실, 재고, 요금, 예약의 기준 시스템 역할을 합니다. 운영자가 PMS에서 객실 재고나 요금을 변경하면, 채널매니저가 이 정보를 여러 OTA에 전파합니다.
+
+반대로 OTA에서 예약이 발생하면, OTA 또는 채널매니저가 PMS로 예약 정보를 전달합니다. PMS는 해당 예약을 내부 예약 데이터로 저장하고, 객실 재고를 차감한 뒤 다른 판매 채널에도 변경된 재고를 다시 동기화합니다.
+
+이 구조를 통해 여러 OTA에서 동시에 객실을 판매하더라도, 각 채널의 재고 상태를 최대한 일관되게 유지하고 중복 예약을 방지합니다.
+
+### 현재 프로젝트의 동작 방식
+
+실제 OTA 연동은 파트너 계약, 인증 환경, 채널별 API 스펙이 필요하기 때문에 이 프로젝트에서는 Mock OTA라는 서버로 대체했습니다.
+
+Mock OTA를 통해 PMS에서 OTA로 객실 재고를 동기화하는 흐름과, OTA에서 발생한 예약 Webhook을 PMS가 수신해 내부 예약과 재고에 반영하는 흐름을 구현했습니다.
+
+## b. 빌드 및 실행법
+
+### MongoDB, Redis 실행
+
+```bash
+docker compose up -d mongodb mongo-init redis mongo-ota
+./gradlew :stayops-mock-ota:bootRun
+./gradlew bootRun
+```
+
+### 애플리케이션 실행
+
+```bash
+./gradlew bootRun
+./gradlew :stayops-mock-ota:bootRun
+```
+
+### 빌드 및 테스트
+
+```bash
+./gradlew clean build
+./gradlew test
+```
+
+## b. 사용 기술
+
+| Category | Tool/Library | Version |
+  |---|---|---:|
+| Language | Kotlin JVM | 2.2.21 |
+| Java | JDK | 24 |
+| Build | Gradle Wrapper | 9.3.1 |
+| Spring | Spring Boot | 4.0.3 |
+|  | Spring Boot Starter WebMVC | 4.0.3 |
+|  | Spring Boot Starter Security | 4.0.3 |
+|  | Spring Boot Starter Data MongoDB | 4.0.3 |
+|  | Spring Boot Starter Data Redis | 4.0.3 |
+|  | Spring Boot Starter Session Data Redis | 4.0.3 |
+|  | Spring Boot Starter Validation | 4.0.3 |
+|  | Spring Boot Starter Actuator | 4.0.3 |
+| Server | Embedded Tomcat | 11.0.18 |
+| Database | MongoDB | 8 |
+|  | MongoDB Java Driver | 5.6.3 |
+| Cache / Session | Redis | 7-alpine |
+| External Java Library  | Swagger UI | 5.32.0 |
+|  | Logback | 1.5.32 |
+| Monitoring | Micrometer | 1.16.3 |
+|  | Prometheus Metrics | 1.4.3 |
+|  | Grafana | latest |
+|  | Loki | latest |
+|  | Promtail | latest |
+| Test | Kotest | 6.1.0 |
+|  | MockK | 1.14.2 |
+|  | SpringMockK | 4.0.2 |
+|  | MockWebServer | 4.12.0 |
+|  | Testcontainers | Spring Boot managed |
+| Deploy | Docker Image JDK | eclipse-temurin:24-jdk-alpine |
+|  | Docker Image JRE | eclipse-temurin:24-jre-alpine |
+| Load Test | k6 | not pinned in repo |
+
+# B. 아키텍처
+
+## a. 인프라 아키텍처
+
+[인프라 설정](./infra)은 `production`과 `minimal`로 구분됩니다.
+
+`Production`은 프로덕션 상황에서 발생할 수 있는 DB failover를 지원하는 Replica set(P-S-S) 구성과 로깅/메트릭을 지원하는 아키텍처 구성입니다. 
+
+`Minimal`은 서비스를 저비용으로 유지하기 위한 최소 구성입니다. failover와 메트릭/로깅을 지원하지 않습니다.
+
+프로젝트의 전반적인 내용은 `Production` 기준으로 합니다.
+
+### Production
+
+![](docs/img/01.png)
+ 
+## b. 데이터 모델
+
+![](docs/img/02.png)
+![](docs/img/03.png)
+
+---
+
+# C. 프로젝트 달성 목표
 
 ### 프로젝트 달성 목표
 
@@ -29,37 +133,7 @@
 
 - **동시성 제어** — 마지막 1객실 동시 예약 시 재고 정합성 보장
 - **데이터 일관성** — Outbox 패턴으로 메시지 브로커 없이 채널 간 Eventually Consistent 동기화
-- **도메인 모델링** — 11개 피처 모듈, 순수 도메인 객체, 도메인 이벤트 기반 크로스 모듈 연동
-
-### 기능적 요구사항
-
-- **멀티 숙소 관리**
-  - 복수의 숙소(호텔, 펜션, 리조트 등)를 하나의 계정으로 관리
-  - 숙소별 독립적인 객실, 재고, 요금, 예약 데이터 운영
-- **객실 및 재고 관리**
-  - 객실타입/객실 CRUD, 날짜별 재고 수량 관리
-  - 동시 예약 요청 시 Race Condition 방어
-- **멀티 채널 판매**
-  - 자사 숙소 예매 사이트(DIRECT) + OTA(Agoda, Airbnb 등) 채널 통합 관리
-  - OTA Webhook 수신을 통한 외부 예약 자동 생성
-  - Outbox 패턴 기반 채널 간 재고 동기화
-- **동적 요금 관리**
-  - 시즌/요일/채널별 요금제 설정 + 우선순위 기반 요금 결정(RateResolver)
-- **예약 라이프사이클**
-  - 예약 생성 → 확정 → 체크인 → 체크아웃 상태 전이
-  - 취소/노쇼 처리 + 재고 자동 복원
-- **정산**
-  - 채널별 수수료/실 정산액 집계 (MongoDB aggregation)
-- **고객 직접 예매 (Finestay)**
-  - 고객 회원가입/로그인 (JWT)
-  - 숙소 검색, 예약 생성, 결제 승인
-  - 마이페이지 — 예약 조회, 취소(환불)
-- **Toss Payments 결제 연동**
-  - 결제 승인(confirmPayment), 환불(cancelPayment)
-  - orderId/금액 위변조 방지 서버 검증
-  - PG 에러 유형별 핸들링 (AlreadyProcessed, PaymentDeclined, ProviderError)
-- **인증/인가**
-  - JWT 기반 인증, 멀티 숙소 접근 권한 제어
+- **도메인 모델링** — 11개 피처 모듈, 순수 도메인 객체, 도메인 이벤트 기반 크로스 모듈 연동te
 
 ### 기술적 도전 과제
 
@@ -67,121 +141,5 @@
   - 낙관적 락 동시성 제어: 마지막 1객실 동시 예약 → 정확히 1건만 성공
   - Outbox 패턴: 메시지 브로커 없이 MongoDB + 스케줄러로 신뢰성 있는 비동기 동기화
   - 도메인 이벤트: 모듈 간 결합도를 낮추면서 크로스 모듈 연동
-- **권장**
-  - 가상 채널 어댑터로 실제 OTA API 없이 동기화 플로우 검증
-  - PG 에러 핸들링: AlreadyProcessed → inquire fallback, PaymentDeclined → 즉시 실패, ProviderError → 재시도
-  - 환불 실패 시 CANCEL_FAILED 상태로 운영자 수동 처리 대비
-  - TDD 전 계층 적용 (Red-Green-Refactor)
-  - Testcontainers로 실제 MongoDB/Redis 기반 e2e 테스트
 
----
-
-## Architecture
-
-- **DDD**: 비즈니스 로직은 도메인 객체 내부에 위치
-- **Layered Architecture**: Controller → Service → Domain ← Repository
-
-### 피처 모듈
-
-| 모듈 | 책임 | 핵심 모델 |
-|------|------|---------|
-| property | 숙소 정보, 상태 관리 | Property, Address |
-| room | 객실 타입/실물 객실, 상태 관리 | RoomType, Room |
-| inventory | 날짜별 재고, 동시성 제어 | RoomInventory |
-| guest | 게스트 정보, 방문 이력, 등급 | Guest, VisitSummary |
-| rate | 요금제, 날짜별 요금 산출 | RatePlan, RateResolver |
-| channel | 판매 채널, OTA 동기화 | Channel, SyncTask |
-| reservation | 예약 라이프사이클 (핵심) | Reservation |
-| settlement | 채널별 수수료/정산 집계 | Settlement |
-| booking | 고객 직접 예매 (Finestay) | - (cross-module orchestration) |
-| payment | Toss Payments 결제 연동 | Payment, PaymentGateway |
-| shared/auth | JWT 인증, 멀티 숙소 접근 권한 | - |
-
-### Reservation Flow
-
-> TODO: 예약 생성 → 확정 → 체크인 → 체크아웃 플로우 다이어그램 추가
-
-### Channel Sync Flow
-
-```
-자사 숙소 예매 사이트 예약 생성
-→ Inventory 차감
-→ SyncTask(PENDING) 생성 (AGODA, AIRBNB 등 활성 OTA 대상)
-→ SyncTaskScheduler 폴링
-→ VirtualChannelSyncAdapter 호출
-→ 성공 → COMPLETED / 실패 → 재시도 (max 3회)
-→ 관리자: Sync Dashboard에서 채널별 동기화 현황 확인
-```
-
----
-
-## Infrastructure
-
-> TODO: 프로젝트 완성 후 인프라 구성도 추가
-
----
-
-## DB
-
-> TODO: 프로젝트 완성 후 ERD 다이어그램 추가
-
----
-
-## 패키지 구조
-
-```
-src/main/kotlin/com/stayops/
-├── shared/          # Money, DateRange, 예외, 설정
-├── property/        # 숙소 관리
-├── room/            # 객실/객실타입
-├── inventory/       # 날짜별 재고 + Redis 캐시
-├── guest/           # 고객 등급/이력
-├── channel/         # 채널 CRUD, webhook 수신, Outbox 동기화
-├── rate/            # 요금제 + RateResolver
-├── reservation/     # 예약 + 도메인 이벤트
-├── settlement/      # MongoDB aggregation 정산
-├── booking/         # 고객 직접 예매 (Finestay)
-├── payment/         # Toss Payments 결제 연동
-└── auth/            # JWT + Redis Refresh Token
-```
-
----
-
-## 구현 단계 (11 Phases)
-
-각 Phase의 도메인 모델, TDD 순서, 생성 파일 목록 등 상세 계획은 [`docs/phases/`](docs/phases/) 참조.
-
-| Phase | 내용 |
-|-------|------|
-| [Phase 1](docs/phases/phase-01-foundation.md) | Foundation — 공통 도메인, MongoDB/Redis 설정, 예외 핸들러 |
-| [Phase 2](docs/phases/phase-02-property.md) | Property 도메인 |
-| [Phase 3](docs/phases/phase-03-room.md) | Room 도메인 |
-| [Phase 4](docs/phases/phase-04-inventory.md) | Inventory 도메인 |
-| [Phase 5](docs/phases/phase-05-guest.md) | Guest 도메인 |
-| [Phase 6](docs/phases/phase-06-rate.md) | Rate 도메인 |
-| [Phase 7](docs/phases/phase-07-channel.md) | Channel — 채널 관리, Outbox 동기화 |
-| [Phase 8](docs/phases/phase-08-reservation.md) | Reservation 도메인 |
-| [Phase 9](docs/phases/phase-09-settlement.md) | Settlement |
-| [Phase 10](docs/phases/phase-10-auth.md) | Auth |
-| Phase 11 | Customer Booking + Toss Payments — 고객 직접 예매, 결제 승인/환불 |
-
----
-
-## How to Run
-
-```bash
-# 인프라 기동
-docker compose up -d
-
-# Backend
-./gradlew bootRun        # http://localhost:8080
-./gradlew test           # 전체 테스트
-```
-
-- Swagger UI: http://localhost:8080/swagger-ui.html
-
----
-
-## Preview
-
-> TODO: 프로젝트 완성 후 스크린샷 추가
+# D. Swagger API
