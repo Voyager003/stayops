@@ -3,7 +3,9 @@ package com.stayops.shared.config
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.boot.env.YamlPropertySourceLoader
+import org.springframework.core.env.MutablePropertySources
 import org.springframework.core.env.PropertySource
+import org.springframework.core.env.PropertySourcesPropertyResolver
 import org.springframework.core.io.ClassPathResource
 
 class RedisPropertiesConfigurationTest {
@@ -27,8 +29,12 @@ class RedisPropertiesConfigurationTest {
     @Test
     fun `should_configure_redis_under_spring_data_in_prod_profile`() {
         val properties = loadYaml("application-prod.yml")
+        val resolver = PropertySourcesPropertyResolver(MutablePropertySources().apply {
+            addLast(properties)
+        })
 
-        assertThat(properties.getProperty("spring.data.redis.host")).isEqualTo("redis")
+        assertThat(properties.getProperty("spring.data.redis.host")).isEqualTo("\${SPRING_DATA_REDIS_HOST:redis}")
+        assertThat(resolver.getProperty("spring.data.redis.host")).isEqualTo("redis")
         assertThat(properties.getProperty("spring.data.redis.port")).isEqualTo(6379)
     }
 

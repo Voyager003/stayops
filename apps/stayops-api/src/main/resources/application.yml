@@ -19,7 +19,7 @@ management:
 
 toss:
   payments:
-    secret-key: test_sk_AQ92ymxN34gLqb4q69np8ajRKXvd
+    secret-key: ${TOSS_SECRET_KEY:}
     base-url: ${TOSS_BASE_URL:https://api.tosspayments.com/v1/payments}
 
 mock-ota:
