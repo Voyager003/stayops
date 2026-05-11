@@ -1,25 +1,28 @@
+map $http_x_forwarded_proto $forwarded_proto {
+    default $http_x_forwarded_proto;
+    ""      $scheme;
+}
+
+map $http_x_forwarded_port $forwarded_port {
+    default $http_x_forwarded_port;
+    ""      $server_port;
+}
+
 server {
     listen 80;
     server_name ${API_DOMAIN};
 
+    client_max_body_size 10m;
+
     location = /health {
         proxy_pass http://app:8080/actuator/health;
         proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto;
+        proxy_set_header X-Forwarded-Port $forwarded_port;
     }
-
-    location / {
-        return 301 https://$host$request_uri;
-    }
-}
-
-server {
-    listen 443 ssl;
-    server_name ${API_DOMAIN};
-
-    ssl_certificate /etc/letsencrypt/live/${API_DOMAIN}/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/${API_DOMAIN}/privkey.pem;
-
-    client_max_body_size 10m;
 
     location = /actuator/prometheus {
         return 404;
@@ -37,7 +40,9 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto;
+        proxy_set_header X-Forwarded-Port $forwarded_port;
         proxy_connect_timeout 60s;
         proxy_read_timeout 60s;
         proxy_send_timeout 60s;
@@ -49,7 +54,9 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto;
+        proxy_set_header X-Forwarded-Port $forwarded_port;
         proxy_connect_timeout 60s;
         proxy_read_timeout 60s;
         proxy_send_timeout 60s;
@@ -60,7 +67,9 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto;
+        proxy_set_header X-Forwarded-Port $forwarded_port;
         proxy_connect_timeout 60s;
         proxy_read_timeout 60s;
         proxy_send_timeout 60s;

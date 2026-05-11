@@ -12,6 +12,10 @@ spring:
 
 server:
   shutdown: graceful
+  forward-headers-strategy: framework
+
+stayops:
+  instance-id: ${STAYOPS_INSTANCE_ID:${HOSTNAME:local}}
 
 management:
   endpoints:

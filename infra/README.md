@@ -9,9 +9,14 @@ StayOps 서버 운영 방식에 따라 인프라 구성을 분리한다.
 
 `infra/production`은 실제 운영 또는 운영에 가까운 부하 테스트, failover/recovery 검증에 사용한다.
 
-- `app`: StayOps app, Redis, Nginx, Mock OTA, Mock OTA MongoDB
+- `app`: StayOps app, Nginx, Mock OTA, Mock OTA MongoDB
 - `app/docker-compose.observability.yml`: Prometheus, Loki, Promtail, Grafana, node-exporter
 - `mongodb-rss`: 3-node MongoDB replica set, MongoDB exporter, node-exporter, Promtail
+
+운영 수준에서 app EC2를 2대 이상으로 확장할 때 Redis는 app 인스턴스 내부가 아니라
+공용 Redis endpoint(예: ElastiCache)를 사용한다. StayOps는 Redis 기반 Spring Session과
+재고 캐시를 사용하므로, 각 EC2가 자기 Redis를 가지면 ALB가 요청을 분산할 때 세션과 캐시가
+서버별로 분리된다.
 
 기본 앱 실행:
 

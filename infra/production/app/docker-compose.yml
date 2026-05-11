@@ -6,13 +6,13 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SPRING_MONGODB_URI: ${SPRING_MONGODB_URI}
+      SPRING_DATA_REDIS_HOST: ${SPRING_DATA_REDIS_HOST:?set shared Redis host}
+      SPRING_DATA_REDIS_PORT: ${SPRING_DATA_REDIS_PORT:-6379}
+      STAYOPS_INSTANCE_ID: ${STAYOPS_INSTANCE_ID:-app}
       TOSS_SECRET_KEY: ${TOSS_SECRET_KEY}
       STAYOPS_PAYMENT_GATEWAY: ${STAYOPS_PAYMENT_GATEWAY:-toss}
       STAYOPS_PAYMENT_LOADTEST_LATENCY_MS: ${STAYOPS_PAYMENT_LOADTEST_LATENCY_MS:-0}
       MOCK_OTA_ENDPOINT: ${MOCK_OTA_ENDPOINT}
-    depends_on:
-      redis:
-        condition: service_healthy
     expose:
       - "8080"
     restart: unless-stopped
@@ -52,10 +52,8 @@ services:
       API_DOMAIN: ${API_DOMAIN}
     ports:
       - "80:80"
-      - "443:443"
     volumes:
       - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
       - ${MOCK_OTA_HTPASSWD_PATH:-./.htpasswd}:/etc/nginx/.htpasswd:ro
     depends_on:
       - app
@@ -64,22 +62,7 @@ services:
     networks:
       - stayops-app
 
-  redis:
-    image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    networks:
-      - stayops-app
-
 volumes:
-  redis_data:
   mock_ota_mongodb_data:
 
 networks:
