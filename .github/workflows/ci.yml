@@ -38,7 +38,7 @@ jobs:
         run: docker compose up -d mongodb mongo-init redis && sleep 5
 
       - name: Download dependencies
-        run: ./gradlew dependencies --no-daemon
+        run: ./gradlew :apps:stayops-api:dependencies :apps:mock-ota:dependencies --no-daemon
 
       - name: Run tests
         run: ./gradlew test --build-cache --no-daemon

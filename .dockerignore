@@ -5,7 +5,7 @@
 .kotlin
 .claude
 build/
-stayops-mock-ota/build/
+apps/*/build/
 docs/
 *.md
 *.iml

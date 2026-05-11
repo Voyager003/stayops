@@ -1,3 +1,4 @@
 rootProject.name = "stayops"
 
-include("stayops-mock-ota")
+include("apps:stayops-api")
+include("apps:mock-ota")
