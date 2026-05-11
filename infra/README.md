@@ -9,7 +9,8 @@ StayOps 서버 운영 방식에 따라 인프라 구성을 분리한다.
 
 `infra/production`은 실제 운영 또는 운영에 가까운 부하 테스트, failover/recovery 검증에 사용한다.
 
-- `app`: StayOps app, Nginx, Mock OTA, Mock OTA MongoDB
+- `app`: StayOps app
+- `mock-ota`: Mock OTA Nginx, Mock OTA app, Mock OTA MongoDB
 - `app/docker-compose.observability.yml`: Prometheus, Loki, Promtail, Grafana, node-exporter
 - `mongodb-rss`: 3-node MongoDB replica set, MongoDB exporter, node-exporter, Promtail
 
@@ -23,6 +24,15 @@ StayOps 서버 운영 방식에 따라 인프라 구성을 분리한다.
 ```bash
 cd infra/production/app
 cp env.example .env
+docker compose --env-file .env -f docker-compose.yml up -d
+```
+
+Mock OTA 실행:
+
+```bash
+cd infra/production/mock-ota
+cp env.example .env
+# MOCK_OTA_HTPASSWD_PATH에 지정한 Basic Auth 파일을 먼저 만든다.
 docker compose --env-file .env -f docker-compose.yml up -d
 ```
 
