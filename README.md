@@ -6,10 +6,12 @@
   - c. [사용 기술](#c-사용-기술)
 - B. [아키텍처](#b-아키텍처)
   - a. [인프라 아키텍처](#a-인프라-아키텍처)
-  - b. [데이터 모델](#b-데이터 모델)
+  - b. [데이터 모델](#b-데이터-모델)
 - C. [프로젝트 달성 목표](#c-프로젝트-달성-목표)
-- D. [Swagger API](#c-프로젝트-달성-목표)
-
+  - a. [부하 테스트로 서버 성능 측정](#a-부하-테스트로-서버-성능-측정)
+  - b. [결제 승인 흐름의 외부 API 불일치 해결](#b-결제-승인-흐름의-외부-api-불일치-해결)
+  - c. [OTA 재고 동기화와 Webhook 멱등성 설계](#c-ota-재고-동기화와-webhook-멱등성-설계)
+- D. [문서 업데이트 내역](#d-문서-업데이트-내역)
 ---
 
 # A. 프로젝트 소개
@@ -94,8 +96,7 @@ docker compose up -d mongodb mongo-init redis mongo-ota
 | Database | MongoDB | 8 |
 |  | MongoDB Java Driver | 5.6.3 |
 | Cache / Session | Redis | 7-alpine |
-| External Java Library  | Swagger UI | 5.32.0 |
-|  | Logback | 1.5.32 |
+| External Java Library  | Logback | 1.5.32 |
 | Monitoring | Micrometer | 1.16.3 |
 |  | Prometheus Metrics | 1.4.3 |
 |  | Grafana | latest |
@@ -114,7 +115,7 @@ docker compose up -d mongodb mongo-init redis mongo-ota
 
 ## a. 인프라 아키텍처
 
-[인프라 설정](./infra)은 `production`과 `minimal`로 구분됩니다.
+[인프라 설정](./infra)은 `Production`과 `Minimal`로 구분됩니다.
 
 `Production`은 프로덕션 상황에서 발생할 수 있는 DB failover를 지원하는 Replica set(P-S-S) 구성과 로깅/메트릭을 지원하는 아키텍처 구성입니다. 
 
@@ -135,22 +136,63 @@ docker compose up -d mongodb mongo-init redis mongo-ota
 
 # C. 프로젝트 달성 목표
 
-## a. 프로젝트 달성 목표
+숙박 도메인에서 실제 운영 상황에서 마주칠 수 있는 문제를 예상하여 직접 재현했습니다.
 
-- 호텔 예약 PMS, CMS 시스템을 분석하여 숙소 운영의 핵심 도메인(객실·재고·예약·채널·정산)을 운영 수준으로 재현
-- 멀티 채널(자사 숙소 예매 사이트 + OTA) 환경에서 재고 정합성과 데이터 일관성을 보장하는 서버를 구축
+단순 CRUD 기능이 아닌 복잡한 도메인에서 실제 운영 환경과 유사한 환경을 만들어 어떤 문제가 생길지 예상하여 문제 해결을 위한 가설을 세운 뒤 검증하는 것을 목표로 했습니다.
 
-## b. BE 역량 목표
+## a. 부하 테스트로 서버 성능 측정
 
-- **동시성 제어** — 마지막 1객실 동시 예약 시 재고 정합성 보장
-- **데이터 일관성** — Outbox 패턴으로 메시지 브로커 없이 채널 간 Eventually Consistent 동기화
-- **도메인 모델링** — 11개 피처 모듈, 순수 도메인 객체, 도메인 이벤트 기반 크로스 모듈 연동
+DAU, 결제 전환율 같은 운영 기준 지표가 없는 상태에서 애플리케이션과 DB 서버가 어느 정도의 트래픽을 수용할 수 있는지 확인할 필요가 있었습니다.
 
-## c. 기술적 도전 과제
+로깅과 메트릭을 구성하고 부하를 올려가며 Smoke test부터 Break-point 테스트까지 진행하면서 현재 서버 스펙에서 MongoDB primary write path가 병목이 되는 것을 확인하여 시스템의 처리 한계와 확장 기준을 수치로 파악했습니다.
 
-- 낙관적 락 동시성 제어: 마지막 1객실 동시 예약 → 정확히 1건만 성공
-- Outbox 패턴: 메시지 브로커 없이 MongoDB + 스케줄러로 신뢰성 있는 비동기 동기화
-- 도메인 이벤트: 모듈 간 결합도를 낮추면서 크로스 모듈 연동
-- 부하 테스트
+부하 테스트 중에 API의 지연율 문제를 발견하고 'Pagenation'과 '복합 인덱스'를 적용해 p95 응답 시간을 **2.25s에서 230ms**로 개선했습니다.
 
-# D. Swagger API
+또한 Failover 테스트를 통해 MongoDB의 Replica-Set 구성에서 발생하는 election이 정상 동작함을 검증하고 장애 상황을 대비한 timeout, 서버 응답 개선, 재시도 전략을 도입했습니다. 
+
+자세한 해결 과정은 [블로그 글](https://www.romedev.kr/blog/load_test_on_mongodb)에 담았습니다. 
+
+## b. 결제 승인 흐름의 외부 API 불일치 해결
+
+예약 결제 승인 과정에서는 내부 MongoDB 트랜잭션과 외부 결제 PG(Payment Gateway) API 호출이 동시에 관여합니다. 
+
+이때 PG 승인 요청이 성공했지만 DB 저장이 실패하거나, PG 호출 timeout같은 상황으로 실제 승인 여부를 알 수 없는 상황이 발생할 수 있다고 판단했습니다.
+
+초기 구조에서는 결제 승인 API 안에서 PG를 직접 호출하고, 같은 흐름에서 Payment와 Reservation 상태를 변경했습니다. 
+
+하지만 DB 트랜잭션은 외부 PG 호출을 rollback할 수 없기 때문에, 결제는 성공했지만 내부 예약 상태는 PENDING으로 남는 불일치가 생길 수 있습니다.
+
+이를 해결하기 위해 결제 승인 요청을 즉시 완료 처리하지 않고, `Payment.CONFIRM_REQUESTED` 상태와 `PaymentOutboxMessage`를 같은 MongoDB 트랜잭션에 저장하도록 변경했습니다. API는 `202 Accepted`로 요청 접수만 응답하고, 실제 PG 승인과 상태 복구는 Outbox worker가 처리하도록 분리했습니다.
+
+Outbox 메시지에는 paymentId, reservationId, orderId, amount, idempotencyKey, retryCount, lockedUntil 같은 재처리 정보를 저장했습니다. 이를 통해 서버가 중간에 종료되거나 외부 PG 응답이 불명확한 경우에도 처리해야 할 작업이 MongoDB에 남고, worker가 멱등성 키를 사용해 안전하게 재시도할 수 있도록 했습니다.
+
+이 과정에서 Redis Queue를 단독 Outbox로 사용하지 않았습니다. 업무 상태는 MongoDB에 있는데 Redis에만 작업을 넣으면 다시 dual write 문제가 생기기 때문입니다. 
+
+따라서 현재 단계에서는 MongoDB 기반 Outbox를 먼저 선택하고, 추후 처리량이나 분산 worker 요구가 커질 때 메시지 브로커를 보조 전달 채널로 도입하는 방향으로 결정했습니다.
+
+의사 결정은 [결제 Outbox 설계](./docs/context/domain-model/blog-payment-outbox-refactoring.md)에 정리했습니다.
+
+## c. OTA 재고 동기화와 Webhook 멱등성 설계
+
+숙소 예약 시스템은 내부 예약만 처리하는 것으로 끝나지 않고 PMS의 객실 재고 변경이 OTA 채널로 전파되고, OTA에서 발생한 예약 Webhook이 다시 PMS에 반영되어야 합니다.
+
+다만 실제 OTA API는 파트너 계약과 인증 환경이 필요하기 때문에 직접 연동할 수 없었습니다. 
+
+단순히 메모리 안에서 성공/실패를 흉내 내는 방식은 네트워크 장애, 서명 검증, 재시도, Webhook 중복 수신 같은 운영 문제를 검증하기 어렵다고 판단했습니다.
+
+그래서 Mock OTA를 별도 Spring Boot 서버로 분리했습니다. PMS와 Mock OTA가 실제 HTTP로 통신하게 만들고, 재고 변경이나 예약 생성 이벤트가 발생하면 `SyncTask`를 Outbox처럼 저장한 뒤 스케줄러가 OTA로 가용 재고를 전송하도록 구성했습니다.
+
+Webhook은 중복 수신될 수 있다는 전제를 두고 `ProcessedWebhookEventRepository.saveIfAbsent()` 계약을 만들었습니다. MongoDB unique index가 중복 저장을 마지막으로 차단하고, 애플리케이션은 이미 처리한 이벤트라면 후속 로직을 실행하지 않도록 했습니다.
+
+또한 OTA HTTP 클라이언트는 Adapter마다 직접 생성하지 않고 `otaRestClient` Bean으로 공유하도록 정리했습니다. 이 과정에서 connect timeout과 read timeout을 설정해 OTA 서버 지연이 스케줄러와 서블릿 스레드 고갈로 번지지 않도록 했습니다.
+
+이 구조를 통해 실제 OTA를 붙이지 않고도 PMS -> OTA 재고 동기화, OTA -> PMS 예약 Webhook, 중복 Webhook 방지, 실패 작업 재시도 흐름을 하나의 시나리오로 검증할 수 있게 했습니다.
+
+자세한 내용은 [채널 동기화 의사결정 기록](./docs/context/phase/phase-07/context.md)과 [OTA RestClient 설계 기록](./docs/context/infra/rest-client-bean-sharing.md)에 정리했습니다.
+
+---
+
+# D. 문서 업데이트 내역
+
+업데이트 날짜: 2026-05-10
+
