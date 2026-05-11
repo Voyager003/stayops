@@ -57,10 +57,37 @@ class SyncTaskTest : BehaviorSpec({
         val task = pendingTask()
 
         `when`("startProcessing() 호출 시") {
-            val processing = task.startProcessing()
+            val processing = task.startProcessing("worker-a", fixedNow.plusSeconds(60), fixedNow)
 
             then("상태가 IN_PROGRESS로 변경된다") {
                 processing.status shouldBe SyncTaskStatus.IN_PROGRESS
+            }
+            then("lease 소유자와 만료 시각을 기록한다") {
+                processing.lockedBy shouldBe "worker-a"
+                processing.lockedUntil shouldBe fixedNow.plusSeconds(60)
+            }
+        }
+    }
+
+    given("lease가 만료된 IN_PROGRESS 상태의 SyncTask") {
+        val task = pendingTask()
+            .startProcessing("worker-a", fixedNow.plusSeconds(60), fixedNow)
+
+        `when`("다른 worker가 만료 이후 startProcessing()을 호출하면") {
+            val reclaimed = task.startProcessing("worker-b", fixedNow.plusSeconds(130), fixedNow.plusSeconds(70))
+
+            then("lease를 다시 획득할 수 있다") {
+                reclaimed.status shouldBe SyncTaskStatus.IN_PROGRESS
+                reclaimed.lockedBy shouldBe "worker-b"
+                reclaimed.lockedUntil shouldBe fixedNow.plusSeconds(130)
+            }
+        }
+
+        `when`("lease가 만료되기 전에 다른 worker가 startProcessing()을 호출하면") {
+            then("예외가 발생한다") {
+                shouldThrow<IllegalStateException> {
+                    task.startProcessing("worker-b", fixedNow.plusSeconds(90), fixedNow.plusSeconds(30))
+                }
             }
         }
     }
@@ -75,6 +102,10 @@ class SyncTaskTest : BehaviorSpec({
 
             then("상태가 COMPLETED로 변경된다") {
                 completed.status shouldBe SyncTaskStatus.COMPLETED
+            }
+            then("lease 정보가 제거된다") {
+                completed.lockedBy shouldBe null
+                completed.lockedUntil shouldBe null
             }
         }
     }
@@ -128,10 +159,13 @@ class SyncTaskTest : BehaviorSpec({
 
         `when`("maxRetries에 도달하면") {
             var failedTask = task
+            var retryAt = fixedNow
             repeat(2) {
-                failedTask = failedTask.fail("error").startProcessing()
+                failedTask = failedTask.fail("error", retryAt)
+                retryAt = failedTask.nextRetryAt!!
+                failedTask = failedTask.startProcessing(retryAt)
             }
-            val finalFailed = failedTask.fail("final error")
+            val finalFailed = failedTask.fail("final error", retryAt)
 
             then("상태가 FAILED로 변경된다") {
                 finalFailed.status shouldBe SyncTaskStatus.FAILED
@@ -168,10 +202,13 @@ class SyncTaskTest : BehaviorSpec({
 
     given("FAILED 상태의 SyncTask") {
         var task = pendingTask().startProcessing()
+        var retryAt = fixedNow
         repeat(2) {
-            task = task.fail("error").startProcessing()
+            task = task.fail("error", retryAt)
+            retryAt = task.nextRetryAt!!
+            task = task.startProcessing(retryAt)
         }
-        val failedTask = task.fail("final error")
+        val failedTask = task.fail("final error", retryAt)
 
         `when`("retry() 호출 시") {
             val retried = failedTask.retry()

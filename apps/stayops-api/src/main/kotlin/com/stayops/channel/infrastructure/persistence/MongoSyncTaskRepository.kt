@@ -31,6 +31,9 @@ class MongoSyncTaskRepository(
             CompoundIndexDefinition(Document(mapOf("status" to 1, "nextRetryAt" to 1)))
         )
         indexOps.createIndex(
+            CompoundIndexDefinition(Document(mapOf("status" to 1, "lockedUntil" to 1)))
+        )
+        indexOps.createIndex(
             CompoundIndexDefinition(Document(mapOf("propertyId" to 1, "channelCode" to 1, "status" to 1)))
         )
     }
@@ -49,15 +52,17 @@ class MongoSyncTaskRepository(
         mongo.findByIdOrNull(id)?.toDomain()
 
     override fun findPendingTasksReadyForProcessing(now: Instant): List<SyncTask> {
-        val query = Query(
-            Criteria.where("status").`is`(SyncTaskStatus.PENDING)
-                .andOperator(
-                    Criteria().orOperator(
-                        Criteria.where("nextRetryAt").`is`(null),
-                        Criteria.where("nextRetryAt").lte(now)
-                    )
+        val pending = Criteria.where("status").`is`(SyncTaskStatus.PENDING)
+            .andOperator(
+                Criteria().orOperator(
+                    Criteria.where("nextRetryAt").`is`(null),
+                    Criteria.where("nextRetryAt").lte(now)
                 )
-        )
+            )
+        val expiredLease = Criteria.where("status").`is`(SyncTaskStatus.IN_PROGRESS)
+            .and("lockedUntil").lte(now)
+
+        val query = Query(Criteria().orOperator(pending, expiredLease))
         return mongoTemplate.find(query, SyncTaskDocument::class.java).map { it.toDomain() }
     }
 

@@ -106,6 +106,18 @@ class MongoSyncTaskRepositoryTest @Autowired constructor(
 
             assertThat(tasks).isEmpty()
         }
+
+        @Test
+        fun `lease가 만료된 IN_PROGRESS 태스크를 반환한다`() {
+            val now = Instant.now(clock)
+            val task = newTask(id = "task-5")
+                .startProcessing("worker-a", now.plusSeconds(60), now)
+            syncTaskRepository.save(task)
+
+            val tasks = syncTaskRepository.findPendingTasksReadyForProcessing(now.plusSeconds(61))
+
+            assertThat(tasks).extracting("id").containsExactly("task-5")
+        }
     }
 
     @Nested

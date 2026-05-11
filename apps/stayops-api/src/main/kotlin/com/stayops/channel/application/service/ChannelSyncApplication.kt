@@ -57,12 +57,13 @@ class ChannelSyncApplication(
         }
     }
 
-    fun processPendingTasks() {
+    fun processPendingTasks(workerId: String = "sync-task-worker") {
         val tasks = syncTaskRepository.findPendingTasksReadyForProcessing(clock.instant())
 
         tasks.forEach { task ->
             try {
-                val processing = task.startProcessing()
+                val now = clock.instant()
+                val processing = task.startProcessing(workerId, now.plusSeconds(60), now)
                 syncTaskRepository.save(processing)
 
                 val channel = channelRepository.findByPropertyIdAndCode(processing.propertyId, processing.channelCode)
@@ -97,7 +98,7 @@ class ChannelSyncApplication(
     }
 
     @Async
-    fun processTasksImmediately(propertyId: String) {
+    fun processTasksImmediately(propertyId: String, workerId: String = "sync-task-immediate") {
         val pendingTasks = syncTaskRepository.findByPropertyIdAndStatus(propertyId, SyncTaskStatus.PENDING)
 
         pendingTasks.forEach { task ->
@@ -119,7 +120,8 @@ class ChannelSyncApplication(
                 )
 
                 if (result.success) {
-                    syncTaskRepository.save(task.startProcessing().complete())
+                    val now = clock.instant()
+                    syncTaskRepository.save(task.startProcessing(workerId, now.plusSeconds(60), now).complete(clock.instant()))
                     log.info("즉시 전송 성공: taskId={}, channelCode={}", task.id, task.channelCode)
                 }
                 // 실패 시 PENDING 유지 → 폴링이 재시도
