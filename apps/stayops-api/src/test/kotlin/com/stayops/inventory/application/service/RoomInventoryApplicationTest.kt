@@ -147,6 +147,21 @@ class RoomInventoryApplicationTest : BehaviorSpec({
             }
         }
 
+        `when`("캐시 조회가 실패하면") {
+            val inventory = newInventory(totalCount = 5, blockedCount = 0)
+            every { cache.get("prop-1", "rt-1", today) } throws RuntimeException("redis down")
+            every { inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate("prop-1", "rt-1", today) } returns inventory
+            every { cache.put(any()) } throws RuntimeException("redis down")
+            every { inventoryRepository.save(any()) } answers { firstArg() }
+            every { cache.evict(any(), any(), any()) } throws RuntimeException("redis down")
+
+            val result = inventoryApplication.blockInventory("prop-1", "rt-1", today, 1)
+
+            then("DB를 source of truth로 사용해 요청을 완료한다") {
+                result.blockedCount shouldBe 1
+            }
+        }
+
         `when`("재고를 찾을 수 없으면") {
             every { cache.get("prop-1", "rt-1", today) } returns null
             every { inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate("prop-1", "rt-1", today) } returns null
