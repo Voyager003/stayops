@@ -9,15 +9,24 @@ StayOps 서버 운영 방식에 따라 인프라 구성을 분리한다.
 
 `infra/production`은 실제 운영 또는 운영에 가까운 부하 테스트, failover/recovery 검증에 사용한다.
 
-- `app`: StayOps app
-- `mock-ota`: Mock OTA Nginx, Mock OTA app, Mock OTA MongoDB
-- `app/docker-compose.observability.yml`: Prometheus, Loki, Promtail, Grafana, node-exporter
+- `app`: StayOps app, app EC2 agent(node-exporter, Promtail)
+- `mock-ota`: Mock OTA Nginx, Mock OTA app, Mock OTA MongoDB, mock OTA EC2 agent
+- `redis`: Redis, Redis exporter, node-exporter, Promtail
+- `observability`: Prometheus, Loki, Grafana, node-exporter
 - `mongodb-rss`: 3-node MongoDB replica set, MongoDB exporter, node-exporter, Promtail
 
-운영 수준에서 app EC2를 2대 이상으로 확장할 때 Redis는 app 인스턴스 내부가 아니라
-공용 Redis endpoint(예: ElastiCache)를 사용한다. StayOps는 Redis 기반 Spring Session과
-재고 캐시를 사용하므로, 각 EC2가 자기 Redis를 가지면 ALB가 요청을 분산할 때 세션과 캐시가
-서버별로 분리된다.
+운영 수준에서 app EC2를 2대 이상으로 확장할 때 Redis는 app 인스턴스 내부가 아니라 private
+Redis EC2의 공용 endpoint를 사용한다. StayOps는 Redis 기반 Spring Session과 재고 캐시를
+사용하므로, 각 EC2가 자기 Redis를 가지면 ALB가 요청을 분산할 때 세션과 캐시가 서버별로
+분리된다.
+
+최종 production 계획은 EC2 8대로 구성한다.
+
+- App EC2 2대
+- Redis EC2 1대
+- Mock OTA EC2 1대
+- MongoDB EC2 3대
+- Observability EC2 1대
 
 기본 앱 실행:
 
@@ -25,6 +34,13 @@ StayOps 서버 운영 방식에 따라 인프라 구성을 분리한다.
 cd infra/production/app
 cp env.example .env
 docker compose --env-file .env -f docker-compose.yml up -d
+```
+
+앱 EC2 agent까지 실행:
+
+```bash
+cd infra/production/app
+docker compose --env-file .env -f docker-compose.yml -f docker-compose.agent.yml up -d
 ```
 
 Mock OTA 실행:
@@ -36,12 +52,27 @@ cp env.example .env
 docker compose --env-file .env -f docker-compose.yml up -d
 ```
 
-관측 스택까지 함께 실행:
+Mock OTA EC2 agent까지 실행:
 
 ```bash
-cd infra/production/app
+cd infra/production/mock-ota
+docker compose --env-file .env -f docker-compose.yml -f docker-compose.agent.yml up -d
+```
+
+Redis 실행:
+
+```bash
+cd infra/production/redis
 cp env.example .env
-docker compose --env-file .env -f docker-compose.yml -f docker-compose.observability.yml up -d
+docker compose --env-file .env up -d
+```
+
+관측 스택 실행:
+
+```bash
+cd infra/production/observability
+cp env.example .env
+docker compose --env-file .env up -d
 ```
 
 MongoDB R-S-S 실행:

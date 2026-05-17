@@ -50,3 +50,17 @@ out/
 **/mongo-keyfile
 *.pem
 *.key
+
+### Terraform ###
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+tfplan
