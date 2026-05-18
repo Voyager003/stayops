@@ -1,0 +1,221 @@
+name: Bootstrap Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: "Role to deploy"
+        type: choice
+        required: true
+        default: all
+        options:
+          - all
+          - observability
+          - redis
+          - mock-ota
+          - mongodb
+          - app
+      run_mongo_bootstrap:
+        description: "Run MongoDB replica set and user bootstrap after mongodb deploy"
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+  packages: read
+
+concurrency:
+  group: stayops-bootstrap-deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-northeast-2
+  ARTIFACT_PREFIX: bootstrap/${{ github.sha }}
+  TARGET_NAME_PREFIX: stayops-prod
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    environment: production-infra
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve artifact bucket
+        run: |
+          set -euo pipefail
+          if [ -n "${{ vars.BOOTSTRAP_ARTIFACT_BUCKET }}" ]; then
+            echo "ARTIFACT_BUCKET=${{ vars.BOOTSTRAP_ARTIFACT_BUCKET }}" >> "$GITHUB_ENV"
+          else
+            account_id="$(aws sts get-caller-identity --query Account --output text)"
+            echo "ARTIFACT_BUCKET=stayops-prod-artifacts-${account_id}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build role bundles
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/stayops-bundles
+
+          tar -czf /tmp/stayops-bundles/app.tgz \
+            -C infra/production/app \
+            docker-compose.yml docker-compose.agent.yml promtail.yml
+
+          tar -czf /tmp/stayops-bundles/redis.tgz \
+            -C infra/production/redis \
+            docker-compose.yml promtail.yml
+
+          tar -czf /tmp/stayops-bundles/mock-ota.tgz \
+            -C infra/production/mock-ota \
+            docker-compose.yml docker-compose.agent.yml nginx.conf.template promtail.yml
+
+          tar -czf /tmp/stayops-bundles/mongodb-rss.tgz \
+            -C infra/production/mongodb-rss \
+            docker-compose.yml init-replica-set.js create-users.js bootstrap-replica-set.sh provision-mongo-users.sh promtail.yml
+
+          tar -czf /tmp/stayops-bundles/observability.tgz \
+            -C infra/production/observability \
+            docker-compose.yml prometheus.yml
+
+      - name: Upload bundles
+        run: |
+          set -euo pipefail
+          aws s3 cp infra/production/scripts/install-compose-stack.sh "s3://${ARTIFACT_BUCKET}/${ARTIFACT_PREFIX}/install-compose-stack.sh"
+          for bundle in /tmp/stayops-bundles/*.tgz; do
+            aws s3 cp "$bundle" "s3://${ARTIFACT_BUCKET}/${ARTIFACT_PREFIX}/$(basename "$bundle")"
+          done
+
+      - name: Deploy via SSM Run Command
+        run: |
+          set -euo pipefail
+
+          target="${{ inputs.deploy_target }}"
+          run_mongo_bootstrap="${{ inputs.run_mongo_bootstrap }}"
+
+          get_instances_by_role() {
+            local role="$1"
+            aws ec2 describe-instances \
+              --filters "Name=tag:Role,Values=${role}" "Name=instance-state-name,Values=running" \
+              --query "Reservations[].Instances[].InstanceId" \
+              --output text
+          }
+
+          get_instances_by_name() {
+            local name="$1"
+            aws ec2 describe-instances \
+              --filters "Name=tag:Name,Values=${name}" "Name=instance-state-name,Values=running" \
+              --query "Reservations[].Instances[].InstanceId" \
+              --output text
+          }
+
+          wait_command() {
+            local command_id="$1"
+            shift
+            local ids=("$@")
+            local id
+            for id in "${ids[@]}"; do
+              aws ssm wait command-executed --command-id "$command_id" --instance-id "$id"
+              aws ssm get-command-invocation --command-id "$command_id" --instance-id "$id" \
+                --query "{InstanceId:InstanceId,Status:Status,ResponseCode:ResponseCode}" \
+                --output table
+            done
+          }
+
+          send_install() {
+            local role_tag="$1"
+            local role="$2"
+            local bundle="$3"
+            local parameter_path="$4"
+            local stack_dir="$5"
+            local compose_files="$6"
+            local ids_raw
+            local ids
+
+            ids_raw="$(get_instances_by_role "$role_tag")"
+            if [ -z "$ids_raw" ]; then
+              echo "No running instances found for Role=${role_tag}" >&2
+              exit 1
+            fi
+            read -r -a ids <<< "$ids_raw"
+
+            cat > /tmp/ssm-params.json <<EOF
+          {
+            "commands": [
+              "set -euo pipefail",
+              "aws s3 cp s3://${ARTIFACT_BUCKET}/${ARTIFACT_PREFIX}/install-compose-stack.sh /tmp/install-compose-stack.sh",
+              "chmod +x /tmp/install-compose-stack.sh",
+              "sudo /tmp/install-compose-stack.sh '${role}' '${ARTIFACT_BUCKET}' '${ARTIFACT_PREFIX}/${bundle}' '${parameter_path}' '${stack_dir}' '${compose_files}'"
+            ]
+          }
+          EOF
+
+            command_id="$(aws ssm send-command \
+              --document-name AWS-RunShellScript \
+              --comment "StayOps bootstrap ${role}" \
+              --instance-ids "${ids[@]}" \
+              --parameters file:///tmp/ssm-params.json \
+              --query "Command.CommandId" \
+              --output text)"
+
+            wait_command "$command_id" "${ids[@]}"
+          }
+
+          send_mongo_bootstrap() {
+            local ids_raw
+            local ids
+            ids_raw="$(get_instances_by_name "${TARGET_NAME_PREFIX}-mongo-1")"
+            if [ -z "$ids_raw" ]; then
+              echo "No running mongo-1 instance found" >&2
+              exit 1
+            fi
+            read -r -a ids <<< "$ids_raw"
+
+            cat > /tmp/ssm-params.json <<'EOF'
+          {
+            "commands": [
+              "set -euo pipefail",
+              "cd /opt/stayops/mongodb-rss",
+              "sudo ./bootstrap-replica-set.sh .env",
+              "sudo ./provision-mongo-users.sh .env"
+            ]
+          }
+          EOF
+
+            command_id="$(aws ssm send-command \
+              --document-name AWS-RunShellScript \
+              --comment "StayOps MongoDB replica set bootstrap" \
+              --instance-ids "${ids[@]}" \
+              --parameters file:///tmp/ssm-params.json \
+              --query "Command.CommandId" \
+              --output text)"
+
+            wait_command "$command_id" "${ids[@]}"
+          }
+
+          if [ "$target" = "all" ] || [ "$target" = "observability" ]; then
+            send_install "observability" "observability" "observability.tgz" "/stayops/prod/observability" "/opt/stayops/observability" "docker-compose.yml"
+          fi
+
+          if [ "$target" = "all" ] || [ "$target" = "redis" ]; then
+            send_install "redis" "redis" "redis.tgz" "/stayops/prod/redis" "/opt/stayops/redis" "docker-compose.yml"
+          fi
+
+          if [ "$target" = "all" ] || [ "$target" = "mock-ota" ]; then
+            send_install "mock-ota" "mock-ota" "mock-ota.tgz" "/stayops/prod/mock-ota" "/opt/stayops/mock-ota" "docker-compose.yml:docker-compose.agent.yml"
+          fi
+
+          if [ "$target" = "all" ] || [ "$target" = "mongodb" ]; then
+            send_install "mongodb" "mongodb-rss" "mongodb-rss.tgz" "/stayops/prod/mongodb" "/opt/stayops/mongodb-rss" "docker-compose.yml"
+            if [ "$run_mongo_bootstrap" = "true" ]; then
+              send_mongo_bootstrap
+            fi
+          fi
+
+          if [ "$target" = "all" ] || [ "$target" = "app" ]; then
+            send_install "app" "app" "app.tgz" "/stayops/prod/app" "/opt/stayops/app" "docker-compose.yml:docker-compose.agent.yml"
+          fi
