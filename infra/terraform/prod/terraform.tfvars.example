@@ -28,3 +28,10 @@ observability_instance_type = "t3.small"
 
 root_volume_size_gb       = 30
 mongo_root_volume_size_gb = 50
+
+# Optional. Defaults to stayops-prod-artifacts-<account-id>.
+# artifact_bucket_name = "stayops-prod-artifacts-123456789012"
+
+# Optional. Set this to attach S3/SSM bootstrap deploy permissions to the
+# GitHub Actions role used by AWS_TERRAFORM_ROLE_ARN.
+# github_actions_role_name = "stayops-github-terraform-role"

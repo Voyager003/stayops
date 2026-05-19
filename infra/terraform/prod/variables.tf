@@ -133,3 +133,21 @@ variable "common_tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "artifact_bucket_name" {
+  description = "Optional S3 bucket name for production deployment bundles. Defaults to a deterministic account-scoped name."
+  type        = string
+  default     = null
+}
+
+variable "artifact_bucket_force_destroy" {
+  description = "Whether Terraform may delete the deployment artifact bucket even when objects remain."
+  type        = bool
+  default     = false
+}
+
+variable "github_actions_role_name" {
+  description = "Optional IAM role name assumed by GitHub Actions. When set, Terraform attaches S3/SSM deploy permissions to it."
+  type        = string
+  default     = null
+}

@@ -21,6 +21,7 @@ Terraform이 새 인프라를 처음부터 생성하도록 만드는 것이다.
 - `/actuator/prometheus` 외부 차단용 ALB Listener Rule
 - Route 53 Private Hosted Zone
 - 내부 DNS Record
+- 초기 배포 bundle 저장용 S3 artifact bucket
 
 최종 Terraform-managed EC2는 8대다.
 
@@ -86,9 +87,9 @@ Terraform
   -> MongoDB bootstrap
 ```
 
-초기 학습 단계에서는 Terraform으로 EC2를 만들고, compose 실행은 Session Manager로 접속해
-수동으로 검증하는 방식이 안전하다. 이후 안정화되면 SSM Run Command, State Manager,
-GitHub Actions 배포 job, 또는 systemd unit으로 자동화한다.
+초기 검증 이후에는 `.github/workflows/bootstrap-deploy.yml`을 사용해 SSM Run Command로
+역할별 Docker Compose stack을 배포한다. 이 방식은 private subnet EC2에 SSH로 접속하지 않고,
+전체 GitHub repository를 각 인스턴스에 clone하지 않는다.
 
 ## 인스턴스 재시작 시 Docker를 자동으로 올리는 방법
 
@@ -133,6 +134,22 @@ EC2 재시작 시 Docker daemon이 올라오고 `restart: unless-stopped` 정책
 DB password, Toss secret, MongoDB keyfile 같은 값은 Git이나 Terraform state에 남기지 말고,
 SSM Parameter Store, Secrets Manager, 또는 GitHub Environment Secret에서 주입하는 방식을 사용한다.
 
+현재 자동화 방향은 다음과 같다.
+
+```text
+GitHub Actions
+  -> 역할별 compose/config bundle 생성
+  -> S3 artifact bucket 업로드
+  -> SSM Run Command 실행
+
+EC2
+  -> S3에서 자기 역할 bundle 다운로드
+  -> Parameter Store에서 /stayops/prod/<role>/ 값 조회
+  -> /opt/stayops/<role>/.env 생성
+  -> docker compose pull && docker compose up -d
+  -> systemd unit 등록으로 EC2 재시작 후 compose up 보장
+```
+
 ## AWS 관련 정보는 어디에 들어가는가
 
 Terraform 코드에는 AWS 계정 정보를 직접 적지 않는다.
@@ -163,6 +180,19 @@ TFVARS_PROD
 - `TF_STATE_KEY`: S3 bucket 안에서 state 파일이 저장될 key
 - `TFVARS_PROD`: `prod.tfvars`와 같은 내용의 Terraform 입력값
 
+Bootstrap deploy workflow는 같은 `AWS_TERRAFORM_ROLE_ARN`을 사용한다. Artifact bucket 이름을
+기본값이 아닌 값으로 만들었다면 GitHub Actions variable도 추가한다.
+
+```text
+BOOTSTRAP_ARTIFACT_BUCKET=<artifact bucket name>
+```
+
+기본값을 사용하면 workflow가 AWS account id로 다음 이름을 계산한다.
+
+```text
+stayops-prod-artifacts-<account-id>
+```
+
 `TFVARS_PROD`에는 다음 같은 인프라 입력값이 들어간다.
 
 ```hcl
@@ -172,6 +202,7 @@ acm_certificate_arn = "arn:aws:acm:..."
 app_instance_type = "t3.small"
 mongo_instance_type = "t3.small"
 redis_instance_type = "t3.micro"
+github_actions_role_name = "stayops-github-terraform-role"
 ```
 
 장기 AWS access key를 GitHub Secret에 넣는 방식은 피한다.
@@ -231,6 +262,59 @@ workflow_dispatch
 앱 코드만 변경될 때는 Terraform apply를 실행하지 않는다.
 인프라 코드가 변경될 때만 Terraform workflow를 실행한다.
 
+## Parameter Store 값
+
+초기 배포 자동화는 AWS Systems Manager Parameter Store를 사용한다.
+
+권장 prefix:
+
+```text
+/stayops/prod/app/
+/stayops/prod/mongodb/
+/stayops/prod/redis/
+/stayops/prod/mock-ota/
+/stayops/prod/observability/
+```
+
+민감값은 `SecureString`으로 저장한다.
+
+최소 예시:
+
+```text
+/stayops/prod/app/SPRING_MONGODB_URI
+/stayops/prod/app/SPRING_DATA_REDIS_HOST
+/stayops/prod/app/SPRING_DATA_REDIS_PORT
+/stayops/prod/app/TOSS_SECRET_KEY
+/stayops/prod/app/MOCK_OTA_ENDPOINT
+/stayops/prod/app/GHCR_USERNAME
+/stayops/prod/app/GHCR_TOKEN
+
+/stayops/prod/mongodb/MONGO_REPLICA_SET
+/stayops/prod/mongodb/MONGO1_HOST
+/stayops/prod/mongodb/MONGO2_HOST
+/stayops/prod/mongodb/MONGO3_HOST
+/stayops/prod/mongodb/MONGO_INITDB_ROOT_USERNAME
+/stayops/prod/mongodb/MONGO_INITDB_ROOT_PASSWORD
+/stayops/prod/mongodb/MONGO_APP_USERNAME
+/stayops/prod/mongodb/MONGO_APP_PASSWORD
+/stayops/prod/mongodb/MONGO_EXPORTER_USERNAME
+/stayops/prod/mongodb/MONGO_EXPORTER_PASSWORD
+/stayops/prod/mongodb/MONGO_KEYFILE_B64
+
+/stayops/prod/redis/LOKI_URL
+
+/stayops/prod/mock-ota/MOCK_OTA_IMAGE
+/stayops/prod/mock-ota/MOCK_OTA_DOMAIN
+/stayops/prod/mock-ota/MOCK_OTA_PMS_WEBHOOK_URL
+/stayops/prod/mock-ota/MOCK_OTA_HTPASSWD_B64
+/stayops/prod/mock-ota/LOKI_URL
+
+/stayops/prod/observability/GRAFANA_PASSWORD
+```
+
+`MONGO_KEYFILE_B64`와 `MOCK_OTA_HTPASSWD_B64`는 파일 내용을 base64로 인코딩한 값이다.
+배포 스크립트가 EC2에서 각각 `mongo-keyfile`, `.htpasswd` 파일로 복원한다.
+
 ## Apply 이후 실행 순서
 
 Terraform apply 후 다음 순서로 진행한다.
@@ -247,6 +331,15 @@ Terraform apply 후 다음 순서로 진행한다.
 10. `api.example.com` 같은 public DNS를 새 ALB로 전환한다.
 11. Prometheus target과 Loki log 수집을 확인한다.
 12. 기존 수동 public App EC2와 기존 수동 MongoDB EC2를 종료한다.
+
+SSM 자동화 사용 시에는 다음 순서로 대체할 수 있다.
+
+```text
+1. Parameter Store에 역할별 값을 등록한다.
+2. Terraform apply로 artifact bucket과 EC2 IAM 권한을 반영한다.
+3. GitHub Actions -> Bootstrap Deploy -> deploy_target=all 실행
+4. 필요하면 deploy_target=app만 다시 실행해 App image를 재배포한다.
+```
 
 ## 참고 문서
 

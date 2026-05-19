@@ -62,3 +62,8 @@ output "private_zone_id" {
   description = "Route 53 private hosted zone ID."
   value       = aws_route53_zone.private.zone_id
 }
+
+output "artifact_bucket_name" {
+  description = "S3 bucket for production deployment bundles."
+  value       = aws_s3_bucket.artifacts.bucket
+}

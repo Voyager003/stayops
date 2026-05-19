@@ -11,22 +11,24 @@ resource "aws_lb" "app" {
 }
 
 resource "aws_lb_target_group" "app" {
-  name        = "${local.name_prefix}-app-tg"
-  port        = 8080
-  protocol    = "HTTP"
-  target_type = "instance"
-  vpc_id      = aws_vpc.this.id
+  name                 = "${local.name_prefix}-app-tg"
+  port                 = 8080
+  protocol             = "HTTP"
+  target_type          = "instance"
+  vpc_id               = aws_vpc.this.id
+  deregistration_delay = 30
+  slow_start           = 30
 
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    interval            = 30
+    interval            = 10
     matcher             = "200"
     path                = "/actuator/health"
     port                = "traffic-port"
     protocol            = "HTTP"
     timeout             = 5
-    unhealthy_threshold = 3
+    unhealthy_threshold = 2
   }
 
   tags = merge(local.tags, {
