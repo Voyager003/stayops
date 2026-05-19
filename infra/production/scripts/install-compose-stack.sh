@@ -11,6 +11,7 @@ IMAGE_OVERRIDE="${7:-}"
 
 ARCHIVE_PATH="/tmp/stayops-${ROLE}.tgz"
 PARAMETER_PATH="${PARAMETER_PATH%/}"
+DOCKER_COMPOSE_VERSION="v2.39.4"
 
 log() {
   printf '[stayops-bootstrap] %s\n' "$*"
@@ -21,6 +22,47 @@ ensure_command() {
     return 0
   fi
   return 1
+}
+
+ensure_curl() {
+  if ensure_command curl; then
+    return 0
+  fi
+
+  if ensure_command dnf; then
+    dnf install -y curl
+  elif ensure_command yum; then
+    yum install -y curl
+  elif ensure_command apt-get; then
+    apt-get update
+    apt-get install -y curl
+  else
+    log "cannot install curl: no supported package manager"
+    exit 1
+  fi
+}
+
+install_docker_compose() {
+  local arch plugin_dir
+
+  ensure_curl
+
+  arch="$(uname -m)"
+  case "${arch}" in
+    x86_64) arch="x86_64" ;;
+    aarch64 | arm64) arch="aarch64" ;;
+    *)
+      log "unsupported architecture for docker compose: ${arch}"
+      exit 1
+      ;;
+  esac
+
+  plugin_dir="/usr/local/lib/docker/cli-plugins"
+  mkdir -p "${plugin_dir}"
+  curl -fsSL \
+    "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-${arch}" \
+    -o "${plugin_dir}/docker-compose"
+  chmod +x "${plugin_dir}/docker-compose"
 }
 
 ensure_runtime_tools() {
@@ -44,17 +86,7 @@ ensure_runtime_tools() {
   fi
 
   if ! docker compose version >/dev/null 2>&1; then
-    if ensure_command dnf; then
-      dnf install -y docker-compose-plugin
-    elif ensure_command yum; then
-      yum install -y docker-compose-plugin
-    elif ensure_command apt-get; then
-      apt-get update
-      apt-get install -y docker-compose-plugin
-    else
-      log "cannot install docker compose plugin: no supported package manager"
-      exit 1
-    fi
+    install_docker_compose
   fi
 
   if ! docker compose version >/dev/null 2>&1; then
