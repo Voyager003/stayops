@@ -196,9 +196,11 @@ write_secret_files() {
 
   if [[ -n "${mongo_keyfile_b64}" ]]; then
     printf '%s' "${mongo_keyfile_b64}" | base64 -d > "${STACK_DIR}/mongo-keyfile"
+    chown 999:999 "${STACK_DIR}/mongo-keyfile"
     chmod 400 "${STACK_DIR}/mongo-keyfile"
   elif [[ -n "${mongo_keyfile_content}" ]]; then
     printf '%s' "${mongo_keyfile_content}" > "${STACK_DIR}/mongo-keyfile"
+    chown 999:999 "${STACK_DIR}/mongo-keyfile"
     chmod 400 "${STACK_DIR}/mongo-keyfile"
   fi
 
@@ -209,6 +211,78 @@ write_secret_files() {
     printf '%s\n' "${mock_ota_htpasswd_content}" > "${STACK_DIR}/.htpasswd"
     chmod 400 "${STACK_DIR}/.htpasswd"
   fi
+}
+
+require_env_value() {
+  local env_file="$1"
+  local key="$2"
+  local value
+
+  value="$(env_value "${env_file}" "${key}")"
+  if [[ -z "${value}" ]]; then
+    log "missing required parameter: ${PARAMETER_PATH}/${key}"
+    exit 1
+  fi
+}
+
+require_one_env_value() {
+  local env_file="$1"
+  shift
+  local key value candidates
+
+  candidates="$*"
+  for key in "$@"; do
+    value="$(env_value "${env_file}" "${key}")"
+    if [[ -n "${value}" ]]; then
+      return 0
+    fi
+  done
+
+  log "missing required parameter: one of ${candidates} under ${PARAMETER_PATH}"
+  exit 1
+}
+
+validate_required_env() {
+  local env_file="$1"
+
+  case "${ROLE}" in
+    app)
+      require_env_value "${env_file}" "SPRING_MONGODB_URI"
+      require_env_value "${env_file}" "SPRING_DATA_REDIS_HOST"
+      require_env_value "${env_file}" "TOSS_SECRET_KEY"
+      require_env_value "${env_file}" "MOCK_OTA_ENDPOINT"
+      require_env_value "${env_file}" "LOKI_URL"
+      ;;
+    mongodb-rss)
+      require_env_value "${env_file}" "MONGO_INITDB_ROOT_USERNAME"
+      require_env_value "${env_file}" "MONGO_INITDB_ROOT_PASSWORD"
+      require_env_value "${env_file}" "MONGO_APP_USERNAME"
+      require_env_value "${env_file}" "MONGO_APP_PASSWORD"
+      require_env_value "${env_file}" "MONGO_EXPORTER_USERNAME"
+      require_env_value "${env_file}" "MONGO_EXPORTER_PASSWORD"
+      require_env_value "${env_file}" "MONGO_REPLICA_SET"
+      require_env_value "${env_file}" "MONGO1_HOST"
+      require_env_value "${env_file}" "MONGO2_HOST"
+      require_env_value "${env_file}" "MONGO3_HOST"
+      require_env_value "${env_file}" "LOKI_URL"
+      require_one_env_value "${env_file}" "MONGO_KEYFILE_B64" "MONGO_KEYFILE_CONTENT"
+      ;;
+    mock-ota)
+      require_env_value "${env_file}" "MOCK_OTA_PMS_WEBHOOK_URL"
+      require_env_value "${env_file}" "LOKI_URL"
+      require_one_env_value "${env_file}" "MOCK_OTA_HTPASSWD_B64" "MOCK_OTA_HTPASSWD_CONTENT"
+      ;;
+    redis)
+      require_env_value "${env_file}" "LOKI_URL"
+      ;;
+    observability)
+      require_env_value "${env_file}" "GRAFANA_PASSWORD"
+      ;;
+    *)
+      log "unknown role for env validation: ${ROLE}"
+      exit 1
+      ;;
+  esac
 }
 
 docker_login_if_configured() {
@@ -320,6 +394,7 @@ main() {
     set_env_value "${env_file}" "STAYOPS_IMAGE" "${IMAGE_OVERRIDE}"
   fi
   chmod 600 "${env_file}"
+  validate_required_env "${env_file}"
   write_secret_files "${env_file}"
   docker_login_if_configured "${env_file}"
 

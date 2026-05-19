@@ -28,6 +28,26 @@ for var in "${required_vars[@]}"; do
   fi
 done
 
+for attempt in {1..30}; do
+  if docker compose exec -T \
+    mongo \
+    mongosh \
+    -u "${MONGO_INITDB_ROOT_USERNAME}" \
+    -p "${MONGO_INITDB_ROOT_PASSWORD}" \
+    --authenticationDatabase admin \
+    --quiet \
+    --eval "db.hello().isWritablePrimary" | grep -q "true"; then
+    break
+  fi
+
+  if [[ "${attempt}" -eq 30 ]]; then
+    echo "timed out waiting for MongoDB primary" >&2
+    exit 1
+  fi
+
+  sleep 2
+done
+
 docker compose exec -T \
   -e MONGO_APP_USERNAME="${MONGO_APP_USERNAME}" \
   -e MONGO_APP_PASSWORD="${MONGO_APP_PASSWORD}" \
