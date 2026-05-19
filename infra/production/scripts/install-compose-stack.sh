@@ -43,6 +43,25 @@ ensure_runtime_tools() {
     exit 1
   fi
 
+  if ! docker compose version >/dev/null 2>&1; then
+    if ensure_command dnf; then
+      dnf install -y docker-compose-plugin
+    elif ensure_command yum; then
+      yum install -y docker-compose-plugin
+    elif ensure_command apt-get; then
+      apt-get update
+      apt-get install -y docker-compose-plugin
+    else
+      log "cannot install docker compose plugin: no supported package manager"
+      exit 1
+    fi
+  fi
+
+  if ! docker compose version >/dev/null 2>&1; then
+    log "docker compose plugin is not available"
+    exit 1
+  fi
+
   systemctl enable docker
   systemctl start docker
 }
