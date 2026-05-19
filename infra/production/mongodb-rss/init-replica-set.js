@@ -17,14 +17,24 @@ const config = {
 };
 
 try {
+  const status = rs.status();
+  print(`Replica set ${status.set} already initialized`);
+  printjson(status);
+  quit(0);
+} catch (error) {
+  if (error.codeName !== "NotYetInitialized") {
+    throw error;
+  }
+}
+
+try {
   rs.initiate(config);
   print(`Replica set ${replicaSet} initiated`);
 } catch (error) {
   if (error.codeName !== "AlreadyInitialized") {
     throw error;
   }
-  print(`Replica set ${replicaSet} already initialized; applying reconfig`);
-  rs.reconfig(config);
+  print(`Replica set ${replicaSet} already initialized`);
 }
 
 printjson(rs.status());
