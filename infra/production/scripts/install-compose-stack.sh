@@ -7,6 +7,7 @@ ARTIFACT_KEY="${3:?artifact key is required}"
 PARAMETER_PATH="${4:?parameter path is required}"
 STACK_DIR="${5:?stack dir is required}"
 COMPOSE_FILES="${6:?compose files are required}"
+IMAGE_OVERRIDE="${7:-}"
 
 ARCHIVE_PATH="/tmp/stayops-${ROLE}.tgz"
 PARAMETER_PATH="${PARAMETER_PATH%/}"
@@ -177,6 +178,19 @@ env_value() {
   grep -E "^${key}=" "${env_file}" | head -n 1 | cut -d= -f2- || true
 }
 
+set_env_value() {
+  local env_file="$1"
+  local key="$2"
+  local value="$3"
+
+  if grep -q "^${key}=" "${env_file}"; then
+    sed -i.bak "s|^${key}=.*|${key}=${value}|" "${env_file}"
+    rm -f "${env_file}.bak"
+  else
+    printf '%s=%s\n' "${key}" "${value}" >> "${env_file}"
+  fi
+}
+
 compose_args() {
   local file
   IFS=':' read -ra files <<< "${COMPOSE_FILES}"
@@ -251,6 +265,9 @@ main() {
 
   write_env_from_parameter_store "${region}" "${env_file}"
   append_runtime_identity "${env_file}" "${instance_alias}"
+  if [[ -n "${IMAGE_OVERRIDE}" ]]; then
+    set_env_value "${env_file}" "STAYOPS_IMAGE" "${IMAGE_OVERRIDE}"
+  fi
   chmod 600 "${env_file}"
   write_secret_files "${env_file}"
   docker_login_if_configured "${env_file}"

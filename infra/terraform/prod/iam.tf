@@ -120,6 +120,17 @@ resource "aws_iam_role_policy" "github_actions_bootstrap_deploy" {
         Resource = "*"
       },
       {
+        Sid    = "ManageAlbRollingTargets"
+        Effect = "Allow"
+        Action = [
+          "elasticloadbalancing:DeregisterTargets",
+          "elasticloadbalancing:DescribeTargetGroups",
+          "elasticloadbalancing:DescribeTargetHealth",
+          "elasticloadbalancing:RegisterTargets"
+        ]
+        Resource = "*"
+      },
+      {
         Sid    = "RunBootstrapCommands"
         Effect = "Allow"
         Action = [
