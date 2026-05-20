@@ -1,13 +1,14 @@
 # StayOps Production Terraform
 
-이 디렉터리는 StayOps의 production-like AWS 인프라를 Terraform으로 구성한다.
+이 디렉터리는 StayOps의 production-like AWS 인프라와 비용 절감용 minimal 인프라를
+Terraform으로 구성한다.
 
-현재 목표는 기존에 수동으로 운영하던 public App EC2와 MongoDB EC2를 버리고,
-Terraform이 새 인프라를 처음부터 생성하도록 만드는 것이다.
+운영 중 실수 삭제를 막기 위해 production과 minimal은 같은 Terraform root를 사용하되
+서로 다른 S3 backend key와 tfvars로 state를 분리한다.
 
 ## Terraform이 생성하는 것
 
-`terraform apply`를 실행하면 다음 AWS 리소스를 생성한다.
+`deployment_topology = "production"`으로 `terraform apply`를 실행하면 다음 AWS 리소스를 생성한다.
 
 - VPC, public/private subnet, route table, Internet Gateway, NAT Gateway
 - ALB, App, MongoDB, Redis, Mock OTA, Observability용 Security Group
@@ -32,6 +33,21 @@ Redis EC2 x 1
 Mock OTA EC2 x 1
 Observability EC2 x 1
 ```
+
+`deployment_topology = "minimal"`과 `environment = "minimal"`로 실행하면 다음 저비용 리소스를 생성한다.
+
+```text
+Public App EC2 x 1
+Private single-node MongoDB EC2 x 1
+Elastic IP x 1
+Route 53 Private Hosted Zone / minimal-mongo private DNS
+S3 artifact bucket
+Session Manager용 IAM Role / Instance Profile
+```
+
+minimal App EC2는 Nginx, StayOps app, Redis, Mock OTA, Mock OTA MongoDB를 같은 Docker Compose
+stack으로 실행한다. minimal MongoDB는 transaction 지원을 위해 standalone이 아니라 single-node
+replica set으로 실행한다.
 
 기존 수동 public App EC2와 기존 수동 MongoDB EC2는 Terraform state에 없으므로
 Terraform이 자동으로 삭제하지 않는다.
@@ -150,6 +166,36 @@ EC2
   -> systemd unit 등록으로 EC2 재시작 후 compose up 보장
 ```
 
+## production과 minimal 전환 방식
+
+production과 minimal을 같은 state에서 `deployment_topology`만 바꿔 전환하지 않는다.
+그 방식은 Terraform이 기존 production 리소스를 삭제하고 minimal 리소스를 만들도록 계획할 수 있어
+운영 리스크가 크다.
+
+대신 state key를 분리한다.
+
+```text
+production -> TF_STATE_KEY_PRODUCTION, TFVARS_PRODUCTION
+minimal    -> TF_STATE_KEY_MINIMAL, TFVARS_MINIMAL
+```
+
+GitHub Actions의 Terraform workflow는 PR에서 두 topology를 모두 plan하고, 수동 apply에서는 입력한
+topology의 state key와 tfvars만 사용한다.
+
+## Terraform으로 리소스 삭제하기
+
+콘솔에서 EC2, ALB, NAT Gateway, Security Group을 하나씩 삭제하지 않는다.
+Terraform이 만든 리소스는 `.github/workflows/terraform-destroy.yml`에서 topology와 확인 문구를
+입력한 뒤 `terraform plan -destroy`와 `terraform apply`로 삭제한다.
+
+```text
+topology=minimal
+confirm=destroy-minimal
+```
+
+production 삭제는 같은 방식이지만 `confirm=destroy-production`을 요구한다. 이 작업은
+GitHub Environment 승인을 거쳐야 한다.
+
 ## AWS 관련 정보는 어디에 들어가는가
 
 Terraform 코드에는 AWS 계정 정보를 직접 적지 않는다.
@@ -169,34 +215,44 @@ GitHub Actions에서는 다음 Repository Secret 또는 Environment Secret이 �
 ```text
 AWS_TERRAFORM_ROLE_ARN
 TF_STATE_BUCKET
-TF_STATE_KEY
-TFVARS_PROD
+TF_STATE_KEY_PRODUCTION
+TF_STATE_KEY_MINIMAL
+TFVARS_PRODUCTION
+TFVARS_MINIMAL
 ```
 
 각 값의 의미는 다르다.
 
 - `AWS_TERRAFORM_ROLE_ARN`: GitHub Actions가 assume할 AWS IAM Role ARN
 - `TF_STATE_BUCKET`: Terraform state를 저장할 S3 bucket
-- `TF_STATE_KEY`: S3 bucket 안에서 state 파일이 저장될 key
-- `TFVARS_PROD`: `prod.tfvars`와 같은 내용의 Terraform 입력값
+- `TF_STATE_KEY_PRODUCTION`: production state 파일이 저장될 S3 key
+- `TF_STATE_KEY_MINIMAL`: minimal state 파일이 저장될 S3 key
+- `TFVARS_PRODUCTION`: production용 tfvars
+- `TFVARS_MINIMAL`: minimal용 tfvars
+
+기존 호환을 위해 `TF_STATE_KEY`, `TFVARS_PROD`가 있으면 production fallback으로 사용할 수 있다.
 
 Bootstrap deploy workflow는 같은 `AWS_TERRAFORM_ROLE_ARN`을 사용한다. Artifact bucket 이름을
 기본값이 아닌 값으로 만들었다면 GitHub Actions variable도 추가한다.
 
 ```text
-BOOTSTRAP_ARTIFACT_BUCKET=<artifact bucket name>
+BOOTSTRAP_ARTIFACT_BUCKET_PRODUCTION=<production artifact bucket name>
+BOOTSTRAP_ARTIFACT_BUCKET_MINIMAL=<minimal artifact bucket name>
 ```
 
 기본값을 사용하면 workflow가 AWS account id로 다음 이름을 계산한다.
 
 ```text
 stayops-prod-artifacts-<account-id>
+stayops-minimal-artifacts-<account-id>
 ```
 
-`TFVARS_PROD`에는 다음 같은 인프라 입력값이 들어간다.
+`TFVARS_PRODUCTION`, `TFVARS_MINIMAL`에는 다음 같은 인프라 입력값이 들어간다.
 
 ```hcl
 aws_region = "ap-northeast-2"
+deployment_topology = "production"
+environment = "prod"
 ami_id = "ami-..."
 acm_certificate_arn = "arn:aws:acm:..."
 app_instance_type = "t3.small"
@@ -212,10 +268,12 @@ GitHub Actions OIDC와 AWS IAM Role을 사용하는 것이 기본 방향이다.
 
 ```bash
 cp terraform.tfvars.example prod.tfvars
+# 또는 minimal 검증 시:
+# cp terraform.minimal.tfvars.example minimal.tfvars
 
 terraform init \
   -backend-config="bucket=<state-bucket>" \
-  -backend-config="key=prod/terraform.tfstate" \
+  -backend-config="key=production/terraform.tfstate" \
   -backend-config="region=ap-northeast-2" \
   -backend-config="encrypt=true"
 
@@ -274,6 +332,8 @@ workflow_dispatch
 /stayops/prod/redis/
 /stayops/prod/mock-ota/
 /stayops/prod/observability/
+/stayops/minimal/app/
+/stayops/minimal/mongodb/
 ```
 
 민감값은 `SecureString`으로 저장한다.
@@ -310,6 +370,24 @@ workflow_dispatch
 /stayops/prod/mock-ota/LOKI_URL
 
 /stayops/prod/observability/GRAFANA_PASSWORD
+
+/stayops/minimal/app/API_DOMAIN
+/stayops/minimal/app/SPRING_MONGODB_URI
+/stayops/minimal/app/TOSS_SECRET_KEY
+/stayops/minimal/app/MOCK_OTA_ENDPOINT
+/stayops/minimal/app/MOCK_OTA_PMS_WEBHOOK_URL
+/stayops/minimal/app/MOCK_OTA_HTPASSWD_B64
+/stayops/minimal/app/GHCR_USERNAME
+/stayops/minimal/app/GHCR_TOKEN
+
+/stayops/minimal/mongodb/MONGO_REPLICA_SET
+/stayops/minimal/mongodb/MONGO_HOST
+/stayops/minimal/mongodb/MONGO_INITDB_ROOT_USERNAME
+/stayops/minimal/mongodb/MONGO_INITDB_ROOT_PASSWORD
+/stayops/minimal/mongodb/MONGO_APP_USERNAME
+/stayops/minimal/mongodb/MONGO_APP_PASSWORD
+/stayops/minimal/mongodb/MONGO_EXPORTER_USERNAME
+/stayops/minimal/mongodb/MONGO_EXPORTER_PASSWORD
 ```
 
 `MONGO_KEYFILE_B64`와 `MOCK_OTA_HTPASSWD_B64`는 파일 내용을 base64로 인코딩한 값이다.

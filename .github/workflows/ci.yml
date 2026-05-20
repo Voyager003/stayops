@@ -9,6 +9,8 @@ on:
       - '.claude/**'
       - 'infra/terraform/**'
       - '.github/workflows/terraform.yml'
+      - '.github/workflows/terraform-destroy.yml'
+      - '.github/workflows/bootstrap-deploy.yml'
       - 'LICENSE'
 
 permissions:

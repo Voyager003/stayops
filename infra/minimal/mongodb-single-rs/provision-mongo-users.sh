@@ -30,6 +30,7 @@ for var in "${required_vars[@]}"; do
 done
 
 docker compose --env-file "${ENV_FILE}" -f "${SCRIPT_DIR}/docker-compose.yml" exec -T \
+  -e MONGO_INITDB_ROOT_USERNAME="${MONGO_INITDB_ROOT_USERNAME}" \
   -e MONGO_APP_USERNAME="${MONGO_APP_USERNAME}" \
   -e MONGO_APP_PASSWORD="${MONGO_APP_PASSWORD}" \
   -e MONGO_EXPORTER_USERNAME="${MONGO_EXPORTER_USERNAME}" \

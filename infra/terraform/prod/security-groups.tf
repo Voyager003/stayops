@@ -58,6 +58,80 @@ resource "aws_security_group" "observability" {
   })
 }
 
+resource "aws_security_group" "minimal_app" {
+  count = local.is_minimal ? 1 : 0
+
+  name        = "${local.name_prefix}-minimal-app-sg"
+  description = "StayOps minimal public app security group"
+  vpc_id      = aws_vpc.this.id
+
+  tags = merge(local.tags, {
+    Name = "${local.name_prefix}-minimal-app-sg"
+  })
+}
+
+resource "aws_security_group" "minimal_mongo" {
+  count = local.is_minimal ? 1 : 0
+
+  name        = "${local.name_prefix}-minimal-mongo-sg"
+  description = "StayOps minimal MongoDB security group"
+  vpc_id      = aws_vpc.this.id
+
+  tags = merge(local.tags, {
+    Name = "${local.name_prefix}-minimal-mongo-sg"
+  })
+}
+
+resource "aws_vpc_security_group_ingress_rule" "minimal_app_http" {
+  for_each = local.is_minimal ? toset(var.allowed_http_cidrs) : toset([])
+
+  security_group_id = aws_security_group.minimal_app[0].id
+  cidr_ipv4         = each.value
+  from_port         = 80
+  ip_protocol       = "tcp"
+  to_port           = 80
+}
+
+resource "aws_vpc_security_group_egress_rule" "minimal_app_to_mongo" {
+  count = local.is_minimal ? 1 : 0
+
+  security_group_id            = aws_security_group.minimal_app[0].id
+  referenced_security_group_id = aws_security_group.minimal_mongo[0].id
+  from_port                    = 27017
+  ip_protocol                  = "tcp"
+  to_port                      = 27017
+}
+
+resource "aws_vpc_security_group_egress_rule" "minimal_app_to_https" {
+  count = local.is_minimal ? 1 : 0
+
+  security_group_id = aws_security_group.minimal_app[0].id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 443
+  ip_protocol       = "tcp"
+  to_port           = 443
+}
+
+resource "aws_vpc_security_group_ingress_rule" "minimal_mongo_from_app" {
+  count = local.is_minimal ? 1 : 0
+
+  security_group_id            = aws_security_group.minimal_mongo[0].id
+  referenced_security_group_id = aws_security_group.minimal_app[0].id
+  from_port                    = 27017
+  ip_protocol                  = "tcp"
+  to_port                      = 27017
+}
+
+resource "aws_vpc_security_group_egress_rule" "minimal_mongo_to_https" {
+  count = local.is_minimal ? 1 : 0
+
+  security_group_id = aws_security_group.minimal_mongo[0].id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 443
+  ip_protocol       = "tcp"
+  to_port           = 443
+}
+
 resource "aws_vpc_security_group_ingress_rule" "alb_http" {
   for_each = toset(var.allowed_http_cidrs)
 

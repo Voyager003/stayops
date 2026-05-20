@@ -2,9 +2,18 @@ const appUsername = process.env.MONGO_APP_USERNAME;
 const appPassword = process.env.MONGO_APP_PASSWORD;
 const exporterUsername = process.env.MONGO_EXPORTER_USERNAME;
 const exporterPassword = process.env.MONGO_EXPORTER_PASSWORD;
+const rootUsername = process.env.MONGO_INITDB_ROOT_USERNAME;
 
 if (!appUsername || !appPassword || !exporterUsername || !exporterPassword) {
   throw new Error("MONGO_APP_USERNAME, MONGO_APP_PASSWORD, MONGO_EXPORTER_USERNAME, and MONGO_EXPORTER_PASSWORD are required");
+}
+
+if (rootUsername && (appUsername === rootUsername || exporterUsername === rootUsername)) {
+  throw new Error("MongoDB root, application, and exporter users must be distinct");
+}
+
+if (appUsername === exporterUsername) {
+  throw new Error("MongoDB application and exporter users must be distinct");
 }
 
 const adminDb = db.getSiblingDB("admin");

@@ -15,6 +15,16 @@ on:
           - mock-ota
           - mongodb
           - app
+          - minimal-mongodb
+          - minimal-app
+      topology:
+        description: "Infrastructure topology"
+        type: choice
+        required: true
+        default: production
+        options:
+          - production
+          - minimal
       run_mongo_bootstrap:
         description: "Run MongoDB replica set and user bootstrap after mongodb deploy"
         type: boolean
@@ -33,7 +43,6 @@ concurrency:
 env:
   AWS_REGION: ap-northeast-2
   ARTIFACT_PREFIX: bootstrap/${{ github.sha }}
-  TARGET_NAME_PREFIX: stayops-prod
 
 jobs:
   bootstrap:
@@ -50,11 +59,23 @@ jobs:
       - name: Resolve artifact bucket
         run: |
           set -euo pipefail
-          if [ -n "${{ vars.BOOTSTRAP_ARTIFACT_BUCKET }}" ]; then
+          topology="${{ inputs.topology }}"
+          if [ "$topology" = "production" ]; then
+            echo "TARGET_NAME_PREFIX=stayops-prod" >> "$GITHUB_ENV"
+            default_bucket_prefix="stayops-prod-artifacts"
+          else
+            echo "TARGET_NAME_PREFIX=stayops-minimal" >> "$GITHUB_ENV"
+            default_bucket_prefix="stayops-minimal-artifacts"
+          fi
+          if [ "$topology" = "minimal" ] && [ -n "${{ vars.BOOTSTRAP_ARTIFACT_BUCKET_MINIMAL }}" ]; then
+            echo "ARTIFACT_BUCKET=${{ vars.BOOTSTRAP_ARTIFACT_BUCKET_MINIMAL }}" >> "$GITHUB_ENV"
+          elif [ "$topology" = "production" ] && [ -n "${{ vars.BOOTSTRAP_ARTIFACT_BUCKET_PRODUCTION }}" ]; then
+            echo "ARTIFACT_BUCKET=${{ vars.BOOTSTRAP_ARTIFACT_BUCKET_PRODUCTION }}" >> "$GITHUB_ENV"
+          elif [ -n "${{ vars.BOOTSTRAP_ARTIFACT_BUCKET }}" ]; then
             echo "ARTIFACT_BUCKET=${{ vars.BOOTSTRAP_ARTIFACT_BUCKET }}" >> "$GITHUB_ENV"
           else
             account_id="$(aws sts get-caller-identity --query Account --output text)"
-            echo "ARTIFACT_BUCKET=stayops-prod-artifacts-${account_id}" >> "$GITHUB_ENV"
+            echo "ARTIFACT_BUCKET=${default_bucket_prefix}-${account_id}" >> "$GITHUB_ENV"
           fi
 
       - name: Build role bundles
@@ -82,6 +103,14 @@ jobs:
             -C infra/production/observability \
             docker-compose.yml prometheus.yml
 
+          tar -czf /tmp/stayops-bundles/minimal-app.tgz \
+            -C infra/minimal/app \
+            docker-compose.yml nginx.conf.template
+
+          tar -czf /tmp/stayops-bundles/minimal-mongodb.tgz \
+            -C infra/minimal/mongodb-single-rs \
+            docker-compose.yml init-single-replica-set.js create-users.js bootstrap-single-replica-set.sh provision-mongo-users.sh
+
       - name: Upload bundles
         run: |
           set -euo pipefail
@@ -95,6 +124,7 @@ jobs:
           set -euo pipefail
 
           target="${{ inputs.deploy_target }}"
+          topology="${{ inputs.topology }}"
           run_mongo_bootstrap="${{ inputs.run_mongo_bootstrap }}"
 
           get_instances_by_role() {
@@ -220,6 +250,53 @@ jobs:
 
             wait_command "$command_id" "${ids[@]}"
           }
+
+          send_minimal_mongo_bootstrap() {
+            local ids_raw
+            local ids
+            ids_raw="$(get_instances_by_name "${TARGET_NAME_PREFIX}-minimal-mongo")"
+            if [ -z "$ids_raw" ]; then
+              echo "No running minimal MongoDB instance found" >&2
+              exit 1
+            fi
+            read -r -a ids <<< "$ids_raw"
+
+            cat > /tmp/ssm-params.json <<'EOF'
+          {
+            "commands": [
+              "set -euo pipefail",
+              "cd /opt/stayops/minimal-mongodb",
+              "sudo ./bootstrap-single-replica-set.sh .env",
+              "sudo ./provision-mongo-users.sh .env"
+            ]
+          }
+          EOF
+
+            command_id="$(aws ssm send-command \
+              --document-name AWS-RunShellScript \
+              --comment "StayOps minimal MongoDB bootstrap" \
+              --instance-ids "${ids[@]}" \
+              --parameters file:///tmp/ssm-params.json \
+              --query "Command.CommandId" \
+              --output text)"
+
+            wait_command "$command_id" "${ids[@]}"
+          }
+
+          if [ "$topology" = "minimal" ]; then
+            if [ "$target" = "all" ] || [ "$target" = "minimal-mongodb" ] || [ "$target" = "mongodb" ]; then
+              send_install "minimal-mongodb" "minimal-mongodb" "minimal-mongodb.tgz" "/stayops/minimal/mongodb" "/opt/stayops/minimal-mongodb" "docker-compose.yml"
+              if [ "$run_mongo_bootstrap" = "true" ]; then
+                send_minimal_mongo_bootstrap
+              fi
+            fi
+
+            if [ "$target" = "all" ] || [ "$target" = "minimal-app" ] || [ "$target" = "app" ]; then
+              send_install "minimal-app" "minimal-app" "minimal-app.tgz" "/stayops/minimal/app" "/opt/stayops/minimal-app" "docker-compose.yml"
+            fi
+
+            exit 0
+          fi
 
           if [ "$target" = "all" ] || [ "$target" = "observability" ]; then
             send_install "observability" "observability" "observability.tgz" "/stayops/prod/observability" "/opt/stayops/observability" "docker-compose.yml"

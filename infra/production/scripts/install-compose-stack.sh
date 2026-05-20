@@ -146,6 +146,8 @@ instance_alias_from_name() {
     *mongo-1) printf 'mongo-1\n' ;;
     *mongo-2) printf 'mongo-2\n' ;;
     *mongo-3) printf 'mongo-3\n' ;;
+    *minimal-app) printf 'minimal-app\n' ;;
+    *minimal-mongo) printf 'minimal-mongo\n' ;;
     *redis) printf 'redis\n' ;;
     *mock-ota) printf 'mock-ota\n' ;;
     *observability) printf 'observability\n' ;;
@@ -271,6 +273,24 @@ validate_required_env() {
       require_env_value "${env_file}" "MOCK_OTA_PMS_WEBHOOK_URL"
       require_env_value "${env_file}" "LOKI_URL"
       require_one_env_value "${env_file}" "MOCK_OTA_HTPASSWD_B64" "MOCK_OTA_HTPASSWD_CONTENT"
+      ;;
+    minimal-app)
+      require_env_value "${env_file}" "API_DOMAIN"
+      require_env_value "${env_file}" "SPRING_MONGODB_URI"
+      require_env_value "${env_file}" "TOSS_SECRET_KEY"
+      require_env_value "${env_file}" "MOCK_OTA_ENDPOINT"
+      require_env_value "${env_file}" "MOCK_OTA_PMS_WEBHOOK_URL"
+      require_one_env_value "${env_file}" "MOCK_OTA_HTPASSWD_B64" "MOCK_OTA_HTPASSWD_CONTENT"
+      ;;
+    minimal-mongodb)
+      require_env_value "${env_file}" "MONGO_REPLICA_SET"
+      require_env_value "${env_file}" "MONGO_HOST"
+      require_env_value "${env_file}" "MONGO_INITDB_ROOT_USERNAME"
+      require_env_value "${env_file}" "MONGO_INITDB_ROOT_PASSWORD"
+      require_env_value "${env_file}" "MONGO_APP_USERNAME"
+      require_env_value "${env_file}" "MONGO_APP_PASSWORD"
+      require_env_value "${env_file}" "MONGO_EXPORTER_USERNAME"
+      require_env_value "${env_file}" "MONGO_EXPORTER_PASSWORD"
       ;;
     redis)
       require_env_value "${env_file}" "LOKI_URL"

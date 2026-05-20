@@ -21,27 +21,33 @@ resource "aws_route53_record" "app" {
 }
 
 resource "aws_route53_record" "redis" {
+  count = local.is_production ? 1 : 0
+
   zone_id = aws_route53_zone.private.zone_id
   name    = "redis.${var.private_zone_name}"
   type    = "A"
   ttl     = 60
-  records = [aws_instance.redis.private_ip]
+  records = [aws_instance.redis[0].private_ip]
 }
 
 resource "aws_route53_record" "mock_ota" {
+  count = local.is_production ? 1 : 0
+
   zone_id = aws_route53_zone.private.zone_id
   name    = "mock-ota.${var.private_zone_name}"
   type    = "A"
   ttl     = 60
-  records = [aws_instance.mock_ota.private_ip]
+  records = [aws_instance.mock_ota[0].private_ip]
 }
 
 resource "aws_route53_record" "observability" {
+  count = local.is_production ? 1 : 0
+
   zone_id = aws_route53_zone.private.zone_id
   name    = "observability.${var.private_zone_name}"
   type    = "A"
   ttl     = 60
-  records = [aws_instance.observability.private_ip]
+  records = [aws_instance.observability[0].private_ip]
 }
 
 resource "aws_route53_record" "mongo" {
@@ -52,4 +58,14 @@ resource "aws_route53_record" "mongo" {
   type    = "A"
   ttl     = 60
   records = [each.value.private_ip]
+}
+
+resource "aws_route53_record" "minimal_mongo" {
+  count = local.is_minimal ? 1 : 0
+
+  zone_id = aws_route53_zone.private.zone_id
+  name    = "minimal-mongo.${var.private_zone_name}"
+  type    = "A"
+  ttl     = 60
+  records = [aws_instance.minimal_mongo[0].private_ip]
 }
