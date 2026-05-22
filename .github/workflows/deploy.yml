@@ -9,6 +9,8 @@ on:
       - '.claude/**'
       - 'infra/terraform/**'
       - '.github/workflows/terraform.yml'
+      - '.github/workflows/terraform-destroy.yml'
+      - '.github/workflows/bootstrap-deploy.yml'
       - 'LICENSE'
   workflow_dispatch:
 
@@ -104,11 +106,25 @@ jobs:
       - name: Resolve artifact bucket
         run: |
           set -euo pipefail
-          if [ -n "${{ vars.BOOTSTRAP_ARTIFACT_BUCKET }}" ]; then
+          topology="${{ vars.DEPLOY_TOPOLOGY || 'production' }}"
+          if [ "$topology" = "minimal" ]; then
+            echo "DEPLOY_TOPOLOGY=minimal" >> "$GITHUB_ENV"
+            echo "TARGET_NAME_PREFIX=stayops-minimal" >> "$GITHUB_ENV"
+            default_bucket_prefix="stayops-minimal-artifacts"
+          else
+            echo "DEPLOY_TOPOLOGY=production" >> "$GITHUB_ENV"
+            echo "TARGET_NAME_PREFIX=stayops-prod" >> "$GITHUB_ENV"
+            default_bucket_prefix="stayops-prod-artifacts"
+          fi
+          if [ "$topology" = "minimal" ] && [ -n "${{ vars.BOOTSTRAP_ARTIFACT_BUCKET_MINIMAL }}" ]; then
+            echo "ARTIFACT_BUCKET=${{ vars.BOOTSTRAP_ARTIFACT_BUCKET_MINIMAL }}" >> "$GITHUB_ENV"
+          elif [ "$topology" = "production" ] && [ -n "${{ vars.BOOTSTRAP_ARTIFACT_BUCKET_PRODUCTION }}" ]; then
+            echo "ARTIFACT_BUCKET=${{ vars.BOOTSTRAP_ARTIFACT_BUCKET_PRODUCTION }}" >> "$GITHUB_ENV"
+          elif [ -n "${{ vars.BOOTSTRAP_ARTIFACT_BUCKET }}" ]; then
             echo "ARTIFACT_BUCKET=${{ vars.BOOTSTRAP_ARTIFACT_BUCKET }}" >> "$GITHUB_ENV"
           else
             account_id="$(aws sts get-caller-identity --query Account --output text)"
-            echo "ARTIFACT_BUCKET=stayops-prod-artifacts-${account_id}" >> "$GITHUB_ENV"
+            echo "ARTIFACT_BUCKET=${default_bucket_prefix}-${account_id}" >> "$GITHUB_ENV"
           fi
 
       - name: Build app bundle
@@ -118,12 +134,16 @@ jobs:
           tar -czf /tmp/stayops-bundles/app.tgz \
             -C infra/production/app \
             docker-compose.yml docker-compose.agent.yml promtail.yml
+          tar -czf /tmp/stayops-bundles/minimal-app.tgz \
+            -C infra/minimal/app \
+            docker-compose.yml nginx.conf.template
 
       - name: Upload app bundle
         run: |
           set -euo pipefail
           aws s3 cp infra/production/scripts/install-compose-stack.sh "s3://${ARTIFACT_BUCKET}/${ARTIFACT_PREFIX}/install-compose-stack.sh"
           aws s3 cp /tmp/stayops-bundles/app.tgz "s3://${ARTIFACT_BUCKET}/${ARTIFACT_PREFIX}/app.tgz"
+          aws s3 cp /tmp/stayops-bundles/minimal-app.tgz "s3://${ARTIFACT_BUCKET}/${ARTIFACT_PREFIX}/minimal-app.tgz"
 
       - name: Deploy app via rolling SSM Run Command
         run: |
@@ -131,8 +151,78 @@ jobs:
 
           app_image="ghcr.io/${GITHUB_REPOSITORY,,}:sha-${GITHUB_SHA}"
 
+          print_command_output() {
+            local command_id="$1"
+            local id="$2"
+
+            aws ssm get-command-invocation \
+              --command-id "$command_id" \
+              --instance-id "$id" \
+              --query "{InstanceId:InstanceId,Status:Status,ResponseCode:ResponseCode}" \
+              --output table
+
+            echo "::group::SSM stdout ${id}"
+            aws ssm get-command-invocation \
+              --command-id "$command_id" \
+              --instance-id "$id" \
+              --query "StandardOutputContent" \
+              --output text || true
+            echo "::endgroup::"
+
+            echo "::group::SSM stderr ${id}"
+            aws ssm get-command-invocation \
+              --command-id "$command_id" \
+              --instance-id "$id" \
+              --query "StandardErrorContent" \
+              --output text || true
+            echo "::endgroup::"
+          }
+
+          if [ "${DEPLOY_TOPOLOGY}" = "minimal" ]; then
+            ids_raw="$(aws ec2 describe-instances \
+              --filters "Name=tag:Role,Values=minimal-app" "Name=instance-state-name,Values=running" \
+              --query "Reservations[].Instances[].InstanceId" \
+              --output text)"
+
+            if [ -z "$ids_raw" ]; then
+              echo "No running minimal app instances found" >&2
+              exit 1
+            fi
+
+            cat > /tmp/ssm-params.json <<EOF
+          {
+            "commands": [
+              "set -euo pipefail",
+              "aws s3 cp s3://${ARTIFACT_BUCKET}/${ARTIFACT_PREFIX}/install-compose-stack.sh /tmp/install-compose-stack.sh",
+              "chmod +x /tmp/install-compose-stack.sh",
+              "sudo /tmp/install-compose-stack.sh 'minimal-app' '${ARTIFACT_BUCKET}' '${ARTIFACT_PREFIX}/minimal-app.tgz' '/stayops/minimal/app' '/opt/stayops/minimal-app' 'docker-compose.yml' '${app_image}'"
+            ]
+          }
+          EOF
+
+            read -r -a minimal_ids <<< "$ids_raw"
+            for id in "${minimal_ids[@]}"; do
+              command_id="$(aws ssm send-command \
+                --document-name AWS-RunShellScript \
+                --comment "StayOps minimal app deploy ${GITHUB_SHA} ${id}" \
+                --instance-ids "$id" \
+                --parameters file:///tmp/ssm-params.json \
+                --query "Command.CommandId" \
+                --output text)"
+
+              if ! aws ssm wait command-executed --command-id "$command_id" --instance-id "$id"; then
+                print_command_output "$command_id" "$id"
+                exit 1
+              fi
+
+              print_command_output "$command_id" "$id"
+            done
+
+            exit 0
+          fi
+
           target_group_arn="$(aws elbv2 describe-target-groups \
-            --names stayops-prod-app-tg \
+            --names "${TARGET_NAME_PREFIX}-app-tg" \
             --query "TargetGroups[0].TargetGroupArn" \
             --output text)"
 
@@ -173,33 +263,6 @@ jobs:
             ]
           }
           EOF
-
-          print_command_output() {
-            local command_id="$1"
-            local id="$2"
-
-            aws ssm get-command-invocation \
-              --command-id "$command_id" \
-              --instance-id "$id" \
-              --query "{InstanceId:InstanceId,Status:Status,ResponseCode:ResponseCode}" \
-              --output table
-
-            echo "::group::SSM stdout ${id}"
-            aws ssm get-command-invocation \
-              --command-id "$command_id" \
-              --instance-id "$id" \
-              --query "StandardOutputContent" \
-              --output text || true
-            echo "::endgroup::"
-
-            echo "::group::SSM stderr ${id}"
-            aws ssm get-command-invocation \
-              --command-id "$command_id" \
-              --instance-id "$id" \
-              --query "StandardErrorContent" \
-              --output text || true
-            echo "::endgroup::"
-          }
 
           for id in "${ids[@]}"; do
             echo "Deregister ${id} from ALB target group"

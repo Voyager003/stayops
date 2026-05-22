@@ -1,4 +1,6 @@
 resource "aws_lb" "app" {
+  count = local.is_production ? 1 : 0
+
   name               = "${local.name_prefix}-alb"
   internal           = false
   load_balancer_type = "application"
@@ -11,6 +13,8 @@ resource "aws_lb" "app" {
 }
 
 resource "aws_lb_target_group" "app" {
+  count = local.is_production ? 1 : 0
+
   name                 = "${local.name_prefix}-app-tg"
   port                 = 8080
   protocol             = "HTTP"
@@ -39,13 +43,15 @@ resource "aws_lb_target_group" "app" {
 resource "aws_lb_target_group_attachment" "app" {
   for_each = aws_instance.app
 
-  target_group_arn = aws_lb_target_group.app.arn
+  target_group_arn = aws_lb_target_group.app[0].arn
   target_id        = each.value.id
   port             = 8080
 }
 
 resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.app.arn
+  count = local.is_production ? 1 : 0
+
+  load_balancer_arn = aws_lb.app[0].arn
   port              = 80
   protocol          = "HTTP"
 
@@ -61,7 +67,9 @@ resource "aws_lb_listener" "http" {
 }
 
 resource "aws_lb_listener" "https" {
-  load_balancer_arn = aws_lb.app.arn
+  count = local.is_production ? 1 : 0
+
+  load_balancer_arn = aws_lb.app[0].arn
   port              = 443
   protocol          = "HTTPS"
   certificate_arn   = var.acm_certificate_arn
@@ -69,12 +77,14 @@ resource "aws_lb_listener" "https" {
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
+    target_group_arn = aws_lb_target_group.app[0].arn
   }
 }
 
 resource "aws_lb_listener_rule" "block_prometheus" {
-  listener_arn = aws_lb_listener.https.arn
+  count = local.is_production ? 1 : 0
+
+  listener_arn = aws_lb_listener.https[0].arn
   priority     = 10
 
   action {

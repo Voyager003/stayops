@@ -6,7 +6,17 @@ on:
     paths:
       - 'infra/terraform/**'
       - '.github/workflows/terraform.yml'
+      - '.github/workflows/terraform-destroy.yml'
   workflow_dispatch:
+    inputs:
+      topology:
+        description: "Terraform topology to apply"
+        type: choice
+        required: true
+        default: production
+        options:
+          - production
+          - minimal
 
 permissions:
   contents: read
@@ -25,6 +35,9 @@ env:
 
 jobs:
   plan:
+    strategy:
+      matrix:
+        topology: ${{ github.event_name == 'pull_request' && fromJSON('["production","minimal"]') || fromJSON(format('["{0}"]', inputs.topology)) }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -45,10 +58,25 @@ jobs:
         run: terraform fmt -check -recursive
 
       - name: Terraform init
+        env:
+          TF_STATE_KEY_PRODUCTION: ${{ secrets.TF_STATE_KEY_PRODUCTION }}
+          TF_STATE_KEY_MINIMAL: ${{ secrets.TF_STATE_KEY_MINIMAL }}
+          TF_STATE_KEY_LEGACY: ${{ secrets.TF_STATE_KEY }}
         run: |
+          if [ "${{ matrix.topology }}" = "minimal" ]; then
+            state_key="${TF_STATE_KEY_MINIMAL}"
+          else
+            state_key="${TF_STATE_KEY_PRODUCTION:-${TF_STATE_KEY_LEGACY}}"
+          fi
+
+          if [ -z "$state_key" ]; then
+            echo "Terraform state key is not configured for topology=${{ matrix.topology }}" >&2
+            exit 1
+          fi
+
           terraform init \
             -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
-            -backend-config="key=${{ secrets.TF_STATE_KEY }}" \
+            -backend-config="key=${state_key}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="encrypt=true"
 
@@ -57,8 +85,22 @@ jobs:
 
       - name: Write production tfvars
         env:
-          TFVARS_PROD: ${{ secrets.TFVARS_PROD }}
-        run: printf '%s' "$TFVARS_PROD" > prod.tfvars
+          TFVARS_PRODUCTION: ${{ secrets.TFVARS_PRODUCTION }}
+          TFVARS_MINIMAL: ${{ secrets.TFVARS_MINIMAL }}
+          TFVARS_PROD_LEGACY: ${{ secrets.TFVARS_PROD }}
+        run: |
+          if [ "${{ matrix.topology }}" = "minimal" ]; then
+            tfvars="${TFVARS_MINIMAL}"
+          else
+            tfvars="${TFVARS_PRODUCTION:-${TFVARS_PROD_LEGACY}}"
+          fi
+
+          if [ -z "$tfvars" ]; then
+            echo "Terraform tfvars secret is not configured for topology=${{ matrix.topology }}" >&2
+            exit 1
+          fi
+
+          printf '%s' "$tfvars" > prod.tfvars
 
       - name: Terraform plan
         run: terraform plan -var-file=prod.tfvars
@@ -84,17 +126,46 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform init
+        env:
+          TF_STATE_KEY_PRODUCTION: ${{ secrets.TF_STATE_KEY_PRODUCTION }}
+          TF_STATE_KEY_MINIMAL: ${{ secrets.TF_STATE_KEY_MINIMAL }}
+          TF_STATE_KEY_LEGACY: ${{ secrets.TF_STATE_KEY }}
         run: |
+          if [ "${{ inputs.topology }}" = "minimal" ]; then
+            state_key="${TF_STATE_KEY_MINIMAL}"
+          else
+            state_key="${TF_STATE_KEY_PRODUCTION:-${TF_STATE_KEY_LEGACY}}"
+          fi
+
+          if [ -z "$state_key" ]; then
+            echo "Terraform state key is not configured for topology=${{ inputs.topology }}" >&2
+            exit 1
+          fi
+
           terraform init \
             -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
-            -backend-config="key=${{ secrets.TF_STATE_KEY }}" \
+            -backend-config="key=${state_key}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="encrypt=true"
 
       - name: Write production tfvars
         env:
-          TFVARS_PROD: ${{ secrets.TFVARS_PROD }}
-        run: printf '%s' "$TFVARS_PROD" > prod.tfvars
+          TFVARS_PRODUCTION: ${{ secrets.TFVARS_PRODUCTION }}
+          TFVARS_MINIMAL: ${{ secrets.TFVARS_MINIMAL }}
+          TFVARS_PROD_LEGACY: ${{ secrets.TFVARS_PROD }}
+        run: |
+          if [ "${{ inputs.topology }}" = "minimal" ]; then
+            tfvars="${TFVARS_MINIMAL}"
+          else
+            tfvars="${TFVARS_PRODUCTION:-${TFVARS_PROD_LEGACY}}"
+          fi
+
+          if [ -z "$tfvars" ]; then
+            echo "Terraform tfvars secret is not configured for topology=${{ inputs.topology }}" >&2
+            exit 1
+          fi
+
+          printf '%s' "$tfvars" > prod.tfvars
 
       - name: Terraform plan
         run: terraform plan -var-file=prod.tfvars -out=tfplan

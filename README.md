@@ -125,7 +125,7 @@ docker compose up -d mongodb mongo-init redis mongo-ota
 
 ### Production
 
-![](docs/img/01.png)
+![](docs/img/04.png)
  
 ## b. 데이터 모델
 
@@ -194,5 +194,5 @@ Webhook은 중복 수신될 수 있다는 전제를 두고 `ProcessedWebhookEven
 
 # D. 문서 업데이트 내역
 
-업데이트 날짜: 2026-05-10
+업데이트 날짜: 2026-05-21
 

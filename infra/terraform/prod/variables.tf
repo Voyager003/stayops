@@ -10,6 +10,17 @@ variable "environment" {
   default     = "prod"
 }
 
+variable "deployment_topology" {
+  description = "Infrastructure topology to create. Use separate backend state keys for production and minimal."
+  type        = string
+  default     = "production"
+
+  validation {
+    condition     = contains(["production", "minimal"], var.deployment_topology)
+    error_message = "deployment_topology must be either production or minimal."
+  }
+}
+
 variable "aws_region" {
   description = "AWS region."
   type        = string
@@ -81,6 +92,18 @@ variable "mock_ota_instance_type" {
   default     = "t3.micro"
 }
 
+variable "minimal_app_instance_type" {
+  description = "Instance type for the minimal public app EC2."
+  type        = string
+  default     = "t3.small"
+}
+
+variable "minimal_mongo_instance_type" {
+  description = "Instance type for the minimal single-node MongoDB EC2."
+  type        = string
+  default     = "t3.small"
+}
+
 variable "observability_instance_type" {
   description = "Instance type for Observability EC2."
   type        = string
@@ -108,6 +131,7 @@ variable "mongo_root_volume_size_gb" {
 variable "acm_certificate_arn" {
   description = "ACM certificate ARN for the public API HTTPS listener."
   type        = string
+  default     = null
 }
 
 variable "private_zone_name" {

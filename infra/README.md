@@ -114,6 +114,11 @@ cp env.example .env
 docker compose --env-file .env up -d
 ```
 
+Terraform minimal topology에서는 App EC2 1대와 MongoDB EC2 1대를 생성한다. App EC2는 public
+subnet에서 Nginx로 HTTP 트래픽을 받고, MongoDB EC2는 private subnet에서 single-node replica set을
+실행한다. HTTPS가 필요하면 ALB를 사용하는 production topology를 사용하거나, 별도의 인증서 자동화
+구성을 추가해야 한다.
+
 ## 선택 기준
 
 - 장애 조치, 복구 시간, MongoDB replication, 운영 관측이 필요하면 `production`을 사용한다.
