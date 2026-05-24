@@ -170,7 +170,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             val confirmedReservation = reservationRepository.findById(reservationResult.reservation.id)!!
             val confirmedPayment = paymentRepository.findByReservationId(reservationResult.reservation.id)!!
 
-            assertThat(confirmedReservation.status).isEqualTo(ReservationStatus.PENDING)
+            assertThat(confirmedReservation.status).isEqualTo(ReservationStatus.CONFIRMED)
             assertThat(confirmedPayment.status).isEqualTo(PaymentStatus.APPROVED)
             assertThat(confirmedPayment.paymentKey).isEqualTo("toss_pk_e2e")
 
@@ -284,7 +284,7 @@ class CustomerReservationE2ETest @Autowired constructor(
                 amount = BigDecimal(200_000)
             )
 
-            assertThat(secondResult.reservation.status).isEqualTo(ReservationStatus.PENDING)
+            assertThat(secondResult.reservation.status).isEqualTo(ReservationStatus.CONFIRMED)
             assertThat(secondResult.payment.status).isEqualTo(ReservationPaymentStatus.APPROVED)
         }
     }

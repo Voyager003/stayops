@@ -204,6 +204,9 @@ class ReservationPaymentOutboxApplication(
             return
         }
 
+        if (reservation.status == ReservationStatus.PENDING) {
+            reservationRepository.save(reservation.confirm())
+        }
         outboxRepository.save(message.complete(clock.instant()))
     }
 
