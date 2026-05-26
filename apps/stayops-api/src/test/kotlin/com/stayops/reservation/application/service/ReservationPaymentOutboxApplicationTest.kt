@@ -182,6 +182,22 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
             }
         }
 
+        `when`("Payment는 이미 승인됐지만 Reservation이 아직 PENDING이면") {
+            then("재고를 다시 차감하지 않고 Reservation을 확정하고 Outbox를 완료한다") {
+                val message = confirmMessage()
+                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                every { paymentRepository.findById("pay-1") } returns approvedPayment()
+                every { reservationRepository.findById("rsv-1") } returns pendingReservation()
+
+                application.processPendingMessages(workerId = "worker-1")
+
+                verify(exactly = 0) { paymentGateway.confirm(any(), any(), any(), any()) }
+                verify(exactly = 0) { inventoryReservationPort.reserve(any(), any(), any()) }
+                verify { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
+                verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
+            }
+        }
+
         `when`("PG 승인 성공 후 재고가 부족하면") {
             then("Payment를 CANCEL_REQUESTED로 바꾸고 재고 부족 보상 취소 Outbox를 생성한다") {
                 val message = confirmMessage()
