@@ -30,7 +30,7 @@ class AuthApi(
             password = request.password,
             name = request.name
         )
-        return ResponseEntity.status(HttpStatus.CREATED).body(AuthResponse.from(member))
+        return ResponseEntity.status(HttpStatus.CREATED).body(AuthResponse.from(member, firstLogin = true))
     }
 
     @PostMapping("/login")
@@ -39,15 +39,15 @@ class AuthApi(
         httpRequest: HttpServletRequest,
         httpResponse: HttpServletResponse
     ): ResponseEntity<AuthResponse> {
-        val member = authApplication.login(request.email, request.password)
+        val result = authApplication.login(request.email, request.password)
 
-        val authentication = UsernamePasswordAuthenticationToken(member, null, emptyList())
+        val authentication = UsernamePasswordAuthenticationToken(result.member, null, emptyList())
         val context = SecurityContextHolder.createEmptyContext()
         context.authentication = authentication
         SecurityContextHolder.setContext(context)
         securityContextRepository.saveContext(context, httpRequest, httpResponse)
 
-        return ResponseEntity.ok(AuthResponse.from(member))
+        return ResponseEntity.ok(AuthResponse.from(result.member, firstLogin = result.firstLogin))
     }
 
     @PostMapping("/logout")

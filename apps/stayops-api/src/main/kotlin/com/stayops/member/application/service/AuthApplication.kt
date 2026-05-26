@@ -11,6 +11,11 @@ import org.slf4j.LoggerFactory
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 
+data class AuthLoginResult(
+    val member: Member,
+    val firstLogin: Boolean
+)
+
 @Service
 class AuthApplication(
     private val memberRepository: MemberRepository,
@@ -38,7 +43,7 @@ class AuthApplication(
         return saved
     }
 
-    fun login(email: String, password: String): Member {
+    fun login(email: String, password: String): AuthLoginResult {
         val member = memberRepository.findByEmail(email)
 
         if (member == null || !passwordEncoder.matches(password, member.passwordHash)) {
@@ -49,9 +54,10 @@ class AuthApplication(
             throw BusinessException("INACTIVE_MEMBER", "비활성화된 회원입니다.")
         }
 
+        val firstLogin = member.lastLoginAt == null
         val loggedIn = member.recordLogin()
         val saved = memberRepository.save(loggedIn)
         log.info("로그인 성공: memberId={}, email={}", saved.id, email)
-        return saved
+        return AuthLoginResult(member = saved, firstLogin = firstLogin)
     }
 }

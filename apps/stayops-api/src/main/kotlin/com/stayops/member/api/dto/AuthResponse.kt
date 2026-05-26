@@ -9,15 +9,17 @@ data class AuthResponse(
     val email: String,
     val name: String,
     val role: MemberRole,
-    val status: MemberStatus
+    val status: MemberStatus,
+    val firstLogin: Boolean = false
 ) {
     companion object {
-        fun from(member: Member) = AuthResponse(
+        fun from(member: Member, firstLogin: Boolean = false) = AuthResponse(
             id = member.id,
             email = member.email,
             name = member.name,
             role = member.role,
-            status = member.status
+            status = member.status,
+            firstLogin = firstLogin
         )
     }
 }

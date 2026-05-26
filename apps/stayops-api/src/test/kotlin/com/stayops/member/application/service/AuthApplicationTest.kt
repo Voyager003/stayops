@@ -79,8 +79,31 @@ class AuthApplicationTest : BehaviorSpec({
 
                 val result = sut.login("test@stayops.com", "password123")
 
-                result.email shouldBe "test@stayops.com"
-                result.lastLoginAt shouldNotBe null
+                result.member.email shouldBe "test@stayops.com"
+                result.member.lastLoginAt shouldNotBe null
+                result.firstLogin shouldBe true
+                verify { memberRepository.save(any()) }
+            }
+        }
+
+        `when`("이미 로그인 기록이 있는 회원이면") {
+            then("최초 로그인으로 표시하지 않는다") {
+                clearAllMocks()
+                val member = Member.create(
+                    id = "member-1",
+                    email = "test@stayops.com",
+                    passwordHash = "hashed-password",
+                    name = "홍길동",
+                    role = MemberRole.OWNER
+                ).recordLogin()
+                every { memberRepository.findByEmail("test@stayops.com") } returns member
+                every { passwordEncoder.matches("password123", "hashed-password") } returns true
+                every { memberRepository.save(any()) } answers { firstArg() }
+
+                val result = sut.login("test@stayops.com", "password123")
+
+                result.member.email shouldBe "test@stayops.com"
+                result.firstLogin shouldBe false
                 verify { memberRepository.save(any()) }
             }
         }

@@ -1,6 +1,7 @@
 package com.stayops.member.api
 
 import com.stayops.member.application.service.AuthApplication
+import com.stayops.member.application.service.AuthLoginResult
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
 import com.stayops.shared.exception.BusinessException
@@ -53,6 +54,7 @@ class AuthApiTest {
                 status { isCreated() }
                 jsonPath("$.email") { value("test@stayops.com") }
                 jsonPath("$.role") { value("OWNER") }
+                jsonPath("$.firstLogin") { value(true) }
             }
         }
 
@@ -85,7 +87,8 @@ class AuthApiTest {
 
         @Test
         fun `유효한 자격증명이면 200을 반환한다`() {
-            every { authApplication.login("test@stayops.com", "password123") } returns sampleMember()
+            every { authApplication.login("test@stayops.com", "password123") } returns
+                AuthLoginResult(sampleMember(), firstLogin = true)
 
             mockMvc.post("/api/v1/auth/login") {
                 contentType = MediaType.APPLICATION_JSON
@@ -94,6 +97,7 @@ class AuthApiTest {
                 status { isOk() }
                 jsonPath("$.email") { value("test@stayops.com") }
                 jsonPath("$.name") { value("홍길동") }
+                jsonPath("$.firstLogin") { value(true) }
             }
         }
 
