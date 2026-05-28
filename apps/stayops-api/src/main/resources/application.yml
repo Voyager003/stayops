@@ -36,3 +36,61 @@ stayops:
       server-selection-timeout: 5s
       connect-timeout: 2s
       read-timeout: 5s
+  rate-limit:
+    enabled: true
+    fail-open: true
+    rules:
+      - id: auth-login
+        method: POST
+        path-pattern: /api/v1/auth/login
+        limit: 10
+        window-seconds: 60
+        identity-type: IP
+      - id: auth-signup
+        method: POST
+        path-pattern: /api/v1/auth/signup
+        limit: 5
+        window-seconds: 600
+        identity-type: IP
+      - id: customer-auth-login
+        method: POST
+        path-pattern: /api/v1/customer/auth/login
+        limit: 10
+        window-seconds: 60
+        identity-type: IP
+      - id: customer-auth-signup
+        method: POST
+        path-pattern: /api/v1/customer/auth/signup
+        limit: 5
+        window-seconds: 600
+        identity-type: IP
+      - id: customer-reservation-create
+        method: POST
+        path-pattern: /api/v1/customer/reservations
+        limit: 5
+        window-seconds: 60
+        identity-type: MEMBER
+      - id: customer-reservation-payment-confirm
+        method: POST
+        path-pattern: /api/v1/customer/reservations/{reservationId}/confirm-payment
+        limit: 10
+        window-seconds: 60
+        identity-type: MEMBER
+      - id: customer-reservation-cancel
+        method: POST
+        path-pattern: /api/v1/customer/reservations/{reservationId}/cancel
+        limit: 10
+        window-seconds: 60
+        identity-type: MEMBER
+      - id: payment-webhook
+        method: POST
+        path-pattern: /api/v1/payments/toss/webhooks/**
+        limit: 120
+        window-seconds: 60
+        identity-type: IP
+      - id: channel-webhook
+        method: POST
+        path-pattern: /api/v1/properties/{propertyId}/channels/webhook/**
+        limit: 120
+        window-seconds: 60
+        identity-type: IP
