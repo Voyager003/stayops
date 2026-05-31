@@ -67,19 +67,19 @@ stayops:
       - id: customer-reservation-create
         method: POST
         path-pattern: /api/v1/customer/reservations
-        limit: 5
+        limit: 60
         window-seconds: 60
         identity-type: MEMBER
       - id: customer-reservation-payment-confirm
         method: POST
         path-pattern: /api/v1/customer/reservations/{reservationId}/confirm-payment
-        limit: 10
+        limit: 60
         window-seconds: 60
         identity-type: MEMBER
       - id: customer-reservation-cancel
         method: POST
         path-pattern: /api/v1/customer/reservations/{reservationId}/cancel
-        limit: 10
+        limit: 30
         window-seconds: 60
         identity-type: MEMBER
       - id: payment-webhook
