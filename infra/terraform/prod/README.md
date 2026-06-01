@@ -480,6 +480,10 @@ minimal app은 Mock OTA와 같은 Docker Compose network 안에서 실행된다.
 5. minimal app EIP 또는 연결한 domain으로 `/actuator/health`를 확인한다.
 6. public DNS를 minimal app EIP로 전환한다.
 
+minimal에서 HTTPS를 사용하려면 `api.learniverse.store`가 minimal app EIP를 보도록 DNS를 먼저
+연결하고, app EC2의 `/etc/letsencrypt/live/api.learniverse.store/` 아래에 인증서를 발급한다.
+minimal nginx는 host의 `/etc/letsencrypt`를 읽어 `443`에서 TLS를 종료한다.
+
 production과 minimal은 같은 Terraform root를 쓰지만 state key가 다르다. 같은 state에서
 `deployment_topology` 값만 바꿔 apply하지 않는다.
 

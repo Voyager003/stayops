@@ -92,6 +92,16 @@ resource "aws_vpc_security_group_ingress_rule" "minimal_app_http" {
   to_port           = 80
 }
 
+resource "aws_vpc_security_group_ingress_rule" "minimal_app_https" {
+  for_each = local.is_minimal ? toset(var.allowed_https_cidrs) : toset([])
+
+  security_group_id = aws_security_group.minimal_app[0].id
+  cidr_ipv4         = each.value
+  from_port         = 443
+  ip_protocol       = "tcp"
+  to_port           = 443
+}
+
 resource "aws_vpc_security_group_egress_rule" "minimal_app_to_mongo" {
   count = local.is_minimal ? 1 : 0
 
