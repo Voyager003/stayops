@@ -3,7 +3,7 @@ name: stayops-minimal-mongo
 services:
   mongo:
     image: mongo:8
-    command: ["mongod", "--replSet", "${MONGO_REPLICA_SET:-rs0}", "--bind_ip_all", "--port", "27017", "--auth"]
+    command: ["mongod", "--replSet", "${MONGO_REPLICA_SET:-rs0}", "--bind_ip_all", "--port", "27017", "--keyFile", "/etc/mongo/keyfile", "--auth"]
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
@@ -13,6 +13,7 @@ services:
       - mongo_data:/data/db
       - ./init-single-replica-set.js:/opt/stayops/init-single-replica-set.js:ro
       - ./create-users.js:/opt/stayops/create-users.js:ro
+      - ${MONGO_KEYFILE_PATH:-./mongo-keyfile}:/etc/mongo/keyfile:ro
     healthcheck:
       test: ["CMD-SHELL", "mongosh -u \"$${MONGO_INITDB_ROOT_USERNAME}\" -p \"$${MONGO_INITDB_ROOT_PASSWORD}\" --authenticationDatabase admin --eval \"db.adminCommand('ping')\""]
       interval: 10s

@@ -417,6 +417,7 @@ workflow_dispatch
 /stayops/minimal/mongodb/MONGO_APP_PASSWORD
 /stayops/minimal/mongodb/MONGO_EXPORTER_USERNAME
 /stayops/minimal/mongodb/MONGO_EXPORTER_PASSWORD
+/stayops/minimal/mongodb/MONGO_KEYFILE_B64
 ```
 
 `MONGO_KEYFILE_B64`와 `MOCK_OTA_HTPASSWD_B64`는 파일 내용을 base64로 인코딩한 값이다.
@@ -460,6 +461,7 @@ GHCR image가 private이면 다음 값을 추가한다. public image이면 생�
 | `/stayops/minimal/mongodb/MONGO_APP_PASSWORD` | `SecureString` | 직접 생성한 app password |
 | `/stayops/minimal/mongodb/MONGO_EXPORTER_USERNAME` | `String` | `stayops_exporter` |
 | `/stayops/minimal/mongodb/MONGO_EXPORTER_PASSWORD` | `SecureString` | 직접 생성한 exporter password |
+| `/stayops/minimal/mongodb/MONGO_KEYFILE_B64` | `SecureString` | MongoDB replica set keyfile 내용을 base64로 인코딩한 값 |
 
 minimal app은 Mock OTA와 같은 Docker Compose network 안에서 실행된다. 그래서
 `MOCK_OTA_ENDPOINT`와 `MOCK_OTA_PMS_WEBHOOK_URL`은 public domain으로 우회하지 않고

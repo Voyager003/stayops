@@ -291,6 +291,7 @@ validate_required_env() {
       require_env_value "${env_file}" "MONGO_APP_PASSWORD"
       require_env_value "${env_file}" "MONGO_EXPORTER_USERNAME"
       require_env_value "${env_file}" "MONGO_EXPORTER_PASSWORD"
+      require_one_env_value "${env_file}" "MONGO_KEYFILE_B64" "MONGO_KEYFILE_CONTENT"
       ;;
     redis)
       require_env_value "${env_file}" "LOKI_URL"
