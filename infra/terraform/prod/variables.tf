@@ -38,18 +38,18 @@ variable "availability_zones" {
   type        = list(string)
 
   validation {
-    condition     = length(var.availability_zones) >= 2
-    error_message = "At least two availability zones are required for the public ALB."
+    condition     = length(var.availability_zones) >= 1
+    error_message = "At least one availability zone is required."
   }
 }
 
 variable "public_subnet_cidrs" {
-  description = "Public subnet CIDR blocks. At least two are required for ALB."
+  description = "Public subnet CIDR blocks. Production requires at least two for ALB."
   type        = list(string)
 
   validation {
-    condition     = length(var.public_subnet_cidrs) >= 2
-    error_message = "At least two public subnets are required for the public ALB."
+    condition     = length(var.public_subnet_cidrs) >= 1
+    error_message = "At least one public subnet is required."
   }
 }
 
@@ -58,8 +58,8 @@ variable "private_subnet_cidrs" {
   type        = list(string)
 
   validation {
-    condition     = length(var.private_subnet_cidrs) >= 2
-    error_message = "At least two private subnets are required for the planned topology."
+    condition     = length(var.private_subnet_cidrs) >= 1
+    error_message = "At least one private subnet is required."
   }
 }
 

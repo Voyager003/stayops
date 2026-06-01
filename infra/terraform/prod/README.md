@@ -39,6 +39,8 @@ Observability EC2 x 1
 ```text
 Public App EC2 x 1
 Private single-node MongoDB EC2 x 1
+Public subnet x 1
+Private subnet x 1
 Elastic IP x 1
 Route 53 Private Hosted Zone / minimal-mongo private DNS
 S3 artifact bucket
@@ -48,6 +50,7 @@ Session Manager용 IAM Role / Instance Profile
 minimal App EC2는 Nginx, StayOps app, Redis, Mock OTA, Mock OTA MongoDB를 같은 Docker Compose
 stack으로 실행한다. minimal MongoDB는 transaction 지원을 위해 standalone이 아니라 single-node
 replica set으로 실행한다.
+minimal은 최소 작동 구성이므로 기본 예시는 단일 AZ에 public subnet 1개, private subnet 1개만 둔다.
 
 기존 수동 public App EC2와 기존 수동 MongoDB EC2는 Terraform state에 없으므로
 Terraform이 자동으로 삭제하지 않는다.
@@ -258,6 +261,32 @@ acm_certificate_arn = "arn:aws:acm:..."
 app_instance_type = "t3.small"
 mongo_instance_type = "t3.small"
 redis_instance_type = "t3.micro"
+github_actions_role_name = "stayops-github-terraform-role"
+```
+
+minimal용 `TFVARS_MINIMAL`은 단일 AZ 기준으로 둔다.
+
+```hcl
+aws_region = "ap-northeast-2"
+
+deployment_topology = "minimal"
+environment         = "minimal"
+
+availability_zones = ["ap-northeast-2a"]
+
+vpc_cidr = "10.10.0.0/16"
+
+public_subnet_cidrs  = ["10.10.101.0/24"]
+private_subnet_cidrs = ["10.10.10.0/24"]
+
+ami_id = "ami-..."
+
+minimal_app_instance_type   = "t3.small"
+minimal_mongo_instance_type = "t3.small"
+
+root_volume_size_gb       = 30
+mongo_root_volume_size_gb = 50
+
 github_actions_role_name = "stayops-github-terraform-role"
 ```
 

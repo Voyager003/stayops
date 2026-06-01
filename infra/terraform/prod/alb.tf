@@ -10,6 +10,13 @@ resource "aws_lb" "app" {
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-alb"
   })
+
+  lifecycle {
+    precondition {
+      condition     = length(var.availability_zones) >= 2 && length(var.public_subnet_cidrs) >= 2
+      error_message = "production topology requires at least two availability zones and two public subnets for the public ALB."
+    }
+  }
 }
 
 resource "aws_lb_target_group" "app" {
