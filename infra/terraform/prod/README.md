@@ -393,9 +393,68 @@ workflow_dispatch
 `MONGO_KEYFILE_B64`와 `MOCK_OTA_HTPASSWD_B64`는 파일 내용을 base64로 인코딩한 값이다.
 배포 스크립트가 EC2에서 각각 `mongo-keyfile`, `.htpasswd` 파일로 복원한다.
 
-## Apply 이후 실행 순서
+### minimal Parameter Store 수동 입력값
 
-Terraform apply 후 다음 순서로 진행한다.
+minimal 구성은 production과 다른 prefix를 사용한다. `/stayops/prod/*` 값을 재사용하지 않고
+아래 값을 `/stayops/minimal/*` 아래에 직접 입력한다.
+
+#### `/stayops/minimal/app/*`
+
+| Key | Type | Value |
+| --- | --- | --- |
+| `/stayops/minimal/app/API_DOMAIN` | `String` | `api.learniverse.store` 또는 minimal app에 연결할 public API domain |
+| `/stayops/minimal/app/SPRING_MONGODB_URI` | `SecureString` | `mongodb://stayops_app:<MONGO_APP_PASSWORD>@minimal-mongo.stayops.internal:27017/stayops?replicaSet=rs0&directConnection=true&retryWrites=true&authSource=admin` |
+| `/stayops/minimal/app/TOSS_SECRET_KEY` | `SecureString` | 사용할 Toss secret key |
+| `/stayops/minimal/app/MOCK_OTA_ENDPOINT` | `String` | `http://mock-ota-app:8081` |
+| `/stayops/minimal/app/MOCK_OTA_PMS_WEBHOOK_URL` | `String` | `http://app:8080/api/v1/properties/{propertyId}/channels/webhook/{channelCode}` |
+| `/stayops/minimal/app/MOCK_OTA_HTPASSWD_B64` | `SecureString` | `.htpasswd` 파일 내용을 base64로 인코딩한 값 |
+
+`SPRING_MONGODB_URI`의 `<MONGO_APP_PASSWORD>`는
+`/stayops/minimal/mongodb/MONGO_APP_PASSWORD`와 같은 값이어야 한다.
+
+GHCR image가 private이면 다음 값을 추가한다. public image이면 생략할 수 있다.
+
+| Key | Type | Value |
+| --- | --- | --- |
+| `/stayops/minimal/app/GHCR_USERNAME` | `String` | GHCR 사용자명 |
+| `/stayops/minimal/app/GHCR_TOKEN` | `SecureString` | GHCR pull 권한 token |
+
+#### `/stayops/minimal/mongodb/*`
+
+| Key | Type | Value |
+| --- | --- | --- |
+| `/stayops/minimal/mongodb/MONGO_REPLICA_SET` | `String` | `rs0` |
+| `/stayops/minimal/mongodb/MONGO_HOST` | `String` | `minimal-mongo.stayops.internal` |
+| `/stayops/minimal/mongodb/MONGO_INITDB_ROOT_USERNAME` | `String` | `root` |
+| `/stayops/minimal/mongodb/MONGO_INITDB_ROOT_PASSWORD` | `SecureString` | 직접 생성한 root password |
+| `/stayops/minimal/mongodb/MONGO_APP_USERNAME` | `String` | `stayops_app` |
+| `/stayops/minimal/mongodb/MONGO_APP_PASSWORD` | `SecureString` | 직접 생성한 app password |
+| `/stayops/minimal/mongodb/MONGO_EXPORTER_USERNAME` | `String` | `stayops_exporter` |
+| `/stayops/minimal/mongodb/MONGO_EXPORTER_PASSWORD` | `SecureString` | 직접 생성한 exporter password |
+
+minimal app은 Mock OTA와 같은 Docker Compose network 안에서 실행된다. 그래서
+`MOCK_OTA_ENDPOINT`와 `MOCK_OTA_PMS_WEBHOOK_URL`은 public domain으로 우회하지 않고
+컨테이너 DNS 이름을 사용한다.
+
+## minimal 전환 절차
+
+현재 서버를 유지할 필요가 없다면 다음 순서로 전환한다.
+
+1. GitHub Actions `Terraform Destroy`에서 `topology=production`,
+   `confirm=destroy-production`으로 production 리소스를 삭제한다.
+2. 위 minimal Parameter Store 값을 수동 입력한다.
+3. GitHub Actions `Terraform`에서 `topology=minimal`로 apply한다.
+4. GitHub Actions `Bootstrap Deploy`에서 `minimal-mongodb`, `minimal-app`을 배포한다.
+   최초 MongoDB 구성 시에는 Mongo bootstrap을 함께 실행한다.
+5. minimal app EIP 또는 연결한 domain으로 `/actuator/health`를 확인한다.
+6. public DNS를 minimal app EIP로 전환한다.
+
+production과 minimal은 같은 Terraform root를 쓰지만 state key가 다르다. 같은 state에서
+`deployment_topology` 값만 바꿔 apply하지 않는다.
+
+## production Apply 이후 실행 순서
+
+production Terraform apply 후 다음 순서로 진행한다.
 
 1. `terraform output`으로 새 EC2 instance id와 private IP를 확인한다.
 2. Session Manager로 Observability EC2에 접속해 compose stack을 올린다.

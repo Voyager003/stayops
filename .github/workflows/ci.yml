@@ -8,6 +8,7 @@ on:
       - 'docs/**'
       - '.claude/**'
       - 'infra/terraform/**'
+      - 'infra/minimal/**/env.example'
       - '.github/workflows/terraform.yml'
       - '.github/workflows/terraform-destroy.yml'
       - '.github/workflows/bootstrap-deploy.yml'

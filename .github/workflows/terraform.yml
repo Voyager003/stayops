@@ -4,7 +4,10 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'infra/terraform/**'
+      - 'infra/terraform/**/*.tf'
+      - 'infra/terraform/**/*.tfvars'
+      - 'infra/terraform/**/*.tfvars.example'
+      - 'infra/terraform/**/.terraform.lock.hcl'
       - '.github/workflows/terraform.yml'
       - '.github/workflows/terraform-destroy.yml'
   workflow_dispatch:
