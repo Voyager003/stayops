@@ -38,6 +38,14 @@ class RedisPropertiesConfigurationTest {
         assertThat(properties.getProperty("spring.data.redis.port")).isEqualTo(6379)
     }
 
+    @Test
+    fun `should_configure_cross_site_session_cookie_for_prod_profile`() {
+        val properties = loadYaml("application-prod.yml")
+
+        assertThat(properties.getProperty("server.servlet.session.cookie.same-site")).isEqualTo("none")
+        assertThat(properties.getProperty("server.servlet.session.cookie.secure")).isEqualTo(true)
+    }
+
     private fun loadYaml(path: String): PropertySource<*> {
         val resource = ClassPathResource(path)
         return YamlPropertySourceLoader().load(path, resource).single()
