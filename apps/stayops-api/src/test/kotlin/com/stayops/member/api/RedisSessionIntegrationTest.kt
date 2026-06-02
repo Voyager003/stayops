@@ -45,12 +45,28 @@ class RedisSessionIntegrationTest @Autowired constructor(
         memberMongoDataRepository.save(MemberDocument.from(member))
     }
 
-    private fun post(path: String, body: String, cookie: String? = null): Pair<Int, String?> {
+    private data class CsrfExchange(
+        val sessionCookie: String,
+        val headerName: String,
+        val token: String
+    )
+
+    private data class LoginSession(
+        val cookie: String,
+        val csrf: CsrfExchange
+    )
+
+    private fun post(path: String, body: String, cookie: String? = null, csrf: CsrfExchange? = null): Pair<Int, String?> {
         val conn = URI("http://localhost:$port$path").toURL().openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
         conn.setRequestProperty("Content-Type", "application/json")
         conn.instanceFollowRedirects = false
-        if (cookie != null) conn.setRequestProperty("Cookie", cookie)
+        if (cookie != null) {
+            conn.setRequestProperty("Cookie", cookie)
+        } else if (csrf != null) {
+            conn.setRequestProperty("Cookie", csrf.sessionCookie)
+        }
+        if (csrf != null) conn.setRequestProperty(csrf.headerName, csrf.token)
         conn.doOutput = true
         conn.outputStream.use { it.write(body.toByteArray()) }
         val status = conn.responseCode
@@ -69,15 +85,42 @@ class RedisSessionIntegrationTest @Autowired constructor(
         return status
     }
 
-    private fun loginAndGetSessionCookie(): String {
+    private fun getCsrf(): CsrfExchange {
+        val conn = URI("http://localhost:$port/api/v1/csrf").toURL().openConnection() as HttpURLConnection
+        conn.requestMethod = "GET"
+        conn.instanceFollowRedirects = false
+        val status = conn.responseCode
+        val setCookie = conn.getHeaderField("Set-Cookie")
+        val body = conn.inputStream.bufferedReader().use { it.readText() }
+        conn.disconnect()
+
+        assertThat(status).isEqualTo(200)
+        assertThat(setCookie).isNotNull().contains("SESSION=")
+
+        return CsrfExchange(
+            sessionCookie = setCookie!!,
+            headerName = body.extractJsonString("headerName"),
+            token = body.extractJsonString("token")
+        )
+    }
+
+    private fun String.extractJsonString(field: String): String {
+        val regex = Regex(""""$field"\s*:\s*"([^"]+)"""")
+        return regex.find(this)?.groupValues?.get(1)
+            ?: error("JSON field not found: $field, body=$this")
+    }
+
+    private fun loginAndGetSession(): LoginSession {
+        val csrf = getCsrf()
         val (status, setCookie) = post(
             "/api/v1/auth/login",
-            """{"email":"session@test.com","password":"password123"}"""
+            """{"email":"session@test.com","password":"password123"}""",
+            csrf = csrf
         )
         assertThat(status).isEqualTo(200)
-        assertThat(setCookie).isNotNull()
-        assertThat(setCookie).contains("SESSION=")
-        return setCookie!!
+        val sessionCookie = setCookie ?: csrf.sessionCookie
+        assertThat(sessionCookie).contains("SESSION=")
+        return LoginSession(sessionCookie, csrf)
     }
 
     private fun extractSessionId(cookie: String): String {
@@ -90,7 +133,7 @@ class RedisSessionIntegrationTest @Autowired constructor(
 
         @Test
         fun `로그인하면 Redis에 세션이 저장된다`() {
-            val cookie = loginAndGetSessionCookie()
+            val (cookie) = loginAndGetSession()
             val sessionId = extractSessionId(cookie)
 
             assertThat(redisTemplate.hasKey("spring:session:sessions:$sessionId"))
@@ -104,7 +147,7 @@ class RedisSessionIntegrationTest @Autowired constructor(
 
         @Test
         fun `로그인 후 세션 쿠키로 인증된 API를 호출할 수 있다`() {
-            val cookie = loginAndGetSessionCookie()
+            val (cookie) = loginAndGetSession()
 
             val status = get("/api/v1/properties", cookie)
             assertThat(status).isEqualTo(200)
@@ -112,9 +155,9 @@ class RedisSessionIntegrationTest @Autowired constructor(
 
         @Test
         fun `로그아웃하면 세션 쿠키로 인증할 수 없다`() {
-            val cookie = loginAndGetSessionCookie()
+            val (cookie, csrf) = loginAndGetSession()
 
-            val (logoutStatus, _) = post("/api/v1/auth/logout", "", cookie)
+            val (logoutStatus, _) = post("/api/v1/auth/logout", "", cookie, csrf)
             assertThat(logoutStatus).isEqualTo(204)
 
             val afterStatus = get("/api/v1/properties", cookie)
@@ -123,7 +166,7 @@ class RedisSessionIntegrationTest @Autowired constructor(
 
         @Test
         fun `세션이 Redis에서 만료되면 인증할 수 없다`() {
-            val cookie = loginAndGetSessionCookie()
+            val (cookie) = loginAndGetSession()
             val sessionId = extractSessionId(cookie)
 
             // 세션 강제 삭제 (만료 시뮬레이션)
@@ -149,19 +192,22 @@ class RedisSessionIntegrationTest @Autowired constructor(
             memberMongoDataRepository.save(MemberDocument.from(customer))
         }
 
-        private fun customerLoginAndGetCookie(): String {
+        private fun customerLoginAndGetSession(): LoginSession {
+            val csrf = getCsrf()
             val (status, setCookie) = post(
                 "/api/v1/customer/auth/login",
-                """{"email":"customer@test.com","password":"password123"}"""
+                """{"email":"customer@test.com","password":"password123"}""",
+                csrf = csrf
             )
             assertThat(status).isEqualTo(200)
-            assertThat(setCookie).isNotNull().contains("SESSION=")
-            return setCookie!!
+            val sessionCookie = setCookie ?: csrf.sessionCookie
+            assertThat(sessionCookie).contains("SESSION=")
+            return LoginSession(sessionCookie, csrf)
         }
 
         @Test
         fun `CUSTOMER 로그인 후 세션 쿠키로 마이페이지를 호출할 수 있다`() {
-            val cookie = customerLoginAndGetCookie()
+            val (cookie) = customerLoginAndGetSession()
 
             val status = get("/api/v1/customer/reservations", cookie)
             assertThat(status).isEqualTo(200)
@@ -169,7 +215,7 @@ class RedisSessionIntegrationTest @Autowired constructor(
 
         @Test
         fun `CUSTOMER 세션이 Redis에서 만료되면 401을 반환한다`() {
-            val cookie = customerLoginAndGetCookie()
+            val (cookie) = customerLoginAndGetSession()
             val sessionId = extractSessionId(cookie)
 
             // 세션 강제 삭제 (만료 시뮬레이션)
@@ -181,9 +227,9 @@ class RedisSessionIntegrationTest @Autowired constructor(
 
         @Test
         fun `CUSTOMER 로그아웃 후 마이페이지를 호출하면 401을 반환한다`() {
-            val cookie = customerLoginAndGetCookie()
+            val (cookie, csrf) = customerLoginAndGetSession()
 
-            val (logoutStatus, _) = post("/api/v1/customer/auth/logout", "", cookie)
+            val (logoutStatus, _) = post("/api/v1/customer/auth/logout", "", cookie, csrf)
             assertThat(logoutStatus).isEqualTo(204)
 
             val status = get("/api/v1/customer/reservations", cookie)
