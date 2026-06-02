@@ -2,6 +2,7 @@ package com.stayops.property.api.dto
 
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Pattern
 
 data class UpdatePropertyRequest(
     @field:NotBlank val name: String,
@@ -22,6 +23,7 @@ data class UpdatePropertyRequest(
     data class ContactInfoRequest(
         @field:NotBlank val phone: String,
         @field:NotBlank val email: String,
+        @field:Pattern(regexp = "^https?://.+", message = "웹사이트는 http 또는 https URL이어야 합니다")
         val website: String? = null
     )
 }

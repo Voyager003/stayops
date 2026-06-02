@@ -9,6 +9,9 @@ data class ContactInfo private constructor(
     init {
         require(phone.isNotBlank()) { "phone은 비어있을 수 없습니다" }
         require(email.isNotBlank()) { "email은 비어있을 수 없습니다" }
+        require(website == null || website.startsWith("http://") || website.startsWith("https://")) {
+            "website는 http 또는 https URL이어야 합니다"
+        }
     }
 
     companion object {
@@ -16,6 +19,6 @@ data class ContactInfo private constructor(
             phone: String,
             email: String,
             website: String? = null
-        ): ContactInfo = ContactInfo(phone, email, website)
+        ): ContactInfo = ContactInfo(phone, email, website?.trim()?.ifBlank { null })
     }
 }
