@@ -21,7 +21,13 @@ class SecurityConfig {
     @Bean
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
         http {
-            csrf { disable() }
+            csrf {
+                ignoringRequestMatchers(
+                    "/api/v1/properties/*/channels/webhook/**",
+                    "/api/v1/payments/toss/webhooks",
+                    "/api/v1/payments/toss/webhooks/**"
+                )
+            }
             cors { configurationSource = corsConfigurationSource() }
             exceptionHandling {
                 authenticationEntryPoint = HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)
@@ -31,6 +37,7 @@ class SecurityConfig {
                 authorize("/actuator/info", permitAll)
                 authorize("/actuator/prometheus", permitAll)
                 authorize("/api/v1/auth/**", permitAll)
+                authorize("/api/v1/csrf", permitAll)
                 authorize("/api/v1/properties/*/channels/webhook/**", permitAll)
                 authorize("/api/v1/payments/toss/webhooks", permitAll)
                 authorize("/api/v1/payments/toss/webhooks/**", permitAll)

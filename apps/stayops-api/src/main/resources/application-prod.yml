@@ -13,6 +13,11 @@ spring:
 server:
   shutdown: graceful
   forward-headers-strategy: framework
+  servlet:
+    session:
+      cookie:
+        same-site: none
+        secure: true
 
 stayops:
   instance-id: ${STAYOPS_INSTANCE_ID:${HOSTNAME:local}}
