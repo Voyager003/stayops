@@ -113,10 +113,10 @@ class ReservationPaymentOutboxApplication(
         } catch (e: PaymentGatewayException.ProviderError) {
             recoverByInquiry(message, payment, reservation, e, failPaymentWhenNotDone = false)
         } catch (e: PaymentGatewayException.PaymentDeclined) {
-            paymentRepository.save(payment.fail(e.reason))
+            failPaymentAndCancelPendingReservation(payment, reservation, e.reason)
             outboxRepository.save(message.complete(clock.instant()))
         } catch (e: PaymentGatewayException.InvalidRequest) {
-            paymentRepository.save(payment.fail(e.reason))
+            failPaymentAndCancelPendingReservation(payment, reservation, e.reason)
             outboxRepository.save(message.skip("PG 요청이 유효하지 않습니다: ${e.reason}", clock.instant()))
         } catch (e: PaymentGatewayException.UnknownError) {
             outboxRepository.save(message.fail(e.message ?: "알 수 없는 결제 오류", clock.instant()))
@@ -158,7 +158,11 @@ class ReservationPaymentOutboxApplication(
         }
 
         if (failPaymentWhenNotDone) {
-            paymentRepository.save(payment.fail("외부 결제 상태가 DONE이 아닙니다: ${inquiry.status}"))
+            failPaymentAndCancelPendingReservation(
+                payment,
+                reservation,
+                "외부 결제 상태가 DONE이 아닙니다: ${inquiry.status}"
+            )
             outboxRepository.save(message.complete(clock.instant()))
             return
         }
@@ -174,7 +178,7 @@ class ReservationPaymentOutboxApplication(
         now: Instant
     ) {
         if (confirmResult.orderId != message.orderId || confirmResult.totalAmount.compareTo(message.amount.amount) != 0) {
-            paymentRepository.save(payment.fail("PG 승인 결과가 요청 값과 일치하지 않습니다"))
+            failPaymentAndCancelPendingReservation(payment, reservation, "PG 승인 결과가 요청 값과 일치하지 않습니다")
             outboxRepository.save(message.skip("PG 승인 결과 불일치", now))
             return
         }
@@ -211,6 +215,17 @@ class ReservationPaymentOutboxApplication(
             reservationRepository.save(reservation.confirm())
         }
         outboxRepository.save(message.complete(clock.instant()))
+    }
+
+    private fun failPaymentAndCancelPendingReservation(
+        payment: Payment,
+        reservation: Reservation,
+        reason: String
+    ) {
+        paymentRepository.save(payment.fail(reason))
+        if (reservation.status == ReservationStatus.PENDING) {
+            reservationRepository.save(reservation.cancelPending())
+        }
     }
 
     private fun requestPaymentCancelForInventoryUnavailable(
