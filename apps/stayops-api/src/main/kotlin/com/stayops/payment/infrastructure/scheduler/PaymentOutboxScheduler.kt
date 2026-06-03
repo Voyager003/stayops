@@ -16,8 +16,8 @@ class PaymentOutboxScheduler(
     private val log = LoggerFactory.getLogger(javaClass)
 
     @Scheduled(
-        fixedDelayString = "\${stayops.payment-outbox.fixed-delay-ms:30000}",
-        initialDelayString = "\${stayops.payment-outbox.initial-delay-ms:60000}"
+        fixedDelayString = "\${stayops.payment-outbox.fixed-delay-ms:5000}",
+        initialDelayString = "\${stayops.payment-outbox.initial-delay-ms:5000}"
     )
     fun processPaymentOutbox() {
         try {
