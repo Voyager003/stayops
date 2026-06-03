@@ -103,4 +103,14 @@ class ChannelApi(
         return ResponseEntity.noContent().build()
     }
 
+    @PostMapping("/{channelId}/simulate-random-booking")
+    fun simulateRandomBooking(
+        @PathVariable propertyId: String,
+        @PathVariable channelId: String
+    ): ResponseEntity<RandomBookingSimulationResponse> {
+        propertyAccessChecker.requireAccess(propertyId)
+        val result = channelApplication.simulateRandomBooking(propertyId, channelId)
+        return ResponseEntity.ok(RandomBookingSimulationResponse.from(result))
+    }
+
 }

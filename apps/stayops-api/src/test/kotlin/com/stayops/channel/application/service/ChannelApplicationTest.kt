@@ -4,6 +4,8 @@ import com.stayops.channel.domain.model.*
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.service.ChannelInventoryQueryAdapter
 import com.stayops.channel.domain.service.ExternalInventorySnapshot
+import com.stayops.channel.domain.service.MockOtaRandomBookingResult
+import com.stayops.channel.domain.service.MockOtaSimulationPort
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
@@ -27,6 +29,7 @@ class ChannelApplicationTest : BehaviorSpec({
     val roomInventoryRepository = mockk<RoomInventoryRepository>()
     val channelSyncApplication = mockk<ChannelSyncApplication>(relaxed = true)
     val inventoryQueryAdapter = mockk<ChannelInventoryQueryAdapter>()
+    val mockOtaSimulationPort = mockk<MockOtaSimulationPort>()
     val fixedInstant = Instant.parse("2026-04-08T10:00:00Z")
     val fixedClock = Clock.fixed(fixedInstant, ZoneId.of("Asia/Seoul"))
     val idGenerator = object : IdGenerator {
@@ -39,6 +42,7 @@ class ChannelApplicationTest : BehaviorSpec({
         roomInventoryRepository = roomInventoryRepository,
         channelSyncApplication = channelSyncApplication,
         inventoryQueryAdapter = inventoryQueryAdapter,
+        mockOtaSimulationPort = mockOtaSimulationPort,
         clock = fixedClock,
         idGenerator = idGenerator,
         otaEndpoint = "https://mock-ota/ari"
@@ -199,6 +203,45 @@ class ChannelApplicationTest : BehaviorSpec({
                 val ex = shouldThrow<BusinessException> {
                     sut.compareInventory("prop-1", "ch-0", "rt-1", startDate, endDate)
                 }
+                ex.code shouldBe "DIRECT_CHANNEL_NOT_SUPPORTED"
+            }
+        }
+    }
+
+    given("OTA 랜덤 예약 시뮬레이션 시") {
+        `when`("OTA 채널이면") {
+            then("환경 설정 endpoint로 Mock OTA를 호출한다") {
+                clearAllMocks()
+                every { channelRepository.findById("ch-1") } returns otaChannel()
+                every {
+                    mockOtaSimulationPort.simulateRandomBooking("https://mock-ota/ari", "prop-1", "AGODA")
+                } returns MockOtaRandomBookingResult(
+                    status = "sent",
+                    bookingId = "booking-1",
+                    roomTypeId = "rt-1",
+                    date = "2026-05-01",
+                    guestName = "김민수"
+                )
+
+                val result = sut.simulateRandomBooking("prop-1", "ch-1")
+
+                result.bookingId shouldBe "booking-1"
+                result.guestName shouldBe "김민수"
+                verify {
+                    mockOtaSimulationPort.simulateRandomBooking("https://mock-ota/ari", "prop-1", "AGODA")
+                }
+            }
+        }
+
+        `when`("DIRECT 채널이면") {
+            then("BusinessException이 발생한다") {
+                clearAllMocks()
+                every { channelRepository.findById("ch-0") } returns Channel.createDirect(id = "ch-0", propertyId = "prop-1")
+
+                val ex = shouldThrow<BusinessException> {
+                    sut.simulateRandomBooking("prop-1", "ch-0")
+                }
+
                 ex.code shouldBe "DIRECT_CHANNEL_NOT_SUPPORTED"
             }
         }

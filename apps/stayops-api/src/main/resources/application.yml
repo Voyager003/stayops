@@ -24,6 +24,9 @@ toss:
 
 mock-ota:
   endpoint: ${MOCK_OTA_ENDPOINT:http://localhost:8081}
+  basic-auth:
+    username: ${MOCK_OTA_BASIC_AUTH_USERNAME:}
+    password: ${MOCK_OTA_BASIC_AUTH_PASSWORD:}
 
 ota:
   http:

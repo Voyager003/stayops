@@ -5,6 +5,8 @@ import com.stayops.channel.application.dto.InventoryCompareResult
 import com.stayops.channel.domain.model.*
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.service.ChannelInventoryQueryAdapter
+import com.stayops.channel.domain.service.MockOtaRandomBookingResult
+import com.stayops.channel.domain.service.MockOtaSimulationPort
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.IdGenerator
@@ -24,6 +26,7 @@ class ChannelApplication(
     private val roomInventoryRepository: RoomInventoryRepository,
     private val channelSyncApplication: ChannelSyncApplication,
     private val inventoryQueryAdapter: ChannelInventoryQueryAdapter,
+    private val mockOtaSimulationPort: MockOtaSimulationPort,
     private val clock: Clock,
     private val idGenerator: IdGenerator,
     @Value("\${mock-ota.endpoint}") private val otaEndpoint: String
@@ -165,6 +168,22 @@ class ChannelApplication(
             channelCode = channel.code,
             channelName = channel.name,
             items = items
+        )
+    }
+
+    fun simulateRandomBooking(propertyId: String, channelId: String): MockOtaRandomBookingResult {
+        val channel = findChannel(propertyId, channelId)
+        if (channel.type != ChannelType.OTA) {
+            throw BusinessException(
+                code = "DIRECT_CHANNEL_NOT_SUPPORTED",
+                message = "OTA 채널만 예약 시뮬레이션을 실행할 수 있습니다"
+            )
+        }
+
+        return mockOtaSimulationPort.simulateRandomBooking(
+            endpoint = otaEndpoint,
+            propertyId = propertyId,
+            channelCode = channel.code
         )
     }
 
