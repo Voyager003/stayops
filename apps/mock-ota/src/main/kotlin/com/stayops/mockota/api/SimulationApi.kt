@@ -5,6 +5,7 @@ import com.stayops.mockota.repository.OtaInventoryRepository
 import com.stayops.mockota.service.FailureMode
 import com.stayops.mockota.service.FailureSimulatorService
 import com.stayops.mockota.service.WebhookSenderService
+import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -19,6 +20,8 @@ class SimulationApi(
     private val failureSimulator: FailureSimulatorService,
     private val otaInventoryRepository: OtaInventoryRepository
 ) {
+
+    private val log = LoggerFactory.getLogger(javaClass)
 
     data class BookingSimulationRequest(
         val propertyId: String,
@@ -56,8 +59,19 @@ class SimulationApi(
 
     @PostMapping("/random-booking")
     fun simulateRandomBooking(@RequestBody request: RandomBookingRequest): ResponseEntity<Map<String, String>> {
+        log.info(
+            "랜덤 예약 시뮬레이션 요청 수신: propertyId={}, channelCode={}",
+            request.propertyId,
+            request.channelCode
+        )
+
         val availableInventory = otaInventoryRepository.findByAvailableCountGreaterThan(0)
         if (availableInventory.isEmpty()) {
+            log.warn(
+                "랜덤 예약 시뮬레이션 실패: 예약 가능한 재고 없음 propertyId={}, channelCode={}",
+                request.propertyId,
+                request.channelCode
+            )
             return ResponseEntity.badRequest()
                 .body(mapOf("error" to "예약 가능한 재고가 없습니다"))
         }
@@ -74,6 +88,15 @@ class SimulationApi(
             checkInDate = checkInDate,
             checkOutDate = checkInDate.plusDays(1),
             guestName = guestName
+        )
+
+        log.info(
+            "랜덤 예약 시뮬레이션 성공: propertyId={}, channelCode={}, roomTypeId={}, date={}, bookingId={}",
+            request.propertyId,
+            request.channelCode,
+            selected.roomTypeId,
+            selected.date,
+            booking.bookingId
         )
 
         webhookSender.sendBookingWebhook(
