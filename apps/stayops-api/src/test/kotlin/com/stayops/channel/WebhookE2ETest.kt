@@ -2,6 +2,7 @@ package com.stayops.channel
 
 import com.stayops.TestcontainersConfiguration
 import com.stayops.channel.domain.model.Channel
+import com.stayops.channel.domain.model.SyncTaskStatus
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.inventory.application.service.RoomInventoryApplication
 import com.stayops.property.domain.model.*
@@ -175,6 +176,27 @@ class WebhookE2ETest @Autowired constructor(
             )
             assertThat(inventories).hasSize(1)
             assertThat(inventories[0].getInteger("reservedCount")).isGreaterThan(0)
+
+            // ReservationCreated event should create an ARI sync task for PMS -> OTA inventory reconciliation.
+            val syncTasks = mongoTemplate.find(
+                Query.query(
+                    Criteria.where("propertyId").`is`("prop-wh")
+                        .and("channelCode").`is`("TEST_OTA")
+                        .and("status").`is`(SyncTaskStatus.PENDING.name)
+                ),
+                org.bson.Document::class.java,
+                "sync_tasks"
+            )
+            assertThat(syncTasks).hasSize(1)
+            val payload = syncTasks[0]["payload"] as org.bson.Document
+            assertThat(payload.getString("roomTypeId")).isEqualTo("rt-wh")
+            assertThat(payload.getString("date")).isEqualTo(checkIn.toString())
+            val inventory = inventories[0]
+            val currentAvailableCount =
+                inventory.getInteger("totalCount") -
+                    inventory.getInteger("reservedCount") -
+                    inventory.getInteger("blockedCount")
+            assertThat((payload["availableCount"] as Number).toInt()).isEqualTo(currentAvailableCount)
         }
     }
 
