@@ -56,11 +56,12 @@ services:
     ports:
       - "8081:8081"
     environment:
-      MOCK_OTA_PMS_WEBHOOK_URL: http://app:8080/api/v1/properties/{propertyId}/channels/webhook/{channelCode}
-      SPRING_DATA_MONGODB_URI: mongodb://mongo-ota:27017/mock-ota
+      MOCK_OTA_PMS_WEBHOOK_URL: ${MOCK_OTA_PMS_WEBHOOK_URL:-http://host.docker.internal:8080/api/v1/properties/{propertyId}/channels/webhook/{channelCode}}
+      SPRING_MONGODB_URI: mongodb://mongo-ota:27017/mock-ota
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - mongo-ota
-      - app
     restart: unless-stopped
 
   loki:
