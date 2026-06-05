@@ -36,7 +36,6 @@ class ChannelEventHandlerTest : BehaviorSpec({
                 every { inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate("prop-1", "rt-1", checkIn.plusDays(1)) } returns
                         inventoryWithAvailable(checkIn.plusDays(1), 8)
                 justRun { channelSyncApplication.createAvailabilitySyncTasks(any(), any(), any(), any()) }
-                justRun { channelSyncApplication.processTasksImmediately(any()) }
 
                 sut.onReservationCreated(
                     ReservationCreated(
@@ -60,7 +59,6 @@ class ChannelEventHandlerTest : BehaviorSpec({
                 every { inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate("prop-1", "rt-1", any()) } returns
                         inventoryWithAvailable(checkIn, 10)
                 justRun { channelSyncApplication.createAvailabilitySyncTasks(any(), any(), any(), any()) }
-                justRun { channelSyncApplication.processTasksImmediately(any()) }
 
                 sut.onReservationCancelled(
                     ReservationCancelled(
