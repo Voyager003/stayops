@@ -16,6 +16,6 @@ class TestcontainersConfiguration {
 
     @Bean
     fun mongoDbProperties(mongo: MongoDBContainer) = DynamicPropertyRegistrar { registry ->
-        registry.add("spring.mongodb.uri") { mongo.replicaSetUrl }
+        registry.add("spring.data.mongodb.uri") { mongo.replicaSetUrl }
     }
 }
