@@ -4,7 +4,7 @@ services:
   mock-ota-app:
     image: ${MOCK_OTA_IMAGE:-ghcr.io/voyager003/stayops-mock-ota:latest}
     environment:
-      SPRING_DATA_MONGODB_URI: mongodb://mock-ota-mongodb:27017/mock-ota
+      SPRING_MONGODB_URI: mongodb://mock-ota-mongodb:27017/mock-ota
       MOCK_OTA_PMS_WEBHOOK_URL: ${MOCK_OTA_PMS_WEBHOOK_URL}
     depends_on:
       mock-ota-mongodb:

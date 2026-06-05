@@ -5,9 +5,8 @@ spring:
   threads:
     virtual:
       enabled: true
-  data:
-    mongodb:
-      uri: ${SPRING_DATA_MONGODB_URI:${SPRING_MONGODB_URI:mongodb://localhost:27018/mock-ota}}
+  mongodb:
+    uri: ${SPRING_MONGODB_URI:${SPRING_DATA_MONGODB_URI:mongodb://localhost:27018/mock-ota}}
 
 mock-ota:
   pms-webhook-url: ${MOCK_OTA_PMS_WEBHOOK_URL:http://localhost:8080/api/v1/properties/{propertyId}/channels/webhook/{channelCode}}
