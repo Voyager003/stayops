@@ -13,7 +13,6 @@ import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
-import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import java.time.Clock
 import java.time.LocalDate
@@ -58,19 +57,16 @@ class ChannelSyncApplication(
     }
 
     fun processPendingTasks(workerId: String = "sync-task-worker") {
-        val tasks = syncTaskRepository.findPendingTasksReadyForProcessing(clock.instant())
-
-        tasks.forEach { task ->
+        while (true) {
+            val now = clock.instant()
+            val processing = syncTaskRepository.claimReadyForProcessing(workerId, now, now.plusSeconds(60))
+                ?: return
             try {
-                val now = clock.instant()
-                val processing = task.startProcessing(workerId, now.plusSeconds(60), now)
-                syncTaskRepository.save(processing)
-
                 val channel = channelRepository.findByPropertyIdAndCode(processing.propertyId, processing.channelCode)
                 if (channel == null || channel.connectionInfo == null) {
                     syncTaskRepository.save(processing.skip("채널 또는 connectionInfo 없음"))
                     log.warn("채널 또는 connectionInfo 없음, 태스크 건너뜀: taskId={}", processing.id)
-                    return@forEach
+                    continue
                 }
 
                 val roomTypeCode = processing.payload["roomTypeId"]?.toString() ?: ""
@@ -92,41 +88,7 @@ class ChannelSyncApplication(
                     log.warn("ARI push 실패: taskId={}, error={}", processing.id, result.errorMessage)
                 }
             } catch (e: ConflictException) {
-                log.warn("SyncTask version 충돌, 다음 폴링에서 재시도: taskId={}", task.id)
-            }
-        }
-    }
-
-    @Async
-    fun processTasksImmediately(propertyId: String, workerId: String = "sync-task-immediate") {
-        val pendingTasks = syncTaskRepository.findByPropertyIdAndStatus(propertyId, SyncTaskStatus.PENDING)
-
-        pendingTasks.forEach { task ->
-            try {
-                val channel = channelRepository.findByPropertyIdAndCode(task.propertyId, task.channelCode)
-                if (channel == null || channel.connectionInfo == null) {
-                    log.warn("즉시 전송 건너뜀 (채널/connectionInfo 없음): taskId={}", task.id)
-                    return@forEach
-                }
-
-                val roomTypeCode = task.payload["roomTypeId"]?.toString() ?: ""
-                val adapter = adapterProvider.getAdapter(task.channelCode)
-                val result = adapter.pushAvailability(
-                    endpoint = channel.connectionInfo!!.apiEndpoint,
-                    apiKey = null,
-                    externalRoomTypeCode = roomTypeCode,
-                    payload = task.payload,
-                    idempotencyKey = task.idempotencyKey
-                )
-
-                if (result.success) {
-                    val now = clock.instant()
-                    syncTaskRepository.save(task.startProcessing(workerId, now.plusSeconds(60), now).complete(clock.instant()))
-                    log.info("즉시 전송 성공: taskId={}, channelCode={}", task.id, task.channelCode)
-                }
-                // 실패 시 PENDING 유지 → 폴링이 재시도
-            } catch (e: ConflictException) {
-                log.warn("즉시 전송 version 충돌 (이미 처리됨): taskId={}", task.id)
+                log.warn("SyncTask version 충돌, 다음 폴링에서 재시도: taskId={}", processing.id)
             }
         }
     }

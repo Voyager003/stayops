@@ -36,17 +36,5 @@ class ChannelAvailabilitySyncAdapterTest : BehaviorSpec({
                 }
             }
         }
-
-        `when`("즉시 처리를 요청하면") {
-            then("ChannelSyncApplication에 위임한다") {
-                justRun { channelSyncApplication.processTasksImmediately("prop-1") }
-
-                sut.processImmediately("prop-1")
-
-                verify(exactly = 1) {
-                    channelSyncApplication.processTasksImmediately("prop-1")
-                }
-            }
-        }
     }
 })

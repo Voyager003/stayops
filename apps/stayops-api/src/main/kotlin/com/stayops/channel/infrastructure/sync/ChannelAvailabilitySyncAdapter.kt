@@ -18,8 +18,4 @@ class ChannelAvailabilitySyncAdapter(
     ) {
         channelSyncApplication.createAvailabilitySyncTasks(propertyId, roomTypeId, date, availableCount)
     }
-
-    override fun processImmediately(propertyId: String) {
-        channelSyncApplication.processTasksImmediately(propertyId)
-    }
 }

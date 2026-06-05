@@ -107,9 +107,6 @@ class RoomInventoryApplication(
             }
             date = date.plusDays(1)
         }
-        if (processed > 0) {
-            availabilitySyncPort.processImmediately(propertyId)
-        }
         log.info("재고 일괄 {}: propertyId={}, roomTypeId={}, range={}~{}, processed={}", action, propertyId, roomTypeId, startDate, endDate, processed)
         return processed
     }
@@ -123,7 +120,6 @@ class RoomInventoryApplication(
         val inventory = getOrThrow(propertyId, roomTypeId, date)
         val updated = saveAndEvict(inventory.block(count))
         availabilitySyncPort.requestAvailabilitySync(propertyId, roomTypeId, date, updated.availableCount)
-        availabilitySyncPort.processImmediately(propertyId)
         log.info("재고 차단: propertyId={}, roomTypeId={}, date={}, count={}", propertyId, roomTypeId, date, count)
         return updated
     }
@@ -137,7 +133,6 @@ class RoomInventoryApplication(
         val inventory = getOrThrow(propertyId, roomTypeId, date)
         val updated = saveAndEvict(inventory.unblock(count))
         availabilitySyncPort.requestAvailabilitySync(propertyId, roomTypeId, date, updated.availableCount)
-        availabilitySyncPort.processImmediately(propertyId)
         log.info("재고 차단 해제: propertyId={}, roomTypeId={}, date={}, count={}", propertyId, roomTypeId, date, count)
         return updated
     }

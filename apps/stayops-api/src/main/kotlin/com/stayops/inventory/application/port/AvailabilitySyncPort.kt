@@ -4,6 +4,4 @@ import java.time.LocalDate
 
 interface AvailabilitySyncPort {
     fun requestAvailabilitySync(propertyId: String, roomTypeId: String, date: LocalDate, availableCount: Int)
-
-    fun processImmediately(propertyId: String)
 }

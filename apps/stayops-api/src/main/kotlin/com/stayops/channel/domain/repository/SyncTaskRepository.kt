@@ -7,6 +7,7 @@ import java.time.Instant
 interface SyncTaskRepository {
     fun save(task: SyncTask): SyncTask
     fun findById(id: String): SyncTask?
+    fun claimReadyForProcessing(workerId: String, now: Instant, lockedUntil: Instant): SyncTask?
     fun findPendingTasksReadyForProcessing(now: Instant): List<SyncTask>
     fun findByPropertyIdAndStatus(propertyId: String, status: SyncTaskStatus): List<SyncTask>
     fun findByPropertyIdAndChannelCodeAndStatus(

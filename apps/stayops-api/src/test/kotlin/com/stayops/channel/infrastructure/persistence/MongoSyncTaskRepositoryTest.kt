@@ -59,6 +59,69 @@ class MongoSyncTaskRepositoryTest @Autowired constructor(
     }
 
     @Nested
+    inner class `claimReadyForProcessing` {
+        @Test
+        fun `ready 태스크를 IN_PROGRESS로 원자적으로 claim한다`() {
+            val now = Instant.now(clock)
+            syncTaskRepository.save(newTask(id = "task-claim"))
+
+            val claimed = syncTaskRepository.claimReadyForProcessing(
+                workerId = "worker-a",
+                now = now,
+                lockedUntil = now.plusSeconds(60)
+            )
+
+            assertThat(claimed).isNotNull
+            assertThat(claimed!!.id).isEqualTo("task-claim")
+            assertThat(claimed.status).isEqualTo(SyncTaskStatus.IN_PROGRESS)
+            assertThat(claimed.lockedBy).isEqualTo("worker-a")
+            assertThat(claimed.lockedUntil).isEqualTo(now.plusSeconds(60))
+
+            val completed = syncTaskRepository.save(claimed.complete(now.plusSeconds(1)))
+            assertThat(completed.status).isEqualTo(SyncTaskStatus.COMPLETED)
+        }
+
+        @Test
+        fun `이미 claim된 태스크는 lease 만료 전 다른 worker가 다시 claim하지 못한다`() {
+            val now = Instant.now(clock)
+            syncTaskRepository.save(newTask(id = "task-once"))
+
+            val first = syncTaskRepository.claimReadyForProcessing(
+                workerId = "worker-a",
+                now = now,
+                lockedUntil = now.plusSeconds(60)
+            )
+            val second = syncTaskRepository.claimReadyForProcessing(
+                workerId = "worker-b",
+                now = now.plusSeconds(1),
+                lockedUntil = now.plusSeconds(61)
+            )
+
+            assertThat(first).isNotNull
+            assertThat(second).isNull()
+        }
+
+        @Test
+        fun `lease가 만료된 IN_PROGRESS 태스크는 다른 worker가 다시 claim할 수 있다`() {
+            val now = Instant.now(clock)
+            val expired = newTask(id = "task-expired")
+                .startProcessing("worker-a", now.minusSeconds(1), now.minusSeconds(61))
+            syncTaskRepository.save(expired)
+
+            val claimed = syncTaskRepository.claimReadyForProcessing(
+                workerId = "worker-b",
+                now = now,
+                lockedUntil = now.plusSeconds(60)
+            )
+
+            assertThat(claimed).isNotNull
+            assertThat(claimed!!.id).isEqualTo("task-expired")
+            assertThat(claimed.lockedBy).isEqualTo("worker-b")
+            assertThat(claimed.status).isEqualTo(SyncTaskStatus.IN_PROGRESS)
+        }
+    }
+
+    @Nested
     inner class `findPendingTasksReadyForProcessing` {
         @Test
         fun `nextRetryAt이 null인 PENDING 태스크를 반환한다`() {

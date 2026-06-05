@@ -10,10 +10,13 @@ import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.aggregation.Aggregation
 import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
+import org.springframework.data.mongodb.core.FindAndModifyOptions
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
+import org.springframework.data.mongodb.core.query.Update
 import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.data.repository.findByIdOrNull
+import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Repository
 import java.time.Instant
 
@@ -51,7 +54,31 @@ class MongoSyncTaskRepository(
     override fun findById(id: String): SyncTask? =
         mongo.findByIdOrNull(id)?.toDomain()
 
+    override fun claimReadyForProcessing(workerId: String, now: Instant, lockedUntil: Instant): SyncTask? {
+        val query = Query(readyCriteria(now))
+            .with(Sort.by(Sort.Direction.ASC, "createdAt"))
+
+        val update = Update()
+            .set("status", SyncTaskStatus.IN_PROGRESS)
+            .set("lockedBy", workerId)
+            .set("lockedUntil", lockedUntil)
+            .set("updatedAt", now)
+            .inc("version", 1)
+
+        return mongoTemplate.findAndModify(
+            query,
+            update,
+            FindAndModifyOptions.options().returnNew(true),
+            SyncTaskDocument::class.java
+        )?.toDomain()
+    }
+
     override fun findPendingTasksReadyForProcessing(now: Instant): List<SyncTask> {
+        val query = Query(readyCriteria(now))
+        return mongoTemplate.find(query, SyncTaskDocument::class.java).map { it.toDomain() }
+    }
+
+    private fun readyCriteria(now: Instant): Criteria {
         val pending = Criteria.where("status").`is`(SyncTaskStatus.PENDING)
             .andOperator(
                 Criteria().orOperator(
@@ -62,8 +89,7 @@ class MongoSyncTaskRepository(
         val expiredLease = Criteria.where("status").`is`(SyncTaskStatus.IN_PROGRESS)
             .and("lockedUntil").lte(now)
 
-        val query = Query(Criteria().orOperator(pending, expiredLease))
-        return mongoTemplate.find(query, SyncTaskDocument::class.java).map { it.toDomain() }
+        return Criteria().orOperator(pending, expiredLease)
     }
 
     override fun findByPropertyIdAndStatus(propertyId: String, status: SyncTaskStatus): List<SyncTask> =
