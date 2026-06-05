@@ -135,6 +135,9 @@ jobs:
           tar -czf /tmp/stayops-bundles/app.tgz \
             -C infra/production/app \
             docker-compose.yml docker-compose.agent.yml promtail.yml
+          tar -czf /tmp/stayops-bundles/mock-ota.tgz \
+            -C infra/production/mock-ota \
+            docker-compose.yml docker-compose.agent.yml nginx.conf.template promtail.yml
           tar -czf /tmp/stayops-bundles/minimal-app.tgz \
             -C infra/minimal/app \
             docker-compose.yml nginx.conf.template
@@ -144,6 +147,7 @@ jobs:
           set -euo pipefail
           aws s3 cp infra/production/scripts/install-compose-stack.sh "s3://${ARTIFACT_BUCKET}/${ARTIFACT_PREFIX}/install-compose-stack.sh"
           aws s3 cp /tmp/stayops-bundles/app.tgz "s3://${ARTIFACT_BUCKET}/${ARTIFACT_PREFIX}/app.tgz"
+          aws s3 cp /tmp/stayops-bundles/mock-ota.tgz "s3://${ARTIFACT_BUCKET}/${ARTIFACT_PREFIX}/mock-ota.tgz"
           aws s3 cp /tmp/stayops-bundles/minimal-app.tgz "s3://${ARTIFACT_BUCKET}/${ARTIFACT_PREFIX}/minimal-app.tgz"
 
       - name: Deploy app via rolling SSM Run Command
@@ -151,6 +155,7 @@ jobs:
           set -euo pipefail
 
           app_image="ghcr.io/${GITHUB_REPOSITORY,,}:sha-${GITHUB_SHA}"
+          mock_ota_image="ghcr.io/${GITHUB_REPOSITORY,,}-mock-ota:sha-${GITHUB_SHA}"
 
           print_command_output() {
             local command_id="$1"
@@ -196,7 +201,7 @@ jobs:
               "set -euo pipefail",
               "aws s3 cp s3://${ARTIFACT_BUCKET}/${ARTIFACT_PREFIX}/install-compose-stack.sh /tmp/install-compose-stack.sh",
               "chmod +x /tmp/install-compose-stack.sh",
-              "sudo /tmp/install-compose-stack.sh 'minimal-app' '${ARTIFACT_BUCKET}' '${ARTIFACT_PREFIX}/minimal-app.tgz' '/stayops/minimal/app' '/opt/stayops/minimal-app' 'docker-compose.yml' '${app_image}'"
+              "sudo /tmp/install-compose-stack.sh 'minimal-app' '${ARTIFACT_BUCKET}' '${ARTIFACT_PREFIX}/minimal-app.tgz' '/stayops/minimal/app' '/opt/stayops/minimal-app' 'docker-compose.yml' '${app_image}' '${mock_ota_image}'"
             ]
           }
           EOF
@@ -221,6 +226,45 @@ jobs:
 
             exit 0
           fi
+
+          mock_ota_ids_raw="$(aws ec2 describe-instances \
+            --filters "Name=tag:Role,Values=mock-ota" "Name=instance-state-name,Values=running" \
+            --query "Reservations[].Instances[].InstanceId" \
+            --output text)"
+
+          if [ -z "$mock_ota_ids_raw" ]; then
+            echo "No running mock-ota instances found" >&2
+            exit 1
+          fi
+
+          cat > /tmp/ssm-params-mock-ota.json <<EOF
+          {
+            "commands": [
+              "set -euo pipefail",
+              "aws s3 cp s3://${ARTIFACT_BUCKET}/${ARTIFACT_PREFIX}/install-compose-stack.sh /tmp/install-compose-stack.sh",
+              "chmod +x /tmp/install-compose-stack.sh",
+              "sudo /tmp/install-compose-stack.sh 'mock-ota' '${ARTIFACT_BUCKET}' '${ARTIFACT_PREFIX}/mock-ota.tgz' '/stayops/prod/mock-ota' '/opt/stayops/mock-ota' 'docker-compose.yml:docker-compose.agent.yml' '${mock_ota_image}'"
+            ]
+          }
+          EOF
+
+          read -r -a mock_ota_ids <<< "$mock_ota_ids_raw"
+          command_id="$(aws ssm send-command \
+            --document-name AWS-RunShellScript \
+            --comment "StayOps mock-ota deploy ${GITHUB_SHA}" \
+            --instance-ids "${mock_ota_ids[@]}" \
+            --parameters file:///tmp/ssm-params-mock-ota.json \
+            --query "Command.CommandId" \
+            --output text)"
+
+          for id in "${mock_ota_ids[@]}"; do
+            if ! aws ssm wait command-executed --command-id "$command_id" --instance-id "$id"; then
+              print_command_output "$command_id" "$id"
+              exit 1
+            fi
+
+            print_command_output "$command_id" "$id"
+          done
 
           target_group_arn="$(aws elbv2 describe-target-groups \
             --names "${TARGET_NAME_PREFIX}-app-tg" \

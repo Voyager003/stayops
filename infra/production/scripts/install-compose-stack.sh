@@ -8,6 +8,7 @@ PARAMETER_PATH="${4:?parameter path is required}"
 STACK_DIR="${5:?stack dir is required}"
 COMPOSE_FILES="${6:?compose files are required}"
 IMAGE_OVERRIDE="${7:-}"
+MOCK_OTA_IMAGE_OVERRIDE="${8:-}"
 
 ARCHIVE_PATH="/tmp/stayops-${ROLE}.tgz"
 PARAMETER_PATH="${PARAMETER_PATH%/}"
@@ -337,6 +338,31 @@ set_env_value() {
   fi
 }
 
+apply_image_overrides() {
+  local env_file="$1"
+
+  case "${ROLE}" in
+    app)
+      if [[ -n "${IMAGE_OVERRIDE}" ]]; then
+        set_env_value "${env_file}" "STAYOPS_IMAGE" "${IMAGE_OVERRIDE}"
+      fi
+      ;;
+    mock-ota)
+      if [[ -n "${IMAGE_OVERRIDE}" ]]; then
+        set_env_value "${env_file}" "MOCK_OTA_IMAGE" "${IMAGE_OVERRIDE}"
+      fi
+      ;;
+    minimal-app)
+      if [[ -n "${IMAGE_OVERRIDE}" ]]; then
+        set_env_value "${env_file}" "STAYOPS_IMAGE" "${IMAGE_OVERRIDE}"
+      fi
+      if [[ -n "${MOCK_OTA_IMAGE_OVERRIDE}" ]]; then
+        set_env_value "${env_file}" "MOCK_OTA_IMAGE" "${MOCK_OTA_IMAGE_OVERRIDE}"
+      fi
+      ;;
+  esac
+}
+
 compose_args() {
   local file
   IFS=':' read -ra files <<< "${COMPOSE_FILES}"
@@ -411,9 +437,7 @@ main() {
 
   write_env_from_parameter_store "${region}" "${env_file}"
   append_runtime_identity "${env_file}" "${instance_alias}"
-  if [[ -n "${IMAGE_OVERRIDE}" ]]; then
-    set_env_value "${env_file}" "STAYOPS_IMAGE" "${IMAGE_OVERRIDE}"
-  fi
+  apply_image_overrides "${env_file}"
   chmod 600 "${env_file}"
   validate_required_env "${env_file}"
   write_secret_files "${env_file}"
