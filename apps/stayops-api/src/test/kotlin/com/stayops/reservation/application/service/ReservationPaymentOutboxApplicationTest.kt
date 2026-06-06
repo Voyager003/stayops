@@ -45,7 +45,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
     val reservationRepository = mockk<ReservationRepository>()
     val inventoryReservationPort = mockk<InventoryReservationPort>()
     val paymentGateway = mockk<PaymentGateway>()
-    val eventPublisher = mockk<ApplicationEventPublisher>()
+    val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
     val fixedInstant = Instant.parse("2026-04-13T10:00:00Z")
     val clock = Clock.fixed(fixedInstant, ZoneId.of("Asia/Seoul"))
     val idGenerator = object : IdGenerator {
@@ -127,7 +127,6 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         every { outboxRepository.findByPaymentIdAndType(any(), any()) } returns null
         every { inventoryReservationPort.reserve(any(), any(), any()) } returns Unit
         every { inventoryReservationPort.release(any(), any(), any()) } returns Unit
-        justRun { eventPublisher.publishEvent(any()) }
     }
 
     given("결제 승인 Outbox 처리 시") {
