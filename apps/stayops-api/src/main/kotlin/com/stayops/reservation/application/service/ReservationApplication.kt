@@ -6,6 +6,8 @@ import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolverService
+import com.stayops.reservation.application.port.ReservationPaymentPort
+import com.stayops.reservation.application.port.ReservationPaymentStatus
 import com.stayops.reservation.domain.event.ReservationCancelled
 import com.stayops.reservation.domain.event.ReservationCheckedOut
 import com.stayops.reservation.domain.event.ReservationCreated
@@ -38,6 +40,7 @@ class ReservationApplication(
     private val roomRepository: RoomRepository,
     private val eventPublisher: ApplicationEventPublisher,
     private val rateResolverService: RateResolverService,
+    private val reservationPaymentPort: ReservationPaymentPort,
     private val idGenerator: IdGenerator,
     private val clock: Clock
 ) {
@@ -151,32 +154,68 @@ class ReservationApplication(
 
     fun confirmReservation(propertyId: String, reservationId: String): Reservation {
         val reservation = getReservation(propertyId, reservationId)
+        requireApprovedPaymentForCustomerReservation(reservation)
         return reservationRepository.save(reservation.confirm())
     }
 
     @Transactional
     fun cancelReservation(propertyId: String, reservationId: String): Reservation {
         val reservation = getReservation(propertyId, reservationId)
-        val cancelled = reservation.cancel()
+        val shouldReleaseInventory = shouldReleaseInventoryOnCancel(reservation)
+        val cancelled = if (reservation.status == ReservationStatus.PENDING) {
+            reservation.cancelPending()
+        } else {
+            reservation.cancel()
+        }
         val saved = reservationRepository.save(cancelled)
 
-        // 재고 복원
-        reservation.dateRange.allDates().forEach { date ->
-            inventoryReservationPort.release(reservation.propertyId, reservation.roomTypeId, date)
-        }
+        if (shouldReleaseInventory) {
+            reservation.dateRange.allDates().forEach { date ->
+                inventoryReservationPort.release(reservation.propertyId, reservation.roomTypeId, date)
+            }
 
-        // 이벤트 발행
-        eventPublisher.publishEvent(
-            ReservationCancelled(
-                reservationId = saved.id,
-                propertyId = reservation.propertyId,
-                roomTypeId = reservation.roomTypeId,
-                dateRange = reservation.dateRange
+            eventPublisher.publishEvent(
+                ReservationCancelled(
+                    reservationId = saved.id,
+                    propertyId = reservation.propertyId,
+                    roomTypeId = reservation.roomTypeId,
+                    dateRange = reservation.dateRange
+                )
             )
-        )
+        }
 
         log.info("예약 취소: id={}", saved.id)
         return saved
+    }
+
+    private fun requireApprovedPaymentForCustomerReservation(reservation: Reservation) {
+        if (reservation.memberId == null) {
+            return
+        }
+
+        val payment = reservationPaymentPort.findByReservationId(reservation.id)
+            ?: throw BusinessException("PAYMENT_NOT_FOUND", "결제 정보를 찾을 수 없습니다: ${reservation.id}")
+        if (payment.status != ReservationPaymentStatus.APPROVED) {
+            throw BusinessException(
+                code = "PAYMENT_NOT_APPROVED",
+                message = "결제가 승인된 예약만 확정할 수 있습니다: reservationId=${reservation.id}, paymentStatus=${payment.status}"
+            )
+        }
+    }
+
+    private fun shouldReleaseInventoryOnCancel(reservation: Reservation): Boolean {
+        if (reservation.status == ReservationStatus.CONFIRMED) {
+            return true
+        }
+        if (reservation.memberId == null) {
+            return reservation.status == ReservationStatus.PENDING
+        }
+
+        val payment = reservationPaymentPort.findByReservationId(reservation.id)
+            ?: return false
+        return payment.status == ReservationPaymentStatus.APPROVED ||
+            payment.status == ReservationPaymentStatus.CANCEL_REQUESTED ||
+            payment.status == ReservationPaymentStatus.CANCEL_FAILED
     }
 
     @Transactional

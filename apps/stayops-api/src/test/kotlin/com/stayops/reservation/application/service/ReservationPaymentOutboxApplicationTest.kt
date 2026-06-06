@@ -13,6 +13,7 @@ import com.stayops.payment.domain.service.PaymentConfirmResult
 import com.stayops.payment.domain.service.PaymentGateway
 import com.stayops.payment.domain.service.PaymentGatewayException
 import com.stayops.payment.domain.service.PaymentInquiryResult
+import com.stayops.reservation.domain.event.ReservationCreated
 import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationChannel
@@ -27,8 +28,10 @@ import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
 import io.mockk.every
+import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.verify
+import org.springframework.context.ApplicationEventPublisher
 import java.math.BigDecimal
 import java.time.Clock
 import java.time.Instant
@@ -42,6 +45,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
     val reservationRepository = mockk<ReservationRepository>()
     val inventoryReservationPort = mockk<InventoryReservationPort>()
     val paymentGateway = mockk<PaymentGateway>()
+    val eventPublisher = mockk<ApplicationEventPublisher>()
     val fixedInstant = Instant.parse("2026-04-13T10:00:00Z")
     val clock = Clock.fixed(fixedInstant, ZoneId.of("Asia/Seoul"))
     val idGenerator = object : IdGenerator {
@@ -54,6 +58,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         reservationRepository = reservationRepository,
         inventoryReservationPort = inventoryReservationPort,
         paymentGateway = paymentGateway,
+        eventPublisher = eventPublisher,
         clock = clock,
         idGenerator = idGenerator
     )
@@ -122,11 +127,12 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         every { outboxRepository.findByPaymentIdAndType(any(), any()) } returns null
         every { inventoryReservationPort.reserve(any(), any(), any()) } returns Unit
         every { inventoryReservationPort.release(any(), any(), any()) } returns Unit
+        justRun { eventPublisher.publishEvent(any()) }
     }
 
     given("결제 승인 Outbox 처리 시") {
         `when`("PG 승인에 성공하면") {
-            then("Payment 승인과 재고 차감 후 Reservation을 확정하고 Outbox를 완료한다") {
+            then("Payment 승인과 재고 차감 후 Reservation은 PENDING으로 유지하고 Outbox를 완료한다") {
                 val message = confirmMessage()
                 every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
                 every { paymentRepository.findById("pay-1") } returns confirmRequestedPayment()
@@ -153,13 +159,20 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
 
                 verify(exactly = 2) { inventoryReservationPort.reserve("prop-1", "rt-1", any()) }
                 verify { paymentRepository.save(match { it.status == PaymentStatus.APPROVED }) }
-                verify { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
+                verify(exactly = 0) { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
+                verify {
+                    eventPublisher.publishEvent(match<ReservationCreated> {
+                        it.reservationId == "rsv-1" &&
+                            it.propertyId == "prop-1" &&
+                            it.roomTypeId == "rt-1"
+                    })
+                }
                 verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
             }
         }
 
         `when`("PG가 이미 처리됐다고 응답하고 조회 결과 DONE이면") {
-            then("외부 상태 조회 결과로 결제를 승인하고 예약을 확정한다") {
+            then("외부 상태 조회 결과로 결제를 승인하고 Reservation은 PENDING으로 유지한다") {
                 val message = confirmMessage()
                 every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
                 every { paymentRepository.findById("pay-1") } returns confirmRequestedPayment()
@@ -177,13 +190,14 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
 
                 verify(exactly = 2) { inventoryReservationPort.reserve("prop-1", "rt-1", any()) }
                 verify { paymentRepository.save(match { it.status == PaymentStatus.APPROVED }) }
-                verify { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
+                verify(exactly = 0) { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
+                verify { eventPublisher.publishEvent(any<ReservationCreated>()) }
                 verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
             }
         }
 
         `when`("Payment는 이미 승인됐지만 Reservation이 아직 PENDING이면") {
-            then("재고를 다시 차감하지 않고 Reservation을 확정하고 Outbox를 완료한다") {
+            then("재고와 Reservation을 다시 변경하지 않고 Outbox만 완료한다") {
                 val message = confirmMessage()
                 every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
                 every { paymentRepository.findById("pay-1") } returns approvedPayment()
@@ -193,7 +207,8 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
 
                 verify(exactly = 0) { paymentGateway.confirm(any(), any(), any(), any()) }
                 verify(exactly = 0) { inventoryReservationPort.reserve(any(), any(), any()) }
-                verify { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
+                verify(exactly = 0) { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
+                verify(exactly = 0) { eventPublisher.publishEvent(any<ReservationCreated>()) }
                 verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
             }
         }

@@ -13,12 +13,14 @@ import com.stayops.payment.domain.service.PaymentConfirmResult
 import com.stayops.payment.domain.service.PaymentGateway
 import com.stayops.payment.domain.service.PaymentGatewayException
 import com.stayops.payment.domain.service.PaymentInquiryResult
+import com.stayops.reservation.domain.event.ReservationCreated
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.ConflictException
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import java.time.Clock
 import java.time.Instant
@@ -31,6 +33,7 @@ class ReservationPaymentOutboxApplication(
     private val reservationRepository: ReservationRepository,
     private val inventoryReservationPort: InventoryReservationPort,
     private val paymentGateway: PaymentGateway,
+    private val eventPublisher: ApplicationEventPublisher,
     private val clock: Clock,
     private val idGenerator: IdGenerator
 ) {
@@ -93,9 +96,6 @@ class ReservationPaymentOutboxApplication(
         }
 
         if (payment.status == PaymentStatus.APPROVED) {
-            if (reservation.status == ReservationStatus.PENDING) {
-                reservationRepository.save(reservation.confirm())
-            }
             outboxRepository.save(message.complete(now))
             return
         }
@@ -107,7 +107,7 @@ class ReservationPaymentOutboxApplication(
                 amount = message.amount.amount,
                 idempotencyKey = message.idempotencyKey
             )
-            approveAndConfirm(message, payment, reservation, confirmResult, now)
+            approveAndReserveInventory(message, payment, reservation, confirmResult, now)
         } catch (e: PaymentGatewayException.AlreadyProcessed) {
             recoverByInquiry(message, payment, reservation, e, failPaymentWhenNotDone = true)
         } catch (e: PaymentGatewayException.ProviderError) {
@@ -138,7 +138,7 @@ class ReservationPaymentOutboxApplication(
         }
 
         if (isDoneForMessage(inquiry, message)) {
-            approveAndConfirm(
+            approveAndReserveInventory(
                 message = message,
                 payment = payment,
                 reservation = reservation,
@@ -170,7 +170,7 @@ class ReservationPaymentOutboxApplication(
         outboxRepository.save(message.fail("외부 결제 상태가 아직 DONE이 아닙니다: ${inquiry.status}", clock.instant()))
     }
 
-    private fun approveAndConfirm(
+    private fun approveAndReserveInventory(
         message: PaymentOutboxMessage,
         payment: Payment,
         reservation: Reservation,
@@ -211,10 +211,20 @@ class ReservationPaymentOutboxApplication(
             return
         }
 
-        if (reservation.status == ReservationStatus.PENDING) {
-            reservationRepository.save(reservation.confirm())
-        }
+        publishReservationCreatedForInventorySync(reservation)
         outboxRepository.save(message.complete(clock.instant()))
+    }
+
+    private fun publishReservationCreatedForInventorySync(reservation: Reservation) {
+        eventPublisher.publishEvent(
+            ReservationCreated(
+                reservationId = reservation.id,
+                propertyId = reservation.propertyId,
+                roomTypeId = reservation.roomTypeId,
+                dateRange = reservation.dateRange,
+                channelCode = reservation.channel.channelCode
+            )
+        )
     }
 
     private fun failPaymentAndCancelPendingReservation(

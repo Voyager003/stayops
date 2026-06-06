@@ -30,6 +30,7 @@ import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.mockk.*
+import org.springframework.context.ApplicationEventPublisher
 import java.math.BigDecimal
 import java.time.Clock
 import java.time.Instant
@@ -47,6 +48,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
     val reservationPaymentPort = mockk<ReservationPaymentPort>()
     val inventoryReservationPort = mockk<InventoryReservationPort>()
     val rateResolverService = RateResolverService()
+    val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
     val fixedInstant = Instant.parse("2026-04-08T10:00:00Z")
     val clock = Clock.fixed(fixedInstant, ZoneId.of("Asia/Seoul"))
     val idGenerator = object : IdGenerator {
@@ -63,6 +65,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
         reservationPaymentPort = reservationPaymentPort,
         inventoryReservationPort = inventoryReservationPort,
         rateResolverService = rateResolverService,
+        eventPublisher = eventPublisher,
         clock = clock,
         idGenerator = idGenerator
     )

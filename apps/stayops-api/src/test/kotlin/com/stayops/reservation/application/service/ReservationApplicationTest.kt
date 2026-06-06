@@ -9,6 +9,9 @@ import com.stayops.rate.domain.model.RatePlan
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolverService
+import com.stayops.reservation.application.port.ReservationPaymentPort
+import com.stayops.reservation.application.port.ReservationPaymentSnapshot
+import com.stayops.reservation.application.port.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.DateType
 import com.stayops.reservation.domain.model.ReservationSearchCriteria
 import com.stayops.reservation.domain.model.ReservationStatus
@@ -46,6 +49,7 @@ class ReservationApplicationTest : BehaviorSpec({
     val roomRepository = mockk<RoomRepository>()
     val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
     val rateResolverService = RateResolverService()
+    val reservationPaymentPort = mockk<ReservationPaymentPort>()
     val fixedClock = Clock.fixed(Instant.parse("2026-04-01T00:00:00Z"), ZoneId.of("Asia/Seoul"))
     val idGenerator = object : IdGenerator {
         override fun generate(): String = "test-id"
@@ -61,6 +65,7 @@ class ReservationApplicationTest : BehaviorSpec({
         roomRepository = roomRepository,
         eventPublisher = eventPublisher,
         rateResolverService = rateResolverService,
+        reservationPaymentPort = reservationPaymentPort,
         idGenerator = idGenerator,
         clock = fixedClock
     )
@@ -180,6 +185,72 @@ class ReservationApplicationTest : BehaviorSpec({
                 every { reservationRepository.save(any()) } answers { firstArg() }
 
                 val result = sut.confirmReservation("prop-1", "rsv-c1")
+                result.status shouldBe ReservationStatus.CONFIRMED
+            }
+        }
+
+        `when`("고객 예약의 결제가 아직 승인되지 않았으면") {
+            then("PMS 확정이 거부된다") {
+                clearAllMocks()
+                val reservation = com.stayops.reservation.domain.model.Reservation.create(
+                    id = "rsv-customer-pending", propertyId = "prop-1", roomTypeId = "rt-1",
+                    guestId = "guest-1",
+                    guestInfo = com.stayops.reservation.domain.model.GuestInfo("홍길동", "010-1234-5678", null),
+                    dateRange = DateRange.of(checkIn, checkOut), numberOfGuests = 2,
+                    channel = com.stayops.reservation.domain.model.ReservationChannel("DIRECT", null, BigDecimal.ZERO),
+                    pricing = com.stayops.reservation.domain.model.ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO),
+                    memberId = "member-1"
+                )
+                every { reservationRepository.findById("rsv-customer-pending") } returns reservation
+                every { reservationPaymentPort.findByReservationId("rsv-customer-pending") } returns
+                    ReservationPaymentSnapshot(
+                        id = "pay-1",
+                        reservationId = "rsv-customer-pending",
+                        memberId = "member-1",
+                        orderId = "order-1",
+                        amount = Money.won(200_000),
+                        status = ReservationPaymentStatus.CONFIRM_REQUESTED,
+                        paymentKey = "payment-key",
+                        failReason = null
+                    )
+
+                val exception = shouldThrow<BusinessException> {
+                    sut.confirmReservation("prop-1", "rsv-customer-pending")
+                }
+
+                exception.code shouldBe "PAYMENT_NOT_APPROVED"
+                verify(exactly = 0) { reservationRepository.save(any()) }
+            }
+        }
+
+        `when`("고객 예약의 결제가 승인되었으면") {
+            then("PMS 확정으로 CONFIRMED 상태가 된다") {
+                clearAllMocks()
+                val reservation = com.stayops.reservation.domain.model.Reservation.create(
+                    id = "rsv-customer-approved", propertyId = "prop-1", roomTypeId = "rt-1",
+                    guestId = "guest-1",
+                    guestInfo = com.stayops.reservation.domain.model.GuestInfo("홍길동", "010-1234-5678", null),
+                    dateRange = DateRange.of(checkIn, checkOut), numberOfGuests = 2,
+                    channel = com.stayops.reservation.domain.model.ReservationChannel("DIRECT", null, BigDecimal.ZERO),
+                    pricing = com.stayops.reservation.domain.model.ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO),
+                    memberId = "member-1"
+                )
+                every { reservationRepository.findById("rsv-customer-approved") } returns reservation
+                every { reservationPaymentPort.findByReservationId("rsv-customer-approved") } returns
+                    ReservationPaymentSnapshot(
+                        id = "pay-1",
+                        reservationId = "rsv-customer-approved",
+                        memberId = "member-1",
+                        orderId = "order-1",
+                        amount = Money.won(200_000),
+                        status = ReservationPaymentStatus.APPROVED,
+                        paymentKey = "payment-key",
+                        failReason = null
+                    )
+                every { reservationRepository.save(any()) } answers { firstArg() }
+
+                val result = sut.confirmReservation("prop-1", "rsv-customer-approved")
+
                 result.status shouldBe ReservationStatus.CONFIRMED
             }
         }

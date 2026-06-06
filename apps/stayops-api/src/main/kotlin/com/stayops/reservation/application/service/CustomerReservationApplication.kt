@@ -11,6 +11,7 @@ import com.stayops.rate.domain.service.RateResolverService
 import com.stayops.reservation.application.port.ReservationPaymentPort
 import com.stayops.reservation.application.port.ReservationPaymentSnapshot
 import com.stayops.reservation.application.port.ReservationPaymentStatus
+import com.stayops.reservation.domain.event.ReservationCancelled
 import com.stayops.reservation.domain.model.*
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
@@ -24,6 +25,7 @@ import com.stayops.shared.exception.ForbiddenException
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -41,6 +43,7 @@ class CustomerReservationApplication(
     private val reservationPaymentPort: ReservationPaymentPort,
     private val inventoryReservationPort: InventoryReservationPort,
     private val rateResolverService: RateResolverService,
+    private val eventPublisher: ApplicationEventPublisher,
     private val clock: Clock,
     private val idGenerator: IdGenerator
 ) {
@@ -259,6 +262,14 @@ class CustomerReservationApplication(
             reservation.dateRange.allDates().forEach { date ->
                 inventoryReservationPort.release(reservation.propertyId, reservation.roomTypeId, date)
             }
+            eventPublisher.publishEvent(
+                ReservationCancelled(
+                    reservationId = cancelledReservation.id,
+                    propertyId = reservation.propertyId,
+                    roomTypeId = reservation.roomTypeId,
+                    dateRange = reservation.dateRange
+                )
+            )
         }
 
         log.info("예약 취소: reservationId={}, 이전상태={}", reservationId, reservation.status)
