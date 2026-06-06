@@ -18,11 +18,13 @@ import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
+import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Clock
 import java.time.LocalDate
 
 @Service
@@ -36,7 +38,8 @@ class ReservationApplication(
     private val roomRepository: RoomRepository,
     private val eventPublisher: ApplicationEventPublisher,
     private val rateResolverService: RateResolverService,
-    private val idGenerator: IdGenerator
+    private val idGenerator: IdGenerator,
+    private val clock: Clock
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -179,6 +182,7 @@ class ReservationApplication(
     @Transactional
     fun checkInReservation(propertyId: String, reservationId: String, roomId: String): Reservation {
         val reservation = getReservation(propertyId, reservationId)
+        requireArrivalDateToday(reservation, "CHECK_IN_NOT_ALLOWED_DATE", "체크인 당일에만 체크인할 수 있습니다.")
 
         val room = roomRepository.findById(roomId)
             ?: throw NotFoundException("ROOM_NOT_FOUND", "객실을 찾을 수 없습니다: $roomId")
@@ -223,6 +227,17 @@ class ReservationApplication(
 
     fun noShowReservation(propertyId: String, reservationId: String): Reservation {
         val reservation = getReservation(propertyId, reservationId)
+        requireArrivalDateToday(reservation, "NO_SHOW_NOT_ALLOWED_DATE", "체크인 당일에만 노쇼 처리할 수 있습니다.")
         return reservationRepository.save(reservation.noShow())
+    }
+
+    private fun requireArrivalDateToday(reservation: Reservation, code: String, message: String) {
+        val today = LocalDate.now(clock)
+        if (reservation.dateRange.checkIn != today) {
+            throw BusinessException(
+                code = code,
+                message = "$message checkIn=${reservation.dateRange.checkIn}, today=$today"
+            )
+        }
     }
 }

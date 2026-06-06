@@ -21,6 +21,7 @@ import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
+import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
 import io.kotest.assertions.throwables.shouldThrow
@@ -29,7 +30,10 @@ import io.kotest.matchers.shouldBe
 import io.mockk.*
 import org.springframework.context.ApplicationEventPublisher
 import java.math.BigDecimal
+import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 class ReservationApplicationTest : BehaviorSpec({
 
@@ -42,6 +46,7 @@ class ReservationApplicationTest : BehaviorSpec({
     val roomRepository = mockk<RoomRepository>()
     val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
     val rateResolverService = RateResolverService()
+    val fixedClock = Clock.fixed(Instant.parse("2026-04-01T00:00:00Z"), ZoneId.of("Asia/Seoul"))
     val idGenerator = object : IdGenerator {
         override fun generate(): String = "test-id"
     }
@@ -56,7 +61,8 @@ class ReservationApplicationTest : BehaviorSpec({
         roomRepository = roomRepository,
         eventPublisher = eventPublisher,
         rateResolverService = rateResolverService,
-        idGenerator = idGenerator
+        idGenerator = idGenerator,
+        clock = fixedClock
     )
 
     val checkIn = LocalDate.of(2026, 4, 1)
@@ -246,6 +252,28 @@ class ReservationApplicationTest : BehaviorSpec({
                 result.status shouldBe ReservationStatus.NO_SHOW
             }
         }
+
+        `when`("체크인 날짜가 오늘이 아닌 예약을 노쇼 처리하면") {
+            then("예외가 발생하고 저장하지 않는다") {
+                clearAllMocks()
+                val futureReservation = com.stayops.reservation.domain.model.Reservation.create(
+                    id = "rsv-noshow-future", propertyId = "prop-1", roomTypeId = "rt-1",
+                    guestId = "guest-1",
+                    guestInfo = com.stayops.reservation.domain.model.GuestInfo("홍길동", "010-1234-5678", null),
+                    dateRange = DateRange.of(checkIn.plusDays(1), checkOut.plusDays(1)), numberOfGuests = 2,
+                    channel = com.stayops.reservation.domain.model.ReservationChannel("DIRECT", null, BigDecimal.ZERO),
+                    pricing = com.stayops.reservation.domain.model.ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO)
+                ).confirm()
+                every { reservationRepository.findById("rsv-noshow-future") } returns futureReservation
+
+                val exception = shouldThrow<BusinessException> {
+                    sut.noShowReservation("prop-1", "rsv-noshow-future")
+                }
+
+                exception.code shouldBe "NO_SHOW_NOT_ALLOWED_DATE"
+                verify(exactly = 0) { reservationRepository.save(any()) }
+            }
+        }
     }
 
     // -- 예약 생성: 실패 --
@@ -316,6 +344,31 @@ class ReservationApplicationTest : BehaviorSpec({
                 result.status shouldBe ReservationStatus.CHECKED_IN
                 result.roomId shouldBe "room-101"
                 verify { roomRepository.save(match { it.status == com.stayops.room.domain.model.RoomStatus.OCCUPIED }) }
+            }
+        }
+
+        `when`("체크인 날짜가 오늘이 아닌 예약에 객실을 배정하면") {
+            then("예외가 발생하고 객실 상태를 변경하지 않는다") {
+                clearAllMocks()
+                val futureReservation = com.stayops.reservation.domain.model.Reservation.create(
+                    id = "rsv-ci-future", propertyId = "prop-1", roomTypeId = "rt-1",
+                    guestId = "guest-1",
+                    guestInfo = com.stayops.reservation.domain.model.GuestInfo("홍길동", "010-1234-5678", null),
+                    dateRange = DateRange.of(checkIn.plusDays(1), checkOut.plusDays(1)), numberOfGuests = 2,
+                    channel = com.stayops.reservation.domain.model.ReservationChannel("DIRECT", null, BigDecimal.ZERO),
+                    pricing = com.stayops.reservation.domain.model.ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO)
+                ).confirm()
+
+                every { reservationRepository.findById("rsv-ci-future") } returns futureReservation
+
+                val exception = shouldThrow<BusinessException> {
+                    sut.checkInReservation("prop-1", "rsv-ci-future", "room-101")
+                }
+
+                exception.code shouldBe "CHECK_IN_NOT_ALLOWED_DATE"
+                verify(exactly = 0) { roomRepository.findById(any()) }
+                verify(exactly = 0) { roomRepository.save(any()) }
+                verify(exactly = 0) { reservationRepository.save(any()) }
             }
         }
     }
