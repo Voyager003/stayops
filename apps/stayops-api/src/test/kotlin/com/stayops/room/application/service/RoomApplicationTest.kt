@@ -53,6 +53,9 @@ class RoomApplicationTest : BehaviorSpec({
             then("Repository.save()가 한 번 호출된다") {
                 verify(exactly = 1) { roomRepository.save(any()) }
             }
+            then("객실 수 변경을 재고와 채널에 반영하기 위해 객실타입 재고 동기화를 요청한다") {
+                verify(exactly = 1) { roomInventorySyncPort.syncInventoryForRoomType("prop-1", "rt-1") }
+            }
         }
 
         `when`("동일한 호수가 이미 존재하면") {

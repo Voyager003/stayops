@@ -47,7 +47,7 @@ class RoomInventoryApplication(
         while (!date.isAfter(endDate)) {
             val inv = existing[date]
             if (inv == null) {
-                inventoryRepository.save(
+                val saved = inventoryRepository.save(
                     RoomInventory.create(
                         id = idGenerator.generate(),
                         propertyId = propertyId,
@@ -56,8 +56,10 @@ class RoomInventoryApplication(
                         totalCount = roomCount
                     )
                 )
+                availabilitySyncPort.requestAvailabilitySync(propertyId, roomTypeId, saved.date, saved.availableCount)
             } else if (inv.totalCount != roomCount) {
-                inventoryRepository.save(inv.updateTotalCount(roomCount))
+                val saved = inventoryRepository.save(inv.updateTotalCount(roomCount))
+                availabilitySyncPort.requestAvailabilitySync(propertyId, roomTypeId, saved.date, saved.availableCount)
             }
             date = date.plusDays(1)
         }

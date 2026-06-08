@@ -10,6 +10,7 @@ import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
 import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.reservation.application.port.ReservationPaymentPort
+import com.stayops.reservation.domain.event.ReservationCancelled
 import com.stayops.reservation.domain.event.ReservationCreated
 import com.stayops.reservation.domain.model.ReservationChannel
 import com.stayops.reservation.domain.model.GuestInfo
@@ -76,18 +77,7 @@ class WebhookApplication(
 
         when (eventType) {
             "BOOKING" -> handleBookingEvent(propertyId, channelCode, channel.commissionRate, mapping, payload)
-            "CANCELLATION" -> {
-                // TODO(미구현): OTA 취소 이벤트 수신 시 externalReservationId로 예약을 조회해
-                //   Reservation.cancel() + 재고 복원 + 도메인 이벤트 발행을 수행해야 한다.
-                //   현재는 로그만 남겨 운영 환경에서 OTA 취소가 **무시된다**. 결과적으로
-                //   고객이 OTA에서 취소해도 PMS 예약은 CONFIRMED 상태로 남아 "유령 예약"과
-                //   잘못된 재고 점유가 발생한다.
-                //   우선순위: High. 해결 전까지 OTA 채널 운영 시 수동 취소 필요.
-                log.warn(
-                    "OTA 취소 수신 — 미구현으로 무시됨: channelCode={}, bookingId={}",
-                    channelCode, payload["bookingId"]
-                )
-            }
+            "CANCELLATION" -> handleCancellationEvent(propertyId, channelCode, payload)
             else -> {
                 log.warn("알 수 없는 이벤트 타입: {}", eventType)
             }
@@ -190,5 +180,43 @@ class WebhookApplication(
         )
 
         log.info("OTA 예약 생성 완료: reservationId={}, bookingId={}", saved.id, bookingId)
+    }
+
+    private fun handleCancellationEvent(
+        propertyId: String,
+        channelCode: String,
+        payload: Map<String, Any>
+    ) {
+        val bookingId = payload["bookingId"]?.toString()
+            ?: throw BusinessException("INVALID_WEBHOOK", "bookingId는 필수입니다")
+
+        val reservation = reservationRepository.findByPropertyIdAndChannelCodeAndExternalReservationId(
+            propertyId = propertyId,
+            channelCode = channelCode,
+            externalReservationId = bookingId
+        )
+
+        if (reservation == null) {
+            log.warn("OTA 취소 대상 예약 없음: propertyId={}, channelCode={}, bookingId={}", propertyId, channelCode, bookingId)
+            return
+        }
+
+        val cancelled = reservation.cancel()
+        val saved = reservationRepository.save(cancelled)
+
+        reservation.dateRange.allDates().forEach { date ->
+            inventoryReservationPort.release(reservation.propertyId, reservation.roomTypeId, date)
+        }
+
+        eventPublisher.publishEvent(
+            ReservationCancelled(
+                reservationId = saved.id,
+                propertyId = reservation.propertyId,
+                roomTypeId = reservation.roomTypeId,
+                dateRange = reservation.dateRange
+            )
+        )
+
+        log.info("OTA 예약 취소 완료: reservationId={}, bookingId={}", saved.id, bookingId)
     }
 }

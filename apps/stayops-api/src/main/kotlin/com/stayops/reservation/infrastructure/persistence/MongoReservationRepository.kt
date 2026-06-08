@@ -43,6 +43,17 @@ class MongoReservationRepository(
         )
         indexOps.createIndex(
             CompoundIndexDefinition(
+                Document(
+                    mapOf(
+                        "propertyId" to 1,
+                        "channel.channelCode" to 1,
+                        "channel.externalReservationId" to 1
+                    )
+                )
+            )
+        )
+        indexOps.createIndex(
+            CompoundIndexDefinition(
                 Document(mapOf("propertyId" to 1, "guestId" to 1))
             )
         )
@@ -83,6 +94,17 @@ class MongoReservationRepository(
 
     override fun findByPropertyIdAndChannelCode(propertyId: String, channelCode: String): List<Reservation> =
         mongo.findByPropertyIdAndChannelChannelCode(propertyId, channelCode).map { it.toDomain() }
+
+    override fun findByPropertyIdAndChannelCodeAndExternalReservationId(
+        propertyId: String,
+        channelCode: String,
+        externalReservationId: String
+    ): Reservation? =
+        mongo.findByPropertyIdAndChannelChannelCodeAndChannelExternalReservationId(
+            propertyId,
+            channelCode,
+            externalReservationId
+        )?.toDomain()
 
     override fun findByMemberId(memberId: String): List<Reservation> =
         mongo.findByMemberId(memberId).map { it.toDomain() }
@@ -227,5 +249,10 @@ interface ReservationMongoDataRepository : MongoRepository<ReservationDocument, 
     fun findByPropertyIdAndStatus(propertyId: String, status: ReservationStatus): List<ReservationDocument>
     fun findByPropertyIdAndGuestId(propertyId: String, guestId: String): List<ReservationDocument>
     fun findByPropertyIdAndChannelChannelCode(propertyId: String, channelCode: String): List<ReservationDocument>
+    fun findByPropertyIdAndChannelChannelCodeAndChannelExternalReservationId(
+        propertyId: String,
+        channelCode: String,
+        externalReservationId: String
+    ): ReservationDocument?
     fun findByMemberId(memberId: String): List<ReservationDocument>
 }

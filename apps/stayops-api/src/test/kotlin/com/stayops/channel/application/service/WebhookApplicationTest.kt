@@ -9,10 +9,15 @@ import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
 import com.stayops.inventory.application.port.InventoryReservationPort
 import com.stayops.reservation.application.port.ReservationPaymentPort
+import com.stayops.reservation.domain.event.ReservationCancelled
 import com.stayops.reservation.domain.event.ReservationCreated
+import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.Reservation
+import com.stayops.reservation.domain.model.ReservationChannel
+import com.stayops.reservation.domain.model.ReservationPricing
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
+import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.BusinessException
@@ -210,6 +215,100 @@ class WebhookApplicationTest : BehaviorSpec({
                         payload = mapOf("bookingId" to "book-3")
                     )
                 }
+                exception.code shouldBe "INVALID_WEBHOOK"
+            }
+        }
+    }
+
+    given("CANCELLATION 이벤트 수신 시") {
+        `when`("외부 예약 ID와 일치하는 확정 예약이 있으면") {
+            then("예약을 취소하고 재고를 복원한 뒤 채널 동기화 이벤트를 발행한다") {
+                clearAllMocks()
+                val reservation = Reservation.create(
+                    id = "rsv-ota-1",
+                    propertyId = "prop-1",
+                    roomTypeId = "rt-deluxe",
+                    guestId = "guest-1",
+                    guestInfo = GuestInfo(name = "John Doe", phone = "OTA-book-1", email = null),
+                    dateRange = DateRange.of(LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 3)),
+                    numberOfGuests = 1,
+                    channel = ReservationChannel(
+                        channelCode = "AGODA",
+                        externalReservationId = "book-1",
+                        commissionRate = BigDecimal("0.15")
+                    ),
+                    pricing = ReservationPricing.calculate(
+                        roomRate = Money.ZERO,
+                        additionalCharges = Money.ZERO,
+                        commissionRate = BigDecimal("0.15")
+                    )
+                ).confirm()
+                val savedSlot = slot<Reservation>()
+
+                every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel
+                every { signatureVerifier.verify("AGODA", any(), "sha256=valid") } returns true
+                every { processedEventRepository.saveIfAbsent(any()) } returns true
+                every { mappingRepository.findByPropertyIdAndChannelCode("prop-1", "AGODA") } returns null
+                every {
+                    reservationRepository.findByPropertyIdAndChannelCodeAndExternalReservationId(
+                        "prop-1",
+                        "AGODA",
+                        "book-1"
+                    )
+                } returns reservation
+                justRun { inventoryReservationPort.release("prop-1", "rt-deluxe", any()) }
+                every { reservationRepository.save(capture(savedSlot)) } answers { firstArg() }
+                every { eventPublisher.publishEvent(any<ReservationCancelled>()) } just Runs
+
+                sut.handleWebhook(
+                    propertyId = "prop-1",
+                    channelCode = "AGODA",
+                    signature = "sha256=valid",
+                    rawBody = """{"eventId":"evt-cancel-1"}""",
+                    eventId = "evt-cancel-1",
+                    eventType = "CANCELLATION",
+                    payload = mapOf("bookingId" to "book-1")
+                )
+
+                savedSlot.captured.status shouldBe ReservationStatus.CANCELLED
+                verify(exactly = 1) {
+                    inventoryReservationPort.release("prop-1", "rt-deluxe", LocalDate.of(2026, 5, 1))
+                }
+                verify(exactly = 1) {
+                    inventoryReservationPort.release("prop-1", "rt-deluxe", LocalDate.of(2026, 5, 2))
+                }
+                verify(exactly = 1) {
+                    eventPublisher.publishEvent(match<ReservationCancelled> {
+                        it.reservationId == "rsv-ota-1" &&
+                            it.propertyId == "prop-1" &&
+                            it.roomTypeId == "rt-deluxe" &&
+                            it.dateRange.checkIn == LocalDate.of(2026, 5, 1) &&
+                            it.dateRange.checkOut == LocalDate.of(2026, 5, 3)
+                    })
+                }
+            }
+        }
+
+        `when`("취소 payload에 bookingId가 없으면") {
+            then("BusinessException이 발생한다") {
+                clearAllMocks()
+                every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel
+                every { signatureVerifier.verify("AGODA", any(), "sha256=valid") } returns true
+                every { processedEventRepository.saveIfAbsent(any()) } returns true
+                every { mappingRepository.findByPropertyIdAndChannelCode("prop-1", "AGODA") } returns null
+
+                val exception = shouldThrow<BusinessException> {
+                    sut.handleWebhook(
+                        propertyId = "prop-1",
+                        channelCode = "AGODA",
+                        signature = "sha256=valid",
+                        rawBody = """{"eventId":"evt-cancel-invalid"}""",
+                        eventId = "evt-cancel-invalid",
+                        eventType = "CANCELLATION",
+                        payload = emptyMap()
+                    )
+                }
+
                 exception.code shouldBe "INVALID_WEBHOOK"
             }
         }

@@ -78,6 +78,82 @@ class RoomInventoryApplicationTest : BehaviorSpec({
 
             then("향후 91일치 재고가 생성되고 totalCount는 Room 수, blockedCount는 totalCount와 같다 (기본 마감)") {
                 verify(exactly = 91) { inventoryRepository.save(match { it.totalCount == 3 && it.blockedCount == 3 }) }
+                verify(exactly = 91) {
+                    availabilitySyncPort.requestAvailabilitySync(
+                        propertyId = "prop-1",
+                        roomTypeId = "rt-1",
+                        date = any(),
+                        availableCount = 0
+                    )
+                }
+            }
+        }
+
+        `when`("기존 재고의 totalCount가 객실 수와 다르면") {
+            then("totalCount를 보정하고 변경된 가용 재고를 채널에 동기화한다") {
+                clearAllMocks()
+                val existing = newInventory(
+                    id = "inv-existing",
+                    date = today,
+                    totalCount = 2,
+                    reservedCount = 1,
+                    blockedCount = 0
+                )
+                val rooms = listOf(
+                    Room.create("r-1", "prop-1", "rt-1", "101", 1),
+                    Room.create("r-2", "prop-1", "rt-1", "102", 1),
+                    Room.create("r-3", "prop-1", "rt-1", "103", 1)
+                )
+                every { roomRepository.findByRoomTypeId("rt-1") } returns rooms
+                every {
+                    inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween("prop-1", "rt-1", any(), any())
+                } returns listOf(existing)
+                every { inventoryRepository.save(any()) } answers { firstArg() }
+
+                inventoryApplication.syncInventoryForRoomType("prop-1", "rt-1")
+
+                verify(exactly = 1) {
+                    inventoryRepository.save(match {
+                        it.id == "inv-existing" &&
+                            it.totalCount == 3 &&
+                            it.reservedCount == 1 &&
+                            it.availableCount == 2
+                    })
+                }
+                verify(exactly = 1) {
+                    availabilitySyncPort.requestAvailabilitySync("prop-1", "rt-1", today, 2)
+                }
+            }
+        }
+
+        `when`("기존 재고의 totalCount가 이미 객실 수와 같으면") {
+            then("저장과 채널 동기화를 수행하지 않는다") {
+                clearAllMocks()
+                val existing = (0L..90L).map { offset ->
+                    newInventory(
+                        id = "inv-existing-$offset",
+                        date = today.plusDays(offset),
+                        totalCount = 3,
+                        reservedCount = 1,
+                        blockedCount = 0
+                    )
+                }
+                val rooms = listOf(
+                    Room.create("r-1", "prop-1", "rt-1", "101", 1),
+                    Room.create("r-2", "prop-1", "rt-1", "102", 1),
+                    Room.create("r-3", "prop-1", "rt-1", "103", 1)
+                )
+                every { roomRepository.findByRoomTypeId("rt-1") } returns rooms
+                every {
+                    inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween("prop-1", "rt-1", any(), any())
+                } returns existing
+
+                inventoryApplication.syncInventoryForRoomType("prop-1", "rt-1")
+
+                verify(exactly = 0) { inventoryRepository.save(any()) }
+                verify(exactly = 0) {
+                    availabilitySyncPort.requestAvailabilitySync(any(), any(), any(), any())
+                }
             }
         }
 

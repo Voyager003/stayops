@@ -15,6 +15,11 @@ interface ReservationRepository {
     fun findByPropertyIdAndDateRange(propertyId: String, startDate: LocalDate, endDate: LocalDate): List<Reservation>
     fun findByPropertyIdAndGuestId(propertyId: String, guestId: String): List<Reservation>
     fun findByPropertyIdAndChannelCode(propertyId: String, channelCode: String): List<Reservation>
+    fun findByPropertyIdAndChannelCodeAndExternalReservationId(
+        propertyId: String,
+        channelCode: String,
+        externalReservationId: String
+    ): Reservation?
     fun findByMemberId(memberId: String): List<Reservation>
     fun findPageByMemberId(memberId: String, page: Int, size: Int): PagedResult<Reservation>
     fun search(propertyId: String, criteria: ReservationSearchCriteria, page: Int, size: Int): PagedResult<Reservation>

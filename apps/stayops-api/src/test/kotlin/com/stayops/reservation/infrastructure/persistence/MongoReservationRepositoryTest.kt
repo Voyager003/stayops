@@ -41,6 +41,7 @@ class MongoReservationRepositoryTest @Autowired constructor(
         checkIn: LocalDate = LocalDate.of(2026, 4, 1),
         checkOut: LocalDate = LocalDate.of(2026, 4, 3),
         channelCode: String = "DIRECT",
+        externalReservationId: String? = null,
         commissionRate: BigDecimal = BigDecimal.ZERO,
         memberId: String? = null,
         expiresAt: Instant? = null,
@@ -54,7 +55,11 @@ class MongoReservationRepositoryTest @Autowired constructor(
         guestInfo = GuestInfo(name = "홍길동", phone = "010-1234-5678", email = "hong@test.com"),
         dateRange = DateRange.of(checkIn, checkOut),
         numberOfGuests = 2,
-        channel = ReservationChannel(channelCode = channelCode, commissionRate = commissionRate),
+        channel = ReservationChannel(
+            channelCode = channelCode,
+            externalReservationId = externalReservationId,
+            commissionRate = commissionRate
+        ),
         pricing = ReservationPricing.calculate(
             roomRate = Money.won(200_000),
             additionalCharges = Money.ZERO,
@@ -196,6 +201,68 @@ class MongoReservationRepositoryTest @Autowired constructor(
 
             assertThat(directResults).hasSize(1)
             assertThat(otaResults).hasSize(1)
+        }
+    }
+
+    @Nested
+    inner class `findByPropertyIdAndChannelCodeAndExternalReservationId` {
+        @Test
+        fun `OTA 외부 예약 ID와 일치하는 예약을 반환한다`() {
+            reservationRepository.save(
+                newReservation(
+                    id = "rsv-agoda-1",
+                    channelCode = "AGODA",
+                    externalReservationId = "agoda-booking-1",
+                    commissionRate = BigDecimal("0.15")
+                ).confirm()
+            )
+            reservationRepository.save(
+                newReservation(
+                    id = "rsv-agoda-2",
+                    channelCode = "AGODA",
+                    externalReservationId = "agoda-booking-2",
+                    commissionRate = BigDecimal("0.15")
+                ).confirm()
+            )
+            reservationRepository.save(
+                newReservation(
+                    id = "rsv-expedia-1",
+                    channelCode = "EXPEDIA",
+                    externalReservationId = "agoda-booking-1",
+                    commissionRate = BigDecimal("0.12")
+                ).confirm()
+            )
+
+            val found = reservationRepository.findByPropertyIdAndChannelCodeAndExternalReservationId(
+                propertyId = "prop-1",
+                channelCode = "AGODA",
+                externalReservationId = "agoda-booking-1"
+            )
+
+            assertThat(found).isNotNull
+            assertThat(found!!.id).isEqualTo("rsv-agoda-1")
+            assertThat(found.channel.channelCode).isEqualTo("AGODA")
+            assertThat(found.channel.externalReservationId).isEqualTo("agoda-booking-1")
+        }
+
+        @Test
+        fun `일치하는 OTA 외부 예약 ID가 없으면 null을 반환한다`() {
+            reservationRepository.save(
+                newReservation(
+                    id = "rsv-agoda-1",
+                    channelCode = "AGODA",
+                    externalReservationId = "agoda-booking-1",
+                    commissionRate = BigDecimal("0.15")
+                ).confirm()
+            )
+
+            val found = reservationRepository.findByPropertyIdAndChannelCodeAndExternalReservationId(
+                propertyId = "prop-1",
+                channelCode = "AGODA",
+                externalReservationId = "missing-booking"
+            )
+
+            assertThat(found).isNull()
         }
     }
 
