@@ -7,7 +7,7 @@ echo "==> Pulling latest images..."
 docker compose -f "$COMPOSE_FILE" pull app mock-ota
 
 echo "==> Restarting services..."
-docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+docker compose -f "$COMPOSE_FILE" up -d --remove-orphans --wait --wait-timeout 180
 
 echo "==> Validating nginx config..."
 docker compose -f "$COMPOSE_FILE" exec nginx nginx -t

@@ -445,7 +445,7 @@ main() {
 
   cd "${STACK_DIR}"
   docker compose $(compose_args) pull
-  docker compose $(compose_args) up -d
+  docker compose $(compose_args) up -d --wait --wait-timeout 180
   install_systemd_unit
 
   log "deployment completed for ${ROLE}"
