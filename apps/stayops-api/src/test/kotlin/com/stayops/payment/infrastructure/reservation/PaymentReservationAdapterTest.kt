@@ -76,6 +76,35 @@ class PaymentReservationAdapterTest : BehaviorSpec({
             }
         }
 
+        `when`("외부 채널에서 이미 승인된 결제를 생성하면") {
+            then("PG Outbox 없이 APPROVED Payment를 저장한다") {
+                val result = adapter.createApprovedExternalPayment(
+                    reservationId = "rsv-ota-1",
+                    memberId = "OTA-book-1",
+                    amount = Money.won(100_000),
+                    paymentKey = "OTA-AGODA-book-1",
+                    method = "OTA"
+                )
+
+                result.reservationId shouldBe "rsv-ota-1"
+                result.memberId shouldBe "OTA-book-1"
+                result.status shouldBe ReservationPaymentStatus.APPROVED
+                result.paymentKey shouldBe "OTA-AGODA-book-1"
+                verify {
+                    paymentRepository.save(match {
+                        it.reservationId == "rsv-ota-1" &&
+                            it.memberId == "OTA-book-1" &&
+                            it.amount == Money.won(100_000) &&
+                            it.status == PaymentStatus.APPROVED &&
+                            it.paymentKey == "OTA-AGODA-book-1" &&
+                            it.method == "OTA" &&
+                            it.approvedAt == fixedInstant
+                    })
+                }
+                verify(exactly = 0) { paymentOutboxRepository.save(any()) }
+            }
+        }
+
         `when`("결제 승인 요청을 접수하면") {
             then("Payment를 CONFIRM_REQUESTED로 변경하고 confirm Outbox를 생성한다") {
                 val payment = pendingPayment()

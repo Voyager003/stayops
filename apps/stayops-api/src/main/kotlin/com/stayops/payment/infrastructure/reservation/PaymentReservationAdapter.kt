@@ -40,6 +40,26 @@ class PaymentReservationAdapter(
             )
         ).toSnapshot()
 
+    override fun createApprovedExternalPayment(
+        reservationId: String,
+        memberId: String,
+        amount: Money,
+        paymentKey: String,
+        method: String
+    ): ReservationPaymentSnapshot =
+        paymentRepository.save(
+            Payment.create(
+                id = idGenerator.generate(),
+                reservationId = reservationId,
+                memberId = memberId,
+                amount = amount
+            ).approve(
+                paymentKey = paymentKey,
+                method = method,
+                approvedAt = clock.instant()
+            )
+        ).toSnapshot()
+
     override fun findByReservationId(reservationId: String): ReservationPaymentSnapshot? =
         paymentRepository.findByReservationId(reservationId)?.toSnapshot()
 

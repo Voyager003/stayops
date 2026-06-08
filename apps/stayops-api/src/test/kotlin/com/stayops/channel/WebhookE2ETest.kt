@@ -5,6 +5,7 @@ import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.model.SyncTaskStatus
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.inventory.application.service.RoomInventoryApplication
+import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.reservation.domain.model.ReservationStatus
@@ -163,6 +164,17 @@ class WebhookE2ETest @Autowired constructor(
             )
             assertThat(reservations).hasSize(1)
             assertThat(reservations[0].getString("status")).isEqualTo(ReservationStatus.CONFIRMED.name)
+            val reservationId = reservations[0].getString("_id")
+
+            // OTA reservations are pre-paid externally, so the PMS should keep an APPROVED payment record.
+            val payments = mongoTemplate.find(
+                Query.query(Criteria.where("reservationId").`is`(reservationId)),
+                org.bson.Document::class.java,
+                "payments"
+            )
+            assertThat(payments).hasSize(1)
+            assertThat(payments[0].getString("status")).isEqualTo(PaymentStatus.APPROVED.name)
+            assertThat(payments[0].getString("paymentKey")).isEqualTo("OTA-TEST_OTA-b-1")
 
             // Query room_inventories for the check-in date → reservedCount increased
             val inventories = mongoTemplate.find(

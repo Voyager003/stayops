@@ -9,6 +9,7 @@ import com.stayops.channel.domain.service.SignatureVerifier
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
 import com.stayops.inventory.application.port.InventoryReservationPort
+import com.stayops.reservation.application.port.ReservationPaymentPort
 import com.stayops.reservation.domain.event.ReservationCreated
 import com.stayops.reservation.domain.model.ReservationChannel
 import com.stayops.reservation.domain.model.GuestInfo
@@ -32,6 +33,7 @@ class WebhookApplication(
     private val signatureVerifier: SignatureVerifier,
     private val channelSyncApplication: ChannelSyncApplication,
     private val reservationRepository: ReservationRepository,
+    private val reservationPaymentPort: ReservationPaymentPort,
     private val inventoryReservationPort: InventoryReservationPort,
     private val guestRepository: GuestRepository,
     private val eventPublisher: ApplicationEventPublisher,
@@ -139,7 +141,7 @@ class WebhookApplication(
                 )
             )
 
-        // 3. Create reservation (PENDING) then confirm (OTA = pre-paid, no payment needed)
+        // 3. Create reservation (PENDING) then confirm (OTA = pre-paid externally)
         val bookingChannel = ReservationChannel(
             channelCode = channelCode,
             externalReservationId = bookingId,
@@ -167,7 +169,16 @@ class WebhookApplication(
 
         val saved = reservationRepository.save(reservation)
 
-        // 4. Publish event for ARI sync to other channels
+        // 4. Record OTA payment as already approved without creating a PG outbox
+        reservationPaymentPort.createApprovedExternalPayment(
+            reservationId = saved.id,
+            memberId = "OTA-$bookingId",
+            amount = pricing.totalAmount,
+            paymentKey = "OTA-$channelCode-$bookingId",
+            method = "OTA"
+        )
+
+        // 5. Publish event for ARI sync to other channels
         eventPublisher.publishEvent(
             ReservationCreated(
                 reservationId = saved.id,

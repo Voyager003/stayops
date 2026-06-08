@@ -8,11 +8,13 @@ import com.stayops.channel.domain.service.SignatureVerifier
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
 import com.stayops.inventory.application.port.InventoryReservationPort
+import com.stayops.reservation.application.port.ReservationPaymentPort
 import com.stayops.reservation.domain.event.ReservationCreated
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.shared.domain.IdGenerator
+import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.BusinessException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -30,6 +32,7 @@ class WebhookApplicationTest : BehaviorSpec({
     val signatureVerifier = mockk<SignatureVerifier>()
     val channelSyncApplication = mockk<ChannelSyncApplication>()
     val reservationRepository = mockk<ReservationRepository>()
+    val reservationPaymentPort = mockk<ReservationPaymentPort>()
     val inventoryReservationPort = mockk<InventoryReservationPort>()
     val guestRepository = mockk<GuestRepository>()
     val eventPublisher = mockk<ApplicationEventPublisher>()
@@ -45,6 +48,7 @@ class WebhookApplicationTest : BehaviorSpec({
         signatureVerifier = signatureVerifier,
         channelSyncApplication = channelSyncApplication,
         reservationRepository = reservationRepository,
+        reservationPaymentPort = reservationPaymentPort,
         inventoryReservationPort = inventoryReservationPort,
         guestRepository = guestRepository,
         eventPublisher = eventPublisher,
@@ -69,6 +73,7 @@ class WebhookApplicationTest : BehaviorSpec({
                 every { signatureVerifier.verify("AGODA", any(), "sha256=valid") } returns true
                 every { processedEventRepository.saveIfAbsent(any()) } returns true
                 every { mappingRepository.findByPropertyIdAndChannelCode("prop-1", "AGODA") } returns null
+                every { roomTypeRepository.findById("rt-deluxe") } returns null
                 justRun { inventoryReservationPort.reserve("prop-1", "rt-deluxe", any()) }
                 every { guestRepository.findByPropertyIdAndPhone("prop-1", "OTA-book-1") } returns null
                 every { guestRepository.save(any()) } answers {
@@ -77,6 +82,15 @@ class WebhookApplicationTest : BehaviorSpec({
                 }
                 val savedSlot = slot<Reservation>()
                 every { reservationRepository.save(capture(savedSlot)) } answers { firstArg() }
+                every {
+                    reservationPaymentPort.createApprovedExternalPayment(
+                        reservationId = "test-id",
+                        memberId = "OTA-book-1",
+                        amount = Money.ZERO,
+                        paymentKey = "OTA-AGODA-book-1",
+                        method = "OTA"
+                    )
+                } returns mockk(relaxed = true)
                 every { eventPublisher.publishEvent(any<ReservationCreated>()) } just Runs
 
                 sut.handleWebhook(
@@ -114,6 +128,17 @@ class WebhookApplicationTest : BehaviorSpec({
                 savedSlot.captured.dateRange.checkIn shouldBe LocalDate.of(2026, 5, 1)
                 savedSlot.captured.dateRange.checkOut shouldBe LocalDate.of(2026, 5, 3)
 
+                // Verify OTA reservation is represented as an already-approved external payment
+                verify(exactly = 1) {
+                    reservationPaymentPort.createApprovedExternalPayment(
+                        reservationId = "test-id",
+                        memberId = "OTA-book-1",
+                        amount = Money.ZERO,
+                        paymentKey = "OTA-AGODA-book-1",
+                        method = "OTA"
+                    )
+                }
+
                 // Verify event published
                 verify(exactly = 1) {
                     eventPublisher.publishEvent(match<ReservationCreated> {
@@ -135,11 +160,15 @@ class WebhookApplicationTest : BehaviorSpec({
                 every { signatureVerifier.verify("AGODA", any(), "sha256=valid") } returns true
                 every { processedEventRepository.saveIfAbsent(any()) } returns true
                 every { mappingRepository.findByPropertyIdAndChannelCode("prop-1", "AGODA") } returns mapping
+                every { roomTypeRepository.findById("internal-rt-1") } returns null
                 justRun { inventoryReservationPort.reserve("prop-1", "internal-rt-1", any()) }
                 every { guestRepository.findByPropertyIdAndPhone("prop-1", "OTA-book-2") } returns null
                 every { guestRepository.save(any()) } answers { firstArg() }
                 val savedSlot = slot<Reservation>()
                 every { reservationRepository.save(capture(savedSlot)) } answers { firstArg() }
+                every {
+                    reservationPaymentPort.createApprovedExternalPayment(any(), any(), any(), any(), any())
+                } returns mockk(relaxed = true)
                 every { eventPublisher.publishEvent(any<ReservationCreated>()) } just Runs
 
                 sut.handleWebhook(
@@ -206,6 +235,7 @@ class WebhookApplicationTest : BehaviorSpec({
 
                 verify(exactly = 0) { mappingRepository.findByPropertyIdAndChannelCode(any(), any()) }
                 verify(exactly = 0) { reservationRepository.save(any()) }
+                verify(exactly = 0) { reservationPaymentPort.createApprovedExternalPayment(any(), any(), any(), any(), any()) }
             }
         }
     }

@@ -10,6 +10,14 @@ interface ReservationPaymentPort {
         amount: Money
     ): ReservationPaymentSnapshot
 
+    fun createApprovedExternalPayment(
+        reservationId: String,
+        memberId: String,
+        amount: Money,
+        paymentKey: String,
+        method: String
+    ): ReservationPaymentSnapshot
+
     fun findByReservationId(reservationId: String): ReservationPaymentSnapshot?
 
     fun findByReservationIds(reservationIds: List<String>): List<ReservationPaymentSnapshot>
