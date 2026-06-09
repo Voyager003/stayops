@@ -213,7 +213,7 @@ stateDiagram-v2
 
 직접 예약과 OTA 예약의 흐름을 분리해, 예약이 언제 재고를 점유하는지, 결제 상태가 언제 변경되는지, 외부 채널 예약을 언제 확정으로 볼 것인지를 명확하게 다룰 수 있도록 설계했습니다.
 
-도메인 경계에 대한 맥락을 [도메인 기능 카탈로그](./docs/context/domain-model/02-domain-model-function-catalog.md), [도메인 진단 기록](./docs/context/domain-model/03-domain-dia gnosis.md), [결제 Outbox 설계](./docs/context/domain-model/blog-payment-outbox-refactoring.md)에 문서로 담았습니다.
+도메인 경계에 대한 맥락을 [도메인 기능 카탈로그](./docs/context/domain-model/02-domain-model-function-catalog.md), [도메인 진단 기록](./docs/context/domain-model/03-domain-diagnosis.md), [결제 Outbox 설계](./docs/context/domain-model/blog-payment-outbox-refactoring.md)에 문서로 담았습니다.
 
 ---
 
