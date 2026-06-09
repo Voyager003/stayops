@@ -371,6 +371,20 @@ compose_args() {
   done
 }
 
+reload_nginx_if_present() {
+  if ! docker compose $(compose_args) config --services | grep -qx 'nginx'; then
+    return 0
+  fi
+
+  log "reloading nginx after compose update"
+  if docker compose $(compose_args) exec -T nginx nginx -s reload; then
+    return 0
+  fi
+
+  log "nginx reload failed; restarting nginx"
+  docker compose $(compose_args) restart nginx
+}
+
 install_systemd_unit() {
   local wrapper="/usr/local/bin/stayops-${ROLE}-compose"
   local unit="/etc/systemd/system/stayops-${ROLE}.service"
@@ -446,6 +460,7 @@ main() {
   cd "${STACK_DIR}"
   docker compose $(compose_args) pull
   docker compose $(compose_args) up -d --wait --wait-timeout 180
+  reload_nginx_if_present
   install_systemd_unit
 
   log "deployment completed for ${ROLE}"
