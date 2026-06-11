@@ -2,7 +2,16 @@ package com.stayops.room.api.dto
 
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomStatus
+import jakarta.validation.constraints.Min
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.NotNull
 import java.time.Instant
+
+data class CreateRoomRequest(
+    @field:NotBlank val roomTypeId: String,
+    @field:NotBlank val roomNumber: String,
+    @field:Min(1) val floor: Int
+)
 
 data class RoomResponse(
     val id: String,
@@ -28,4 +37,12 @@ data class RoomResponse(
             updatedAt = room.updatedAt
         )
     }
+}
+
+data class UpdateRoomStatusRequest(
+    @field:NotNull val action: RoomStatusAction
+)
+
+enum class RoomStatusAction {
+    CHECK_IN, CHECK_OUT, COMPLETE_CLEANING, START_MAINTENANCE, COMPLETE_MAINTENANCE
 }
