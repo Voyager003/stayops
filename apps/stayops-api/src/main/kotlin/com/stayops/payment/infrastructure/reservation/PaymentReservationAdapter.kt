@@ -81,7 +81,7 @@ class PaymentReservationAdapter(
         validateConfirmRequest(payment, orderId, amount)
 
         val requestedPayment = payment.requestConfirm(paymentKey)
-        val savedPayment = if (requestedPayment == payment) {
+        val savedPayment = if (requestedPayment === payment) {
             payment
         } else {
             paymentRepository.save(requestedPayment)
@@ -122,7 +122,7 @@ class PaymentReservationAdapter(
         validatePaymentOwner(payment, memberId)
 
         val requestedPayment = payment.requestCancel()
-        val savedPayment = if (requestedPayment == payment) {
+        val savedPayment = if (requestedPayment === payment) {
             payment
         } else {
             paymentRepository.save(requestedPayment)

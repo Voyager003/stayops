@@ -129,7 +129,7 @@ class PaymentWebhookApplication(
         }
 
         val requestedPayment = payment.requestConfirm(paymentKey)
-        val savedPayment = if (requestedPayment == payment) {
+        val savedPayment = if (requestedPayment === payment) {
             payment
         } else {
             paymentRepository.save(requestedPayment)

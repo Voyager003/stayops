@@ -3,8 +3,7 @@ package com.stayops.payment.domain.model
 import com.stayops.shared.domain.Money
 import java.time.Instant
 
-@ConsistentCopyVisibility
-data class Payment private constructor(
+class Payment private constructor(
     val id: String,
     val reservationId: String,
     val memberId: String,
@@ -34,11 +33,10 @@ data class Payment private constructor(
             "PENDING 상태에서만 승인 요청할 수 있습니다: $status"
         }
 
-        return copy(
+        return copyState(
             status = PaymentStatus.CONFIRM_REQUESTED,
             paymentKey = paymentKey,
-            failReason = null,
-            updatedAt = Instant.now()
+            failReason = null
         )
     }
 
@@ -50,12 +48,11 @@ data class Payment private constructor(
         check(this.paymentKey == null || this.paymentKey == paymentKey) {
             "승인 요청 paymentKey와 승인 결과 paymentKey가 다릅니다: ${this.paymentKey}, $paymentKey"
         }
-        return copy(
+        return copyState(
             status = PaymentStatus.APPROVED,
             paymentKey = paymentKey,
             method = method,
-            approvedAt = approvedAt,
-            updatedAt = Instant.now()
+            approvedAt = approvedAt
         )
     }
 
@@ -63,10 +60,9 @@ data class Payment private constructor(
         check(status == PaymentStatus.PENDING || status == PaymentStatus.CONFIRM_REQUESTED) {
             "PENDING 또는 CONFIRM_REQUESTED 상태에서만 실패 처리할 수 있습니다: $status"
         }
-        return copy(
+        return copyState(
             status = PaymentStatus.FAILED,
-            failReason = reason,
-            updatedAt = Instant.now()
+            failReason = reason
         )
     }
 
@@ -82,10 +78,9 @@ data class Payment private constructor(
             "paymentKey가 있어야 취소 요청할 수 있습니다"
         }
 
-        return copy(
+        return copyState(
             status = PaymentStatus.CANCEL_REQUESTED,
-            failReason = null,
-            updatedAt = Instant.now()
+            failReason = null
         )
     }
 
@@ -93,22 +88,54 @@ data class Payment private constructor(
         check(status == PaymentStatus.APPROVED || status == PaymentStatus.CANCEL_REQUESTED) {
             "APPROVED 또는 CANCEL_REQUESTED 상태에서만 취소할 수 있습니다: $status"
         }
-        return copy(
-            status = PaymentStatus.CANCELLED,
-            updatedAt = Instant.now()
-        )
+        return copyState(status = PaymentStatus.CANCELLED)
     }
 
     fun failCancel(reason: String): Payment {
         check(status == PaymentStatus.APPROVED || status == PaymentStatus.CANCEL_REQUESTED) {
             "APPROVED 또는 CANCEL_REQUESTED 상태에서만 환불 실패 처리할 수 있습니다: $status"
         }
-        return copy(
+        return copyState(
             status = PaymentStatus.CANCEL_FAILED,
-            failReason = reason,
-            updatedAt = Instant.now()
+            failReason = reason
         )
     }
+
+    private fun copyState(
+        status: PaymentStatus = this.status,
+        paymentKey: String? = this.paymentKey,
+        method: String? = this.method,
+        failReason: String? = this.failReason,
+        approvedAt: Instant? = this.approvedAt,
+        updatedAt: Instant = Instant.now()
+    ): Payment = Payment(
+        id = id,
+        reservationId = reservationId,
+        memberId = memberId,
+        orderId = orderId,
+        amount = amount,
+        status = status,
+        paymentKey = paymentKey,
+        method = method,
+        failReason = failReason,
+        approvedAt = approvedAt,
+        version = version,
+        createdAt = createdAt,
+        updatedAt = updatedAt
+    )
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as Payment
+
+        return id == other.id
+    }
+
+    override fun hashCode(): Int = 31 * javaClass.hashCode() + id.hashCode()
+
+    override fun toString(): String = "Payment(id=$id, status=$status, orderId=$orderId)"
 
     companion object {
         fun create(

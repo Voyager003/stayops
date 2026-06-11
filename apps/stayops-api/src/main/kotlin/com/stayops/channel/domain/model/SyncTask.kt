@@ -4,8 +4,7 @@ import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 
-@ConsistentCopyVisibility
-data class SyncTask private constructor(
+class SyncTask private constructor(
     val id: String,
     val propertyId: String,
     val channelCode: String,
@@ -40,7 +39,7 @@ data class SyncTask private constructor(
         check(canStartPending || canReclaimExpiredLease) {
             "처리 가능한 SyncTask 상태가 아닙니다: status=$status, nextRetryAt=$nextRetryAt, lockedUntil=${this.lockedUntil}"
         }
-        return copy(
+        return copyState(
             status = SyncTaskStatus.IN_PROGRESS,
             lockedBy = workerId,
             lockedUntil = lockedUntil,
@@ -52,7 +51,7 @@ data class SyncTask private constructor(
         check(status == SyncTaskStatus.IN_PROGRESS) {
             "IN_PROGRESS 상태에서만 완료할 수 있습니다: $status"
         }
-        return copy(
+        return copyState(
             status = SyncTaskStatus.COMPLETED,
             nextRetryAt = null,
             lockedBy = null,
@@ -65,7 +64,7 @@ data class SyncTask private constructor(
         check(status == SyncTaskStatus.IN_PROGRESS) {
             "IN_PROGRESS 상태에서만 건너뛸 수 있습니다: $status"
         }
-        return copy(
+        return copyState(
             status = SyncTaskStatus.SKIPPED,
             lastError = reason,
             nextRetryAt = null,
@@ -82,7 +81,7 @@ data class SyncTask private constructor(
         val newRetryCount = retryCount + 1
         val reachedMax = newRetryCount >= maxRetries
 
-        return copy(
+        return copyState(
             status = if (reachedMax) SyncTaskStatus.FAILED else SyncTaskStatus.PENDING,
             retryCount = newRetryCount,
             nextRetryAt = if (reachedMax) null else now + backoffDelay(newRetryCount),
@@ -97,7 +96,7 @@ data class SyncTask private constructor(
         check(status == SyncTaskStatus.FAILED) {
             "FAILED 상태에서만 수동 재시도할 수 있습니다: $status"
         }
-        return copy(
+        return copyState(
             status = SyncTaskStatus.PENDING,
             retryCount = 0,
             nextRetryAt = null,
@@ -107,6 +106,47 @@ data class SyncTask private constructor(
             updatedAt = now
         )
     }
+
+    private fun copyState(
+        status: SyncTaskStatus = this.status,
+        retryCount: Int = this.retryCount,
+        nextRetryAt: Instant? = this.nextRetryAt,
+        lockedBy: String? = this.lockedBy,
+        lockedUntil: Instant? = this.lockedUntil,
+        lastError: String? = this.lastError,
+        updatedAt: Instant = Instant.now()
+    ): SyncTask = SyncTask(
+        id = id,
+        propertyId = propertyId,
+        channelCode = channelCode,
+        type = type,
+        payload = payload,
+        idempotencyKey = idempotencyKey,
+        status = status,
+        retryCount = retryCount,
+        maxRetries = maxRetries,
+        nextRetryAt = nextRetryAt,
+        lockedBy = lockedBy,
+        lockedUntil = lockedUntil,
+        lastError = lastError,
+        version = version,
+        createdAt = createdAt,
+        updatedAt = updatedAt
+    )
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as SyncTask
+
+        return id == other.id
+    }
+
+    override fun hashCode(): Int = 31 * javaClass.hashCode() + id.hashCode()
+
+    override fun toString(): String =
+        "SyncTask(id=$id, type=$type, status=$status, propertyId=$propertyId, channelCode=$channelCode)"
 
     companion object {
         private const val BASE_DELAY_SECONDS = 30L

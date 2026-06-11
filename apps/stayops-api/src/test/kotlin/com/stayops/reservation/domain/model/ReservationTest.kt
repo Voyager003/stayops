@@ -5,6 +5,7 @@ import com.stayops.shared.domain.Money
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
@@ -151,6 +152,48 @@ class ReservationTest : BehaviorSpec({
                         pricing = directPricing()
                     )
                 }
+            }
+        }
+    }
+
+    given("Reservation 동일성 비교 시") {
+        `when`("같은 id의 예약이 서로 다른 상태를 가지면") {
+            val pending = pendingReservation()
+            val confirmed = pending.confirm()
+
+            then("같은 예약으로 판단한다") {
+                confirmed shouldBe pending
+                confirmed.hashCode() shouldBe pending.hashCode()
+            }
+        }
+
+        `when`("id가 다르면 나머지 값이 같아도") {
+            val first = pendingReservation()
+            val second = Reservation.create(
+                id = "rsv-2",
+                propertyId = first.propertyId,
+                roomTypeId = first.roomTypeId,
+                guestId = first.guestId,
+                guestInfo = first.guestInfo,
+                dateRange = first.dateRange,
+                numberOfGuests = first.numberOfGuests,
+                channel = first.channel,
+                pricing = first.pricing,
+                memberId = first.memberId,
+                expiresAt = first.expiresAt
+            )
+
+            then("다른 예약으로 판단한다") {
+                second shouldNotBe first
+            }
+        }
+
+        `when`("HashSet에 같은 id의 다른 상태 예약을 넣으면") {
+            val reservations = hashSetOf(pendingReservation())
+            reservations += pendingReservation().confirm()
+
+            then("중복 추가되지 않는다") {
+                reservations.size shouldBe 1
             }
         }
     }
