@@ -6,23 +6,6 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import java.time.LocalDate
 
-data class CreateBookingDraftRequest(
-    @field:NotBlank
-    val propertyId: String,
-
-    @field:NotBlank
-    val roomTypeId: String,
-
-    @field:NotNull
-    val checkIn: LocalDate,
-
-    @field:NotNull
-    val checkOut: LocalDate,
-
-    @field:Min(1)
-    val guests: Int
-)
-
 data class BookingDraftResponse(
     val draftId: String,
     val propertyId: String,
@@ -43,3 +26,20 @@ data class BookingDraftResponse(
             )
     }
 }
+
+data class CreateBookingDraftRequest(
+    @field:NotBlank
+    val propertyId: String,
+
+    @field:NotBlank
+    val roomTypeId: String,
+
+    @field:NotNull
+    val checkIn: LocalDate,
+
+    @field:NotNull
+    val checkOut: LocalDate,
+
+    @field:Min(1)
+    val guests: Int
+)

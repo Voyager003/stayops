@@ -6,6 +6,31 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
+data class CheckInRequest(
+    val roomId: String
+)
+
+data class CreateReservationRequest(
+    val roomTypeId: String,
+    val checkIn: LocalDate,
+    val checkOut: LocalDate,
+    val numberOfGuests: Int,
+    val guestId: String,
+    val guestName: String,
+    val guestPhone: String,
+    val guestEmail: String? = null,
+    val channelCode: String,
+    val externalReservationId: String? = null
+)
+
+data class PagedReservationResponse(
+    val content: List<ReservationResponse>,
+    val totalElements: Long,
+    val page: Int,
+    val size: Int,
+    val totalPages: Int
+)
+
 data class ReservationResponse(
     val id: String,
     val propertyId: String,
