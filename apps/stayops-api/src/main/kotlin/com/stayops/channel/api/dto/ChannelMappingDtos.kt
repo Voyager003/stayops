@@ -1,8 +1,8 @@
 package com.stayops.channel.api.dto
 
 import com.stayops.channel.domain.model.ChannelMapping
-import com.stayops.channel.domain.model.MappingEntry
 import com.stayops.channel.domain.model.MappingType
+import jakarta.validation.constraints.NotBlank
 
 data class ChannelMappingResponse(
     val propertyId: String,
@@ -25,3 +25,11 @@ data class ChannelMappingResponse(
         )
     }
 }
+
+data class CreateMappingRequest(
+    @field:NotBlank
+    val internalId: String,
+    @field:NotBlank
+    val externalCode: String,
+    val type: MappingType = MappingType.ROOM_TYPE
+)

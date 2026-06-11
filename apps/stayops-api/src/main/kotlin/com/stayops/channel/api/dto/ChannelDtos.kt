@@ -3,6 +3,9 @@ package com.stayops.channel.api.dto
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.model.ChannelStatus
 import com.stayops.channel.domain.model.ChannelType
+import com.stayops.channel.domain.service.MockOtaRandomBookingResult
+import jakarta.validation.constraints.DecimalMin
+import jakarta.validation.constraints.NotBlank
 import java.math.BigDecimal
 import java.time.Instant
 
@@ -33,3 +36,36 @@ data class ChannelResponse(
         )
     }
 }
+
+data class CreateChannelRequest(
+    @field:NotBlank
+    val code: String,
+    @field:NotBlank
+    val name: String,
+    @field:DecimalMin("0.01")
+    val commissionRate: BigDecimal
+)
+
+data class RandomBookingSimulationResponse(
+    val status: String,
+    val bookingId: String,
+    val roomTypeId: String,
+    val date: String,
+    val guestName: String
+) {
+    companion object {
+        fun from(result: MockOtaRandomBookingResult) = RandomBookingSimulationResponse(
+            status = result.status,
+            bookingId = result.bookingId,
+            roomTypeId = result.roomTypeId,
+            date = result.date,
+            guestName = result.guestName
+        )
+    }
+}
+
+data class UpdateChannelRequest(
+    val name: String? = null,
+    @field:DecimalMin("0.01")
+    val commissionRate: BigDecimal? = null
+)
