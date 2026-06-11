@@ -1,10 +1,19 @@
-package com.stayops.member.api.dto
+package com.stayops.member.api.customer.dto
 
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 
-data class SignupRequest(
+data class CustomerLoginRequest(
+    @field:Email
+    @field:NotBlank
+    val email: String,
+
+    @field:NotBlank
+    val password: String
+)
+
+data class CustomerSignupRequest(
     @field:Email
     @field:NotBlank
     val email: String,
