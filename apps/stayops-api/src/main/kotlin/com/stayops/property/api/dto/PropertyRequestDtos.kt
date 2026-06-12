@@ -1,5 +1,6 @@
 package com.stayops.property.api.dto
 
+import com.stayops.shared.time.TimeZonePolicy
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
@@ -11,7 +12,7 @@ data class CreatePropertyRequest(
     @field:Valid val address: AddressRequest,
     @field:Valid val contactInfo: ContactInfoRequest,
     @field:NotBlank val description: String,
-    val timezone: String = "Asia/Seoul",
+    val timezone: String = TimeZonePolicy.DEFAULT_ZONE_ID,
     val currency: String = "KRW"
 ) {
     data class AddressRequest(

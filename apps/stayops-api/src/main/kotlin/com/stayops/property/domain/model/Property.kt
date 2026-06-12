@@ -1,5 +1,6 @@
 package com.stayops.property.domain.model
 
+import com.stayops.shared.time.TimeZonePolicy
 import java.time.Instant
 
 class Property private constructor(
@@ -103,10 +104,11 @@ class Property private constructor(
             address: Address,
             contactInfo: ContactInfo,
             description: String,
-            timezone: String = "Asia/Seoul",
+            timezone: String = TimeZonePolicy.DEFAULT_ZONE_ID,
             currency: String = "KRW"
         ): Property {
             require(name.isNotBlank()) { "숙소명은 비어있을 수 없습니다" }
+            TimeZonePolicy.toZoneId(timezone)
             val now = Instant.now()
             return Property(
                 id = id,

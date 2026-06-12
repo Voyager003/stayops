@@ -34,6 +34,8 @@ ota:
     read-timeout: 10s
 
 stayops:
+  time:
+    default-zone-id: ${STAYOPS_TIME_DEFAULT_ZONE_ID:UTC}
   mongodb:
     timeout:
       server-selection-timeout: 5s

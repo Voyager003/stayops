@@ -14,6 +14,7 @@ import com.stayops.property.domain.model.PropertyType
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.NotFoundException
+import com.stayops.shared.time.TimeZonePolicy
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -66,7 +67,7 @@ class PropertyOnboardingApplication(
         address: Address,
         contactInfo: ContactInfo,
         description: String,
-        timezone: String = "Asia/Seoul",
+        timezone: String = TimeZonePolicy.DEFAULT_ZONE_ID,
         currency: String = "KRW"
     ): PropertyOnboardingResult {
         val owner = memberRepository.findById(ownerId)

@@ -51,6 +51,22 @@ class PropertyTest : BehaviorSpec({
                 }
             }
         }
+        `when`("지원하지 않는 timezone이면") {
+            then("예외가 발생한다") {
+                shouldThrow<java.time.DateTimeException> {
+                    Property.create(
+                        id = "prop-1",
+                        ownerId = "owner-1",
+                        name = "해운대 펜션",
+                        type = PropertyType.PENSION,
+                        address = sampleAddress(),
+                        contactInfo = sampleContactInfo(),
+                        description = "설명",
+                        timezone = "Invalid/Zone"
+                    )
+                }
+            }
+        }
     }
 
     given("INACTIVE 상태의 숙소") {

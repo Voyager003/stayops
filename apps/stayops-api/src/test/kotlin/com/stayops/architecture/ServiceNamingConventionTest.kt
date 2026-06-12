@@ -8,6 +8,34 @@ import kotlin.test.assertTrue
 class ServiceNamingConventionTest {
 
     @Test
+    fun should_not_hardcode_korea_timezone_in_main_sources() {
+        val mainRoots = listOf(
+            Path.of("src/main/kotlin"),
+            Path.of("src/main/resources")
+        )
+
+        val hardcodedTimezoneReferences = mainRoots.flatMap { root ->
+            Files.walk(root).use { paths ->
+                paths
+                    .filter { Files.isRegularFile(it) }
+                    .filter { path ->
+                        path.fileName.toString().endsWith(".kt") ||
+                            path.fileName.toString().endsWith(".yml") ||
+                            path.fileName.toString().endsWith(".yaml")
+                    }
+                    .filter { path -> Files.readString(path).contains("Asia/Seoul") }
+                    .map { root.relativize(it).toString() }
+                    .toList()
+            }
+        }
+
+        assertTrue(
+            actual = hardcodedTimezoneReferences.isEmpty(),
+            message = "Production code must use the central timezone policy or property timezone, not Asia/Seoul literals: $hardcodedTimezoneReferences"
+        )
+    }
+
+    @Test
     fun should_name_application_facades_as_application_and_domain_services_as_service() {
         val sourceRoot = Path.of("src/main/kotlin/com/stayops")
 
