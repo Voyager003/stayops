@@ -9,7 +9,6 @@ import com.stayops.rate.domain.service.RateResolverService
 import com.stayops.reservation.application.port.ReservationPaymentPort
 import com.stayops.reservation.application.port.ReservationPaymentStatus
 import com.stayops.reservation.domain.event.ReservationCancelled
-import com.stayops.reservation.domain.event.ReservationCheckedOut
 import com.stayops.reservation.domain.event.ReservationCreated
 import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.Reservation
@@ -18,8 +17,6 @@ import com.stayops.reservation.domain.model.ReservationPricing
 import com.stayops.reservation.domain.model.ReservationSearchCriteria
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
-import com.stayops.room.domain.model.RoomStatus
-import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.IdGenerator
@@ -31,7 +28,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.Clock
 import java.time.LocalDate
 
 @Service
@@ -42,13 +38,11 @@ class ReservationApplication(
     private val ratePlanRepository: RatePlanRepository,
     private val guestRepository: GuestRepository,
     private val inventoryReservationPort: InventoryReservationPort,
-    private val roomRepository: RoomRepository,
     private val eventPublisher: ApplicationEventPublisher,
     private val rateResolverService: RateResolverService,
     private val reservationPaymentPort: ReservationPaymentPort,
     private val reservationCancellationPolicy: ReservationCancellationPolicy,
-    private val idGenerator: IdGenerator,
-    private val clock: Clock
+    private val idGenerator: IdGenerator
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -209,65 +203,4 @@ class ReservationApplication(
         }
     }
 
-    @Transactional
-    fun checkInReservation(propertyId: String, reservationId: String, roomId: String): Reservation {
-        val reservation = getReservation(propertyId, reservationId)
-        requireArrivalDateToday(reservation, "CHECK_IN_NOT_ALLOWED_DATE", "체크인 당일에만 체크인할 수 있습니다.")
-
-        val room = roomRepository.findById(roomId)
-            ?: throw NotFoundException("ROOM_NOT_FOUND", "객실을 찾을 수 없습니다: $roomId")
-        check(room.status == RoomStatus.AVAILABLE) {
-            "AVAILABLE 상태의 객실만 배정할 수 있습니다: ${room.status}"
-        }
-
-        roomRepository.save(room.checkIn())
-        val checkedIn = reservation.checkIn(roomId)
-        val saved = reservationRepository.save(checkedIn)
-
-        log.info("체크인: reservationId={}, roomId={}", saved.id, roomId)
-        return saved
-    }
-
-    @Transactional
-    fun checkOutReservation(propertyId: String, reservationId: String): Reservation {
-        val reservation = getReservation(propertyId, reservationId)
-        val checkedOut = reservation.checkOut()
-        val saved = reservationRepository.save(checkedOut)
-
-        if (reservation.roomId != null) {
-            val room = roomRepository.findById(reservation.roomId!!)
-            if (room != null) {
-                roomRepository.save(room.checkOut())
-            }
-        }
-
-        eventPublisher.publishEvent(
-            ReservationCheckedOut(
-                reservationId = saved.id,
-                propertyId = reservation.propertyId,
-                guestId = reservation.guestId,
-                totalAmount = reservation.pricing.totalAmount,
-                stayNights = reservation.nightCount.toLong()
-            )
-        )
-
-        log.info("체크아웃: reservationId={}", saved.id)
-        return saved
-    }
-
-    fun noShowReservation(propertyId: String, reservationId: String): Reservation {
-        val reservation = getReservation(propertyId, reservationId)
-        requireArrivalDateToday(reservation, "NO_SHOW_NOT_ALLOWED_DATE", "체크인 당일에만 노쇼 처리할 수 있습니다.")
-        return reservationRepository.save(reservation.noShow())
-    }
-
-    private fun requireArrivalDateToday(reservation: Reservation, code: String, message: String) {
-        val today = LocalDate.now(clock)
-        if (reservation.dateRange.checkIn != today) {
-            throw BusinessException(
-                code = code,
-                message = "$message checkIn=${reservation.dateRange.checkIn}, today=$today"
-            )
-        }
-    }
 }

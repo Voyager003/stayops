@@ -5,6 +5,7 @@ import com.stayops.reservation.api.dto.CreateReservationRequest
 import com.stayops.reservation.api.dto.PagedReservationResponse
 import com.stayops.reservation.api.dto.ReservationResponse
 import com.stayops.reservation.application.service.ReservationApplication
+import com.stayops.reservation.application.service.StayOperationApplication
 import com.stayops.reservation.domain.model.DateType
 import com.stayops.reservation.domain.model.ReservationSearchCriteria
 import com.stayops.reservation.domain.model.ReservationStatus
@@ -26,6 +27,7 @@ import java.time.LocalDate
 @RequestMapping("/api/v1/properties/{propertyId}/reservations")
 class ReservationApi(
     private val reservationApplication: ReservationApplication,
+    private val stayOperationApplication: StayOperationApplication,
     private val memberAccessApplication: MemberAccessApplication
 ) {
 
@@ -127,7 +129,7 @@ class ReservationApi(
         @AuthenticationPrincipal member: Member?
     ): ResponseEntity<ReservationResponse> {
         memberAccessApplication.requirePropertyAccess(member, propertyId)
-        val reservation = reservationApplication.checkInReservation(propertyId, reservationId, request.roomId)
+        val reservation = stayOperationApplication.checkInReservation(propertyId, reservationId, request.roomId)
         return ResponseEntity.ok(ReservationResponse.from(reservation))
     }
 
@@ -138,7 +140,7 @@ class ReservationApi(
         @AuthenticationPrincipal member: Member?
     ): ResponseEntity<ReservationResponse> {
         memberAccessApplication.requirePropertyAccess(member, propertyId)
-        val reservation = reservationApplication.checkOutReservation(propertyId, reservationId)
+        val reservation = stayOperationApplication.checkOutReservation(propertyId, reservationId)
         return ResponseEntity.ok(ReservationResponse.from(reservation))
     }
 
@@ -149,7 +151,7 @@ class ReservationApi(
         @AuthenticationPrincipal member: Member?
     ): ResponseEntity<ReservationResponse> {
         memberAccessApplication.requirePropertyAccess(member, propertyId)
-        val reservation = reservationApplication.noShowReservation(propertyId, reservationId)
+        val reservation = stayOperationApplication.noShowReservation(propertyId, reservationId)
         return ResponseEntity.ok(ReservationResponse.from(reservation))
     }
 }
