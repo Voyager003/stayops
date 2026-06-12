@@ -14,14 +14,12 @@ import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationChannel
 import com.stayops.reservation.domain.model.ReservationPricing
-import com.stayops.reservation.domain.model.ReservationSearchCriteria
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
-import com.stayops.shared.domain.PagedResult
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
@@ -125,33 +123,6 @@ class ReservationApplication(
         return saved
     }
 
-    fun getReservation(propertyId: String, reservationId: String): Reservation {
-        val reservation = reservationRepository.findById(reservationId)
-            ?: throw NotFoundException("RESERVATION_NOT_FOUND", "예약을 찾을 수 없습니다: $reservationId")
-        require(reservation.propertyId == propertyId) { "예약이 해당 숙소에 속하지 않습니다." }
-        return reservation
-    }
-
-    fun getReservations(propertyId: String): List<Reservation> =
-        reservationRepository.findByPropertyId(propertyId)
-
-    fun getReservationsByStatus(propertyId: String, status: ReservationStatus): List<Reservation> =
-        reservationRepository.findByPropertyIdAndStatus(propertyId, status)
-
-    fun searchReservations(
-        propertyId: String,
-        criteria: ReservationSearchCriteria,
-        page: Int,
-        size: Int
-    ): PagedResult<Reservation> = reservationRepository.search(propertyId, criteria, page, size)
-
-    fun searchReservationsByPropertyIds(
-        propertyIds: List<String>,
-        criteria: ReservationSearchCriteria,
-        page: Int,
-        size: Int
-    ): PagedResult<Reservation> = reservationRepository.searchByPropertyIds(propertyIds, criteria, page, size)
-
     fun confirmReservation(propertyId: String, reservationId: String): Reservation {
         val reservation = getReservation(propertyId, reservationId)
         requireApprovedPaymentForCustomerReservation(reservation)
@@ -203,4 +174,10 @@ class ReservationApplication(
         }
     }
 
+    private fun getReservation(propertyId: String, reservationId: String): Reservation {
+        val reservation = reservationRepository.findById(reservationId)
+            ?: throw NotFoundException("RESERVATION_NOT_FOUND", "예약을 찾을 수 없습니다: $reservationId")
+        require(reservation.propertyId == propertyId) { "예약이 해당 숙소에 속하지 않습니다." }
+        return reservation
+    }
 }

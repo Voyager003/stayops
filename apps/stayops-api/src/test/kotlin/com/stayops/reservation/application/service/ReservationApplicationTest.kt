@@ -12,11 +12,8 @@ import com.stayops.rate.domain.service.RateResolverService
 import com.stayops.reservation.application.port.ReservationPaymentPort
 import com.stayops.reservation.application.port.ReservationPaymentSnapshot
 import com.stayops.reservation.application.port.ReservationPaymentStatus
-import com.stayops.reservation.domain.model.DateType
-import com.stayops.reservation.domain.model.ReservationSearchCriteria
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
-import com.stayops.shared.domain.PagedResult
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
@@ -333,47 +330,6 @@ class ReservationApplicationTest : BehaviorSpec({
                         guestEmail = null, channelCode = "DIRECT"
                     )
                 }
-            }
-        }
-    }
-
-    // -- 검색 --
-
-    given("예약 검색 시") {
-        `when`("상태와 채널 필터를 적용하면") {
-            then("조건에 맞는 페이징 결과를 반환한다") {
-                clearAllMocks()
-                val criteria = ReservationSearchCriteria(
-                    statuses = listOf(ReservationStatus.CONFIRMED),
-                    channelCodes = listOf("AGODA"),
-                    dateType = DateType.CHECK_IN,
-                    startDate = checkIn,
-                    endDate = checkOut
-                )
-                val reservation = com.stayops.reservation.domain.model.Reservation.create(
-                    id = "rsv-s1", propertyId = "prop-1", roomTypeId = "rt-1",
-                    guestId = "guest-1",
-                    guestInfo = com.stayops.reservation.domain.model.GuestInfo("홍길동", "010-1234-5678", null),
-                    dateRange = DateRange.of(checkIn, checkOut), numberOfGuests = 2,
-                    channel = com.stayops.reservation.domain.model.ReservationChannel("AGODA", null, BigDecimal("0.15")),
-                    pricing = com.stayops.reservation.domain.model.ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal("0.15"))
-                ).confirm()
-
-                every {
-                    reservationRepository.search("prop-1", criteria, 0, 20)
-                } returns PagedResult(
-                    content = listOf(reservation),
-                    totalElements = 1,
-                    page = 0,
-                    size = 20,
-                    totalPages = 1
-                )
-
-                val result = sut.searchReservations("prop-1", criteria, 0, 20)
-
-                result.totalElements shouldBe 1
-                result.content[0].channel.channelCode shouldBe "AGODA"
-                result.content[0].status shouldBe ReservationStatus.CONFIRMED
             }
         }
     }

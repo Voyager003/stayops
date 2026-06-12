@@ -4,7 +4,7 @@ import com.stayops.member.domain.model.Member
 import com.stayops.member.application.service.MemberAccessApplication
 import com.stayops.reservation.api.dto.PagedReservationResponse
 import com.stayops.reservation.api.dto.ReservationResponse
-import com.stayops.reservation.application.service.ReservationApplication
+import com.stayops.reservation.application.service.ReservationQueryApplication
 import com.stayops.reservation.domain.model.DateType
 import com.stayops.reservation.domain.model.ReservationSearchCriteria
 import com.stayops.reservation.domain.model.ReservationStatus
@@ -19,7 +19,7 @@ import java.time.LocalDate
 @RestController
 @RequestMapping("/api/v1/reservations")
 class AllPropertiesReservationApi(
-    private val reservationApplication: ReservationApplication,
+    private val reservationQueryApplication: ReservationQueryApplication,
     private val memberAccessApplication: MemberAccessApplication
 ) {
 
@@ -47,7 +47,7 @@ class AllPropertiesReservationApi(
             endDate = endDate,
             guestName = guestName
         )
-        val result = reservationApplication.searchReservationsByPropertyIds(propertyIds, criteria, page, size)
+        val result = reservationQueryApplication.searchReservationsByPropertyIds(propertyIds, criteria, page, size)
         return ResponseEntity.ok(PagedReservationResponse(
             content = result.content.map { ReservationResponse.from(it) },
             totalElements = result.totalElements,
