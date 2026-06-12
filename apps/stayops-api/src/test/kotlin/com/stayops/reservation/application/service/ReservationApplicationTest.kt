@@ -50,6 +50,7 @@ class ReservationApplicationTest : BehaviorSpec({
     val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
     val rateResolverService = RateResolverService()
     val reservationPaymentPort = mockk<ReservationPaymentPort>()
+    val reservationCancellationPolicy = ReservationCancellationPolicy(reservationPaymentPort)
     val fixedClock = Clock.fixed(Instant.parse("2026-04-01T00:00:00Z"), ZoneId.of("Asia/Seoul"))
     val idGenerator = object : IdGenerator {
         override fun generate(): String = "test-id"
@@ -66,6 +67,7 @@ class ReservationApplicationTest : BehaviorSpec({
         eventPublisher = eventPublisher,
         rateResolverService = rateResolverService,
         reservationPaymentPort = reservationPaymentPort,
+        reservationCancellationPolicy = reservationCancellationPolicy,
         idGenerator = idGenerator,
         clock = fixedClock
     )

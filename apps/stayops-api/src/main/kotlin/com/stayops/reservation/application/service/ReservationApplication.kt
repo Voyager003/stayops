@@ -46,6 +46,7 @@ class ReservationApplication(
     private val eventPublisher: ApplicationEventPublisher,
     private val rateResolverService: RateResolverService,
     private val reservationPaymentPort: ReservationPaymentPort,
+    private val reservationCancellationPolicy: ReservationCancellationPolicy,
     private val idGenerator: IdGenerator,
     private val clock: Clock
 ) {
@@ -166,7 +167,7 @@ class ReservationApplication(
     @Transactional
     fun cancelReservation(propertyId: String, reservationId: String): Reservation {
         val reservation = getReservation(propertyId, reservationId)
-        val shouldReleaseInventory = shouldReleaseInventoryOnCancel(reservation)
+        val shouldReleaseInventory = reservationCancellationPolicy.shouldReleaseInventoryOnCancel(reservation)
         val cancelled = if (reservation.status == ReservationStatus.PENDING) {
             reservation.cancelPending()
         } else {
@@ -206,21 +207,6 @@ class ReservationApplication(
                 message = "결제가 승인된 예약만 확정할 수 있습니다: reservationId=${reservation.id}, paymentStatus=${payment.status}"
             )
         }
-    }
-
-    private fun shouldReleaseInventoryOnCancel(reservation: Reservation): Boolean {
-        if (reservation.status == ReservationStatus.CONFIRMED) {
-            return true
-        }
-        if (reservation.memberId == null) {
-            return reservation.status == ReservationStatus.PENDING
-        }
-
-        val payment = reservationPaymentPort.findByReservationId(reservation.id)
-            ?: return false
-        return payment.status == ReservationPaymentStatus.APPROVED ||
-            payment.status == ReservationPaymentStatus.CANCEL_REQUESTED ||
-            payment.status == ReservationPaymentStatus.CANCEL_FAILED
     }
 
     @Transactional
