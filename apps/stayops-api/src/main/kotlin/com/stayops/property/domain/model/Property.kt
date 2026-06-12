@@ -2,8 +2,7 @@ package com.stayops.property.domain.model
 
 import java.time.Instant
 
-@ConsistentCopyVisibility
-data class Property private constructor(
+class Property private constructor(
     val id: String,
     val ownerId: String,
     val name: String,
@@ -22,21 +21,21 @@ data class Property private constructor(
         require(status == PropertyStatus.INACTIVE) {
             "INACTIVE 상태에서만 활성화할 수 있습니다: $status"
         }
-        return copy(status = PropertyStatus.ACTIVE, updatedAt = Instant.now())
+        return copyState(status = PropertyStatus.ACTIVE, updatedAt = Instant.now())
     }
 
     fun deactivate(): Property {
         require(status == PropertyStatus.ACTIVE) {
             "ACTIVE 상태에서만 비활성화할 수 있습니다: $status"
         }
-        return copy(status = PropertyStatus.INACTIVE, updatedAt = Instant.now())
+        return copyState(status = PropertyStatus.INACTIVE, updatedAt = Instant.now())
     }
 
     fun suspend(): Property {
         require(status == PropertyStatus.ACTIVE) {
             "ACTIVE 상태에서만 정지할 수 있습니다: $status"
         }
-        return copy(status = PropertyStatus.SUSPENDED, updatedAt = Instant.now())
+        return copyState(status = PropertyStatus.SUSPENDED, updatedAt = Instant.now())
     }
 
     fun isBookable(): Boolean = status == PropertyStatus.ACTIVE
@@ -48,8 +47,52 @@ data class Property private constructor(
         contactInfo: ContactInfo = this.contactInfo
     ): Property {
         require(name.isNotBlank()) { "숙소명은 비어있을 수 없습니다" }
-        return copy(name = name, description = description, address = address, contactInfo = contactInfo, updatedAt = Instant.now())
+        return copyState(
+            name = name,
+            description = description,
+            address = address,
+            contactInfo = contactInfo,
+            updatedAt = Instant.now()
+        )
     }
+
+    private fun copyState(
+        id: String = this.id,
+        ownerId: String = this.ownerId,
+        name: String = this.name,
+        type: PropertyType = this.type,
+        address: Address = this.address,
+        contactInfo: ContactInfo = this.contactInfo,
+        description: String = this.description,
+        status: PropertyStatus = this.status,
+        timezone: String = this.timezone,
+        currency: String = this.currency,
+        version: Long = this.version,
+        createdAt: Instant = this.createdAt,
+        updatedAt: Instant = this.updatedAt
+    ): Property = Property(
+        id = id,
+        ownerId = ownerId,
+        name = name,
+        type = type,
+        address = address,
+        contactInfo = contactInfo,
+        description = description,
+        status = status,
+        timezone = timezone,
+        currency = currency,
+        version = version,
+        createdAt = createdAt,
+        updatedAt = updatedAt
+    )
+
+    override fun equals(other: Any?): Boolean =
+        this === other || (other is Property && id == other.id)
+
+    override fun hashCode(): Int = id.hashCode()
+
+    override fun toString(): String =
+        "Property(id=$id, ownerId=$ownerId, name=$name, type=$type, status=$status)"
 
     companion object {
         fun create(
