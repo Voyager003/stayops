@@ -1,6 +1,5 @@
 package com.stayops.property.api.dto
 
-import com.stayops.property.domain.model.PropertyType
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
@@ -8,7 +7,7 @@ import jakarta.validation.constraints.Pattern
 
 data class CreatePropertyRequest(
     @field:NotBlank val name: String,
-    @field:NotNull val type: PropertyType,
+    @field:NotBlank val type: String,
     @field:Valid val address: AddressRequest,
     @field:Valid val contactInfo: ContactInfoRequest,
     @field:NotBlank val description: String,

@@ -2,7 +2,8 @@ package com.stayops.channel.application.service
 
 import com.stayops.channel.application.dto.InventoryCompareItem
 import com.stayops.channel.application.dto.InventoryCompareResult
-import com.stayops.channel.domain.model.*
+import com.stayops.channel.domain.model.Channel
+import com.stayops.channel.domain.model.ChannelType
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.service.ChannelInventoryQueryAdapter
 import com.stayops.channel.domain.service.MockOtaRandomBookingResult

@@ -2,9 +2,11 @@ package com.stayops.channel.api
 
 import com.stayops.channel.application.dto.InventoryCompareResult
 import com.stayops.channel.application.service.ChannelApplication
-import com.stayops.member.infrastructure.security.PropertyAccessChecker
+import com.stayops.member.application.service.MemberAccessApplication
+import com.stayops.member.domain.model.Member
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
@@ -15,7 +17,7 @@ import java.time.LocalDate
 @RestController
 @RequestMapping("/api/v1/properties/{propertyId}/channels/{channelId}/inventory")
 class ChannelInventoryApi(
-    private val propertyAccessChecker: PropertyAccessChecker,
+    private val memberAccessApplication: MemberAccessApplication,
     private val channelApplication: ChannelApplication
 ) {
 
@@ -25,9 +27,10 @@ class ChannelInventoryApi(
         @PathVariable channelId: String,
         @RequestParam roomTypeId: String,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) startDate: LocalDate,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) endDate: LocalDate
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) endDate: LocalDate,
+        @AuthenticationPrincipal member: Member?
     ): ResponseEntity<InventoryCompareResult> {
-        propertyAccessChecker.requireAccess(propertyId)
+        memberAccessApplication.requirePropertyAccess(member, propertyId)
         val result = channelApplication.compareInventory(
             propertyId = propertyId,
             channelId = channelId,

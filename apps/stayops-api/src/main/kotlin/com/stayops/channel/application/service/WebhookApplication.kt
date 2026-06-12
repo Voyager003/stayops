@@ -1,5 +1,6 @@
 package com.stayops.channel.application.service
 
+import com.stayops.channel.domain.model.ChannelMapping
 import com.stayops.channel.domain.model.MappingType
 import com.stayops.channel.domain.model.ProcessedWebhookEvent
 import com.stayops.channel.domain.repository.ChannelMappingRepository
@@ -17,6 +18,7 @@ import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationPricing
 import com.stayops.reservation.domain.repository.ReservationRepository
+import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
@@ -24,6 +26,7 @@ import com.stayops.shared.exception.BusinessException
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
+import java.math.BigDecimal
 import java.time.LocalDate
 
 @Service
@@ -38,7 +41,7 @@ class WebhookApplication(
     private val inventoryReservationPort: InventoryReservationPort,
     private val guestRepository: GuestRepository,
     private val eventPublisher: ApplicationEventPublisher,
-    private val roomTypeRepository: com.stayops.room.domain.repository.RoomTypeRepository,
+    private val roomTypeRepository: RoomTypeRepository,
     private val idGenerator: IdGenerator
 ) {
 
@@ -89,8 +92,8 @@ class WebhookApplication(
     private fun handleBookingEvent(
         propertyId: String,
         channelCode: String,
-        commissionRate: java.math.BigDecimal,
-        mapping: com.stayops.channel.domain.model.ChannelMapping?,
+        commissionRate: BigDecimal,
+        mapping: ChannelMapping?,
         payload: Map<String, Any>
     ) {
         val roomTypeCode = payload["roomTypeCode"]?.toString()

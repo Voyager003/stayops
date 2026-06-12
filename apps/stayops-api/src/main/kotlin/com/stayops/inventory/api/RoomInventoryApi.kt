@@ -5,9 +5,11 @@ import com.stayops.inventory.api.dto.BulkBlockRequest
 import com.stayops.inventory.api.dto.InventoryUpdateAction
 import com.stayops.inventory.api.dto.UpdateInventoryRequest
 import com.stayops.inventory.application.service.RoomInventoryApplication
-import com.stayops.member.infrastructure.security.PropertyAccessChecker
+import com.stayops.member.application.service.MemberAccessApplication
+import com.stayops.member.domain.model.Member
 import jakarta.validation.Valid
 import org.springframework.format.annotation.DateTimeFormat
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -22,16 +24,17 @@ import java.time.LocalDate
 @RequestMapping("/api/v1/properties/{pid}")
 class RoomInventoryApi(
     private val inventoryApplication: RoomInventoryApplication,
-    private val propertyAccessChecker: PropertyAccessChecker
+    private val memberAccessApplication: MemberAccessApplication
 ) {
     @GetMapping("/availability")
     fun getAvailability(
         @PathVariable pid: String,
         @RequestParam roomTypeId: String,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) startDate: LocalDate,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) endDate: LocalDate
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) endDate: LocalDate,
+        @AuthenticationPrincipal member: Member?
     ): List<AvailabilityResponse> {
-        propertyAccessChecker.requireAccess(pid)
+        memberAccessApplication.requirePropertyAccess(member, pid)
         return inventoryApplication.getAvailability(pid, roomTypeId, startDate, endDate)
             .map { AvailabilityResponse.from(it) }
     }
@@ -40,9 +43,10 @@ class RoomInventoryApi(
     fun bulkBlock(
         @PathVariable pid: String,
         @PathVariable roomTypeId: String,
-        @RequestBody @Valid request: BulkBlockRequest
+        @RequestBody @Valid request: BulkBlockRequest,
+        @AuthenticationPrincipal member: Member?
     ): Map<String, Any> {
-        propertyAccessChecker.requireAccess(pid)
+        memberAccessApplication.requirePropertyAccess(member, pid)
         val processed = inventoryApplication.bulkBlock(
             propertyId = pid,
             roomTypeId = roomTypeId,
@@ -64,9 +68,10 @@ class RoomInventoryApi(
         @PathVariable pid: String,
         @PathVariable roomTypeId: String,
         @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate,
-        @RequestBody @Valid request: UpdateInventoryRequest
+        @RequestBody @Valid request: UpdateInventoryRequest,
+        @AuthenticationPrincipal member: Member?
     ): AvailabilityResponse {
-        propertyAccessChecker.requireAccess(pid)
+        memberAccessApplication.requirePropertyAccess(member, pid)
         val inventory = when (request.action) {
             InventoryUpdateAction.BLOCK -> inventoryApplication.blockInventory(pid, roomTypeId, date, request.count)
             InventoryUpdateAction.UNBLOCK -> inventoryApplication.unblockInventory(pid, roomTypeId, date, request.count)

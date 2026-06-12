@@ -2,7 +2,9 @@ package com.stayops.statistics.infrastructure.persistence
 
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.statistics.application.service.StatisticsQueryRepository
-import com.stayops.statistics.application.service.StatisticsQueryRepository.*
+import com.stayops.statistics.application.service.StatisticsQueryRepository.CancelAggregation
+import com.stayops.statistics.application.service.StatisticsQueryRepository.ChannelAggregation
+import com.stayops.statistics.application.service.StatisticsQueryRepository.RoomAggregation
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.aggregation.Aggregation
 import org.springframework.data.mongodb.core.query.Criteria

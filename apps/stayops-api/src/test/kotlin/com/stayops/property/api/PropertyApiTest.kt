@@ -3,7 +3,6 @@ package com.stayops.property.api
 import com.stayops.TestcontainersConfiguration
 import com.stayops.property.api.dto.CreatePropertyRequest
 import com.stayops.property.api.dto.UpdatePropertyRequest
-import com.stayops.property.domain.model.PropertyType
 import com.stayops.property.infrastructure.persistence.PropertyMongoDataRepository
 import com.stayops.channel.infrastructure.persistence.ChannelMongoDataRepository
 import com.stayops.member.domain.model.Member
@@ -62,7 +61,7 @@ class PropertyApiTest @Autowired constructor(
 
     private fun createRequest(name: String = "해운대 펜션") = CreatePropertyRequest(
         name = name,
-        type = PropertyType.PENSION,
+        type = "PENSION",
         address = CreatePropertyRequest.AddressRequest("해운대로 123", "부산", "부산광역시", "48099", "KR"),
         contactInfo = CreatePropertyRequest.ContactInfoRequest("051-123-4567", "test@pension.com"),
         description = "아름다운 펜션"

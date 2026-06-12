@@ -1,6 +1,7 @@
 package com.stayops.reservation.application.service
 
 import com.stayops.channel.domain.repository.ChannelRepository
+import com.stayops.channel.domain.model.Channel
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
 import com.stayops.inventory.application.port.InventoryReservationPort
@@ -12,7 +13,11 @@ import com.stayops.reservation.application.port.ReservationPaymentPort
 import com.stayops.reservation.application.port.ReservationPaymentSnapshot
 import com.stayops.reservation.application.port.ReservationPaymentStatus
 import com.stayops.reservation.domain.event.ReservationCancelled
-import com.stayops.reservation.domain.model.*
+import com.stayops.reservation.domain.model.GuestInfo
+import com.stayops.reservation.domain.model.Reservation
+import com.stayops.reservation.domain.model.ReservationChannel
+import com.stayops.reservation.domain.model.ReservationPricing
+import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
@@ -95,7 +100,7 @@ class CustomerReservationApplication(
         // 3. Channel (DIRECT) 조회 — 없으면 자동 생성 (기존 Property 호환)
         val channel = channelRepository.findByPropertyIdAndCode(propertyId, "DIRECT")
             ?: channelRepository.save(
-                com.stayops.channel.domain.model.Channel.createDirect(idGenerator.generate(), propertyId)
+                Channel.createDirect(idGenerator.generate(), propertyId)
             )
 
         // 4. 요금 계산

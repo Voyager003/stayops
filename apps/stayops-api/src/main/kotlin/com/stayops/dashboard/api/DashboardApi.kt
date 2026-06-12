@@ -1,39 +1,38 @@
 package com.stayops.dashboard.api
 
 import com.stayops.member.domain.model.Member
-import com.stayops.member.domain.model.MemberRole
 import com.stayops.dashboard.application.dto.DashboardSummary
 import com.stayops.dashboard.application.service.DashboardApplication
-import com.stayops.property.domain.repository.PropertyRepository
-import com.stayops.member.infrastructure.security.PropertyAccessChecker
+import com.stayops.member.application.service.MemberAccessApplication
 import org.springframework.http.ResponseEntity
-import org.springframework.security.core.context.SecurityContextHolder
-import org.springframework.web.bind.annotation.*
+import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.RestController
 import java.time.Clock
 import java.time.LocalDate
 
 @RestController
 class DashboardApi(
     private val dashboardApplication: DashboardApplication,
-    private val propertyAccessChecker: PropertyAccessChecker,
-    private val propertyRepository: PropertyRepository,
+    private val memberAccessApplication: MemberAccessApplication,
     private val clock: Clock
 ) {
 
     @GetMapping("/api/v1/properties/{propertyId}/dashboard")
-    fun getDashboard(@PathVariable propertyId: String): ResponseEntity<DashboardSummary> {
-        propertyAccessChecker.requireAccess(propertyId)
+    fun getDashboard(
+        @PathVariable propertyId: String,
+        @AuthenticationPrincipal member: Member?
+    ): ResponseEntity<DashboardSummary> {
+        memberAccessApplication.requirePropertyAccess(member, propertyId)
         return ResponseEntity.ok(dashboardApplication.getDashboard(propertyId, LocalDate.now(clock)))
     }
 
     @GetMapping("/api/v1/dashboard")
-    fun getAllPropertiesDashboard(): ResponseEntity<DashboardSummary> {
-        val member = SecurityContextHolder.getContext().authentication?.principal as Member
-        val propertyIds = if (member.role == MemberRole.ADMIN) {
-            propertyRepository.findAll().map { it.id }
-        } else {
-            member.propertyAccess.map { it.propertyId }
-        }
+    fun getAllPropertiesDashboard(
+        @AuthenticationPrincipal member: Member?
+    ): ResponseEntity<DashboardSummary> {
+        val propertyIds = memberAccessApplication.resolveAccessiblePropertyIds(member)
         return ResponseEntity.ok(dashboardApplication.getAggregatedDashboard(propertyIds, LocalDate.now(clock)))
     }
 }

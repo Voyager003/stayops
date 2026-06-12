@@ -1,23 +1,57 @@
-package com.stayops.property.api.dto
+package com.stayops.property.application.dto
 
-import com.stayops.property.application.dto.PropertyView
-import java.time.Instant
+import com.stayops.property.domain.model.Property
 
-data class PropertyResponse(
+data class CreatePropertyCommand(
+    val ownerId: String,
+    val name: String,
+    val type: String,
+    val street: String,
+    val city: String,
+    val state: String,
+    val zipCode: String,
+    val country: String,
+    val latitude: Double?,
+    val longitude: Double?,
+    val phone: String,
+    val email: String,
+    val website: String?,
+    val description: String,
+    val timezone: String,
+    val currency: String
+)
+
+data class UpdatePropertyCommand(
+    val id: String,
+    val name: String,
+    val description: String,
+    val street: String,
+    val city: String,
+    val state: String,
+    val zipCode: String,
+    val country: String,
+    val latitude: Double?,
+    val longitude: Double?,
+    val phone: String,
+    val email: String,
+    val website: String?
+)
+
+data class PropertyView(
     val id: String,
     val ownerId: String,
     val name: String,
     val type: String,
-    val address: AddressResponse,
-    val contactInfo: ContactInfoResponse,
+    val address: AddressView,
+    val contactInfo: ContactInfoView,
     val description: String,
     val status: String,
     val timezone: String,
     val currency: String,
-    val createdAt: Instant,
-    val updatedAt: Instant
+    val createdAt: java.time.Instant,
+    val updatedAt: java.time.Instant
 ) {
-    data class AddressResponse(
+    data class AddressView(
         val street: String,
         val city: String,
         val state: String,
@@ -27,19 +61,19 @@ data class PropertyResponse(
         val longitude: Double?
     )
 
-    data class ContactInfoResponse(
+    data class ContactInfoView(
         val phone: String,
         val email: String,
         val website: String?
     )
 
     companion object {
-        fun from(property: PropertyView): PropertyResponse = PropertyResponse(
+        fun from(property: Property): PropertyView = PropertyView(
             id = property.id,
             ownerId = property.ownerId,
             name = property.name,
-            type = property.type,
-            address = AddressResponse(
+            type = property.type.name,
+            address = AddressView(
                 street = property.address.street,
                 city = property.address.city,
                 state = property.address.state,
@@ -48,13 +82,13 @@ data class PropertyResponse(
                 latitude = property.address.latitude,
                 longitude = property.address.longitude
             ),
-            contactInfo = ContactInfoResponse(
+            contactInfo = ContactInfoView(
                 phone = property.contactInfo.phone,
                 email = property.contactInfo.email,
                 website = property.contactInfo.website
             ),
             description = property.description,
-            status = property.status,
+            status = property.status.name,
             timezone = property.timezone,
             currency = property.currency,
             createdAt = property.createdAt,

@@ -1,14 +1,11 @@
 package com.stayops.dashboard.api
 
-import com.stayops.member.domain.model.Member
-import com.stayops.member.domain.model.MemberRole
-import com.stayops.member.domain.model.PropertyAccess
-import com.stayops.member.domain.model.PropertyRole
 import com.stayops.dashboard.application.dto.DashboardSummary
 import com.stayops.dashboard.application.service.DashboardApplication
-import com.stayops.property.domain.model.*
-import com.stayops.property.domain.repository.PropertyRepository
-import com.stayops.member.infrastructure.security.PropertyAccessChecker
+import com.stayops.member.application.service.MemberAccessApplication
+import com.stayops.member.domain.model.Member
+import com.stayops.member.domain.model.MemberRole
+import com.stayops.member.domain.model.PropertyRole
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -18,6 +15,7 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
@@ -29,11 +27,11 @@ import java.time.ZoneId
 class DashboardApiTest {
 
     private val dashboardApplication = mockk<DashboardApplication>()
-    private val propertyAccessChecker = mockk<PropertyAccessChecker>(relaxed = true)
-    private val propertyRepository = mockk<PropertyRepository>()
+    private val memberAccessApplication = mockk<MemberAccessApplication>(relaxed = true)
     private val fixedClock = Clock.fixed(Instant.parse("2026-04-08T10:00:00Z"), ZoneId.of("Asia/Seoul"))
     private val mockMvc: MockMvc = MockMvcBuilders
-        .standaloneSetup(DashboardApi(dashboardApplication, propertyAccessChecker, propertyRepository, fixedClock))
+        .standaloneSetup(DashboardApi(dashboardApplication, memberAccessApplication, fixedClock))
+        .setCustomArgumentResolvers(AuthenticationPrincipalArgumentResolver())
         .build()
 
     private fun sampleSummary() = DashboardSummary(
@@ -86,6 +84,7 @@ class DashboardApiTest {
                 .grantAccess("prop-2", PropertyRole.OWNER)
 
             setAuthentication(owner)
+            every { memberAccessApplication.resolveAccessiblePropertyIds(any()) } returns listOf("prop-1", "prop-2")
 
             every {
                 dashboardApplication.getAggregatedDashboard(listOf("prop-1", "prop-2"), any<LocalDate>())
@@ -108,15 +107,7 @@ class DashboardApiTest {
                 passwordHash = "hashed", name = "관리자", role = MemberRole.ADMIN
             )
             setAuthentication(admin)
-
-            val property1 = Property.create("prop-1", "admin-1", "호텔A", PropertyType.HOTEL,
-                Address.of("길1", "서울", "서울특별시", "00000", "KR"),
-                ContactInfo.of("010-0000-0000", "a@a.com"), "설명")
-            val property2 = Property.create("prop-2", "admin-1", "호텔B", PropertyType.HOTEL,
-                Address.of("길2", "부산", "부산광역시", "00000", "KR"),
-                ContactInfo.of("010-0000-0001", "b@b.com"), "설명")
-
-            every { propertyRepository.findAll() } returns listOf(property1, property2)
+            every { memberAccessApplication.resolveAccessiblePropertyIds(any()) } returns listOf("prop-1", "prop-2")
             every {
                 dashboardApplication.getAggregatedDashboard(listOf("prop-1", "prop-2"), any<LocalDate>())
             } returns sampleSummary()
@@ -127,7 +118,7 @@ class DashboardApiTest {
                     jsonPath("$.todayRevenue") { value(350_000) }
                 }
 
-            verify { propertyRepository.findAll() }
+            verify { memberAccessApplication.resolveAccessiblePropertyIds(any()) }
         }
     }
 }

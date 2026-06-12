@@ -4,6 +4,7 @@ import com.stayops.channel.application.dto.ChannelSyncStatus
 import com.stayops.channel.application.dto.SyncDashboardResult
 import com.stayops.channel.application.dto.SyncSummary
 import com.stayops.channel.domain.model.ChannelType
+import com.stayops.channel.domain.model.SyncTask
 import com.stayops.channel.domain.model.SyncTaskStatus
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.repository.SyncTaskRepository
@@ -48,7 +49,7 @@ class SyncDashboardApplication(
         propertyId: String,
         status: SyncTaskStatus?,
         channelCode: String?
-    ): List<com.stayops.channel.domain.model.SyncTask> {
+    ): List<SyncTask> {
         return when {
             status != null && channelCode != null ->
                 syncTaskRepository.findByPropertyIdAndChannelCodeAndStatus(propertyId, channelCode, status)

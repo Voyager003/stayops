@@ -4,9 +4,11 @@ import com.stayops.room.api.dto.CreateRoomTypeRequest
 import com.stayops.room.api.dto.RoomTypeResponse
 import com.stayops.room.api.dto.UpdateRoomTypeRequest
 import com.stayops.room.application.service.RoomTypeApplication
-import com.stayops.member.infrastructure.security.PropertyAccessChecker
+import com.stayops.member.application.service.MemberAccessApplication
+import com.stayops.member.domain.model.Member
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -21,15 +23,16 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/v1/properties/{pid}/room-types")
 class RoomTypeApi(
     private val roomTypeApplication: RoomTypeApplication,
-    private val propertyAccessChecker: PropertyAccessChecker
+    private val memberAccessApplication: MemberAccessApplication
 ) {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     fun create(
         @PathVariable pid: String,
-        @RequestBody @Valid request: CreateRoomTypeRequest
+        @RequestBody @Valid request: CreateRoomTypeRequest,
+        @AuthenticationPrincipal member: Member?
     ): RoomTypeResponse {
-        propertyAccessChecker.requireAccess(pid)
+        memberAccessApplication.requirePropertyAccess(member, pid)
         val roomType = roomTypeApplication.createRoomType(
             propertyId = pid,
             name = request.name,
@@ -43,17 +46,21 @@ class RoomTypeApi(
     }
 
     @GetMapping
-    fun getAll(@PathVariable pid: String): List<RoomTypeResponse> {
-        propertyAccessChecker.requireAccess(pid)
+    fun getAll(
+        @PathVariable pid: String,
+        @AuthenticationPrincipal member: Member?
+    ): List<RoomTypeResponse> {
+        memberAccessApplication.requirePropertyAccess(member, pid)
         return roomTypeApplication.getRoomTypesByProperty(pid).map { RoomTypeResponse.from(it) }
     }
 
     @GetMapping("/{id}")
     fun getOne(
         @PathVariable pid: String,
-        @PathVariable id: String
+        @PathVariable id: String,
+        @AuthenticationPrincipal member: Member?
     ): RoomTypeResponse {
-        propertyAccessChecker.requireAccess(pid)
+        memberAccessApplication.requirePropertyAccess(member, pid)
         return RoomTypeResponse.from(roomTypeApplication.getRoomType(id))
     }
 
@@ -61,9 +68,10 @@ class RoomTypeApi(
     fun update(
         @PathVariable pid: String,
         @PathVariable id: String,
-        @RequestBody @Valid request: UpdateRoomTypeRequest
+        @RequestBody @Valid request: UpdateRoomTypeRequest,
+        @AuthenticationPrincipal member: Member?
     ): RoomTypeResponse {
-        propertyAccessChecker.requireAccess(pid)
+        memberAccessApplication.requirePropertyAccess(member, pid)
         val roomType = roomTypeApplication.updateRoomType(
             id = id,
             name = request.name,
@@ -80,9 +88,10 @@ class RoomTypeApi(
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun delete(
         @PathVariable pid: String,
-        @PathVariable id: String
+        @PathVariable id: String,
+        @AuthenticationPrincipal member: Member?
     ) {
-        propertyAccessChecker.requireAccess(pid)
+        memberAccessApplication.requirePropertyAccess(member, pid)
         roomTypeApplication.deleteRoomType(id)
     }
 }

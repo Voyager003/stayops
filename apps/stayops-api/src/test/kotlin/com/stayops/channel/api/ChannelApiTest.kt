@@ -2,11 +2,12 @@ package com.stayops.channel.api
 
 import com.stayops.channel.application.service.ChannelApplication
 import com.stayops.channel.domain.service.MockOtaRandomBookingResult
-import com.stayops.member.infrastructure.security.PropertyAccessChecker
+import com.stayops.member.application.service.MemberAccessApplication
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.Test
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
@@ -14,9 +15,10 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 class ChannelApiTest {
 
     private val channelApplication = mockk<ChannelApplication>()
-    private val propertyAccessChecker = mockk<PropertyAccessChecker>(relaxed = true)
+    private val memberAccessApplication = mockk<MemberAccessApplication>(relaxed = true)
     private val mockMvc: MockMvc = MockMvcBuilders
-        .standaloneSetup(ChannelApi(channelApplication, propertyAccessChecker))
+        .standaloneSetup(ChannelApi(channelApplication, memberAccessApplication))
+        .setCustomArgumentResolvers(AuthenticationPrincipalArgumentResolver())
         .build()
 
     @Test
@@ -41,7 +43,7 @@ class ChannelApiTest {
                 jsonPath("$.guestName") { value("김민수") }
             }
 
-        verify { propertyAccessChecker.requireAccess("prop-1") }
+        verify { memberAccessApplication.requirePropertyAccess(any(), "prop-1") }
         verify { channelApplication.simulateRandomBooking("prop-1", "ch-1") }
     }
 }

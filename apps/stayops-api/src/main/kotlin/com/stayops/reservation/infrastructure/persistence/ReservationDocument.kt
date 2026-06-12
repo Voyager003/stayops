@@ -1,6 +1,10 @@
 package com.stayops.reservation.infrastructure.persistence
 
-import com.stayops.reservation.domain.model.*
+import com.stayops.reservation.domain.model.GuestInfo
+import com.stayops.reservation.domain.model.Reservation
+import com.stayops.reservation.domain.model.ReservationChannel
+import com.stayops.reservation.domain.model.ReservationPricing
+import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
 import org.springframework.data.annotation.Id

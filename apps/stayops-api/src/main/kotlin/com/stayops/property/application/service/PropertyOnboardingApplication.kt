@@ -5,6 +5,8 @@ import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.PropertyRole
 import com.stayops.member.domain.repository.MemberRepository
+import com.stayops.property.application.dto.CreatePropertyCommand
+import com.stayops.property.application.dto.PropertyView
 import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo
 import com.stayops.property.domain.model.Property
@@ -17,7 +19,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
 data class PropertyOnboardingResult(
-    val property: Property,
+    val property: PropertyView,
     val owner: Member
 )
 
@@ -29,6 +31,32 @@ class PropertyOnboardingApplication(
     private val idGenerator: IdGenerator
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    @Transactional
+    fun onboardProperty(command: CreatePropertyCommand): PropertyOnboardingResult {
+        return onboardProperty(
+            ownerId = command.ownerId,
+            name = command.name,
+            type = parsePropertyType(command.type),
+            address = Address.of(
+                street = command.street,
+                city = command.city,
+                state = command.state,
+                zipCode = command.zipCode,
+                country = command.country,
+                latitude = command.latitude,
+                longitude = command.longitude
+            ),
+            contactInfo = ContactInfo.of(
+                phone = command.phone,
+                email = command.email,
+                website = command.website
+            ),
+            description = command.description,
+            timezone = command.timezone,
+            currency = command.currency
+        )
+    }
 
     @Transactional
     fun onboardProperty(
@@ -61,6 +89,10 @@ class PropertyOnboardingApplication(
         val savedOwner = memberRepository.save(owner.grantAccess(savedProperty.id, PropertyRole.OWNER))
 
         log.info("숙소 온보딩 완료: propertyId={}, ownerId={}, name={}", savedProperty.id, ownerId, name)
-        return PropertyOnboardingResult(property = savedProperty, owner = savedOwner)
+        return PropertyOnboardingResult(property = PropertyView.from(savedProperty), owner = savedOwner)
     }
+
+    private fun parsePropertyType(type: String): PropertyType =
+        runCatching { PropertyType.valueOf(type.uppercase()) }
+            .getOrElse { throw IllegalArgumentException("지원하지 않는 숙소 타입입니다: $type") }
 }

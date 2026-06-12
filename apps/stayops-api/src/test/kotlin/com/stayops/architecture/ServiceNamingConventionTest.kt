@@ -65,27 +65,33 @@ class ServiceNamingConventionTest {
     }
 
     @Test
-    fun should_keep_member_security_checkers_inside_member_infrastructure() {
+    fun should_keep_member_access_policy_inside_member_application() {
         val mainRoot = Path.of("src/main/kotlin")
 
-        val memberSecurityRoot = mainRoot.resolve("com/stayops/member/infrastructure/security")
+        val memberApplicationRoot = mainRoot.resolve("com/stayops/member/application/service")
         assertTrue(
-            actual = Files.exists(memberSecurityRoot.resolve("CustomerAuthChecker.kt")),
-            message = "CustomerAuthChecker depends on Member and must live under member infrastructure"
-        )
-        assertTrue(
-            actual = Files.exists(memberSecurityRoot.resolve("PropertyAccessChecker.kt")),
-            message = "PropertyAccessChecker depends on Member and must live under member infrastructure"
+            actual = Files.exists(memberApplicationRoot.resolve("MemberAccessApplication.kt")),
+            message = "Member access policy must live under member application"
         )
 
         val sharedSecurityRoot = mainRoot.resolve("com/stayops/shared/security")
         assertTrue(
             actual = !Files.exists(sharedSecurityRoot.resolve("CustomerAuthChecker.kt")),
-            message = "CustomerAuthChecker is not shared because it depends on Member"
+            message = "Customer access policy is not shared because it depends on Member"
         )
         assertTrue(
             actual = !Files.exists(sharedSecurityRoot.resolve("PropertyAccessChecker.kt")),
-            message = "PropertyAccessChecker is not shared because it depends on Member"
+            message = "Property access policy is not shared because it depends on Member"
+        )
+
+        val memberSecurityRoot = mainRoot.resolve("com/stayops/member/infrastructure/security")
+        assertTrue(
+            actual = !Files.exists(memberSecurityRoot.resolve("CustomerAuthChecker.kt")),
+            message = "CustomerAuthChecker must be replaced by MemberAccessApplication"
+        )
+        assertTrue(
+            actual = !Files.exists(memberSecurityRoot.resolve("PropertyAccessChecker.kt")),
+            message = "PropertyAccessChecker must be replaced by MemberAccessApplication"
         )
     }
 
@@ -228,6 +234,69 @@ class ServiceNamingConventionTest {
         assertTrue(
             actual = directPaymentReferences.isEmpty(),
             message = "Customer reservation use cases and API DTOs must depend on ReservationPaymentPort, not Payment internals: $directPaymentReferences"
+        )
+    }
+
+    @Test
+    fun should_keep_api_layer_from_depending_on_infrastructure_security_or_domain_repositories() {
+        val mainRoot = Path.of("src/main/kotlin")
+        val apiLayerViolations = Files.walk(mainRoot.resolve("com/stayops")).use { paths ->
+            paths
+                .filter { Files.isRegularFile(it) }
+                .filter { it.fileName.toString().endsWith(".kt") }
+                .filter { path -> path.toString().contains("/api/") }
+                .filter { path ->
+                    val content = Files.readString(path)
+                    content.contains(Regex("^import com\\.stayops\\..*\\.infrastructure\\.", RegexOption.MULTILINE)) ||
+                        content.contains(Regex("^import com\\.stayops\\..*\\.domain\\.repository\\.", RegexOption.MULTILINE))
+                }
+                .map { mainRoot.relativize(it).toString() }
+                .toList()
+        }
+
+        assertTrue(
+            actual = apiLayerViolations.isEmpty(),
+            message = "API layer must depend on application use cases, not infrastructure security or domain repositories: $apiLayerViolations"
+        )
+    }
+
+    @Test
+    fun should_keep_property_api_from_creating_domain_objects_or_mutating_security_context() {
+        val propertyApi = Path.of("src/main/kotlin/com/stayops/property/api/PropertyApi.kt")
+        val propertyApiContent = Files.readString(propertyApi)
+
+        val forbiddenPropertyApiReferences = listOf(
+            "import com.stayops.property.domain.model.Address",
+            "import com.stayops.property.domain.model.ContactInfo",
+            "import org.springframework.security.authentication.UsernamePasswordAuthenticationToken",
+            "import org.springframework.security.core.context.SecurityContextHolder",
+            "import org.springframework.security.web.context.HttpSessionSecurityContextRepository",
+            "Address.of(",
+            "ContactInfo.of(",
+            "SecurityContextHolder."
+        ).filter { propertyApiContent.contains(it) }
+
+        assertTrue(
+            actual = forbiddenPropertyApiReferences.isEmpty(),
+            message = "PropertyApi must delegate domain object creation and security context mutation: $forbiddenPropertyApiReferences"
+        )
+
+        val propertyApiDtoRoot = Path.of("src/main/kotlin/com/stayops/property/api/dto")
+        val domainModelImports = Files.walk(propertyApiDtoRoot).use { paths ->
+            paths
+                .filter { Files.isRegularFile(it) }
+                .filter { it.fileName.toString().endsWith(".kt") }
+                .filter { path ->
+                    Files.readString(path)
+                        .contains(Regex("^import com\\.stayops\\.property\\.domain\\.model\\.", RegexOption.MULTILINE))
+                }
+                .map { propertyApiDtoRoot.relativize(it).toString() }
+                .toList()
+        }
+
+        assertTrue(
+            actual = domainModelImports.isEmpty(),
+            message = "Property API DTOs must not import property domain models: $domainModelImports"
         )
     }
 

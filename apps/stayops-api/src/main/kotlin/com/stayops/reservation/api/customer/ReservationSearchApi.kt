@@ -1,11 +1,19 @@
 package com.stayops.reservation.api.customer
 
-import com.stayops.reservation.api.customer.dto.*
+import com.stayops.reservation.api.customer.dto.AvailabilityResponse
+import com.stayops.reservation.api.customer.dto.PropertySearchResponse
+import com.stayops.reservation.api.customer.dto.RatePreviewResponse
+import com.stayops.reservation.api.customer.dto.ReservationOfferResponse
+import com.stayops.reservation.api.customer.dto.RoomTypeSearchResponse
 import com.stayops.reservation.application.service.PropertySearchCriteria
 import com.stayops.reservation.application.service.ReservationSearchApplication
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.ResponseEntity
-import org.springframework.web.bind.annotation.*
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDate
 
 @RestController

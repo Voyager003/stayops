@@ -5,9 +5,11 @@ import com.stayops.room.api.dto.RoomResponse
 import com.stayops.room.api.dto.RoomStatusAction
 import com.stayops.room.api.dto.UpdateRoomStatusRequest
 import com.stayops.room.application.service.RoomApplication
-import com.stayops.member.infrastructure.security.PropertyAccessChecker
+import com.stayops.member.application.service.MemberAccessApplication
+import com.stayops.member.domain.model.Member
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -23,15 +25,16 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/v1/properties/{pid}/rooms")
 class RoomApi(
     private val roomApplication: RoomApplication,
-    private val propertyAccessChecker: PropertyAccessChecker
+    private val memberAccessApplication: MemberAccessApplication
 ) {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     fun create(
         @PathVariable pid: String,
-        @RequestBody @Valid request: CreateRoomRequest
+        @RequestBody @Valid request: CreateRoomRequest,
+        @AuthenticationPrincipal member: Member?
     ): RoomResponse {
-        propertyAccessChecker.requireAccess(pid)
+        memberAccessApplication.requirePropertyAccess(member, pid)
         val room = roomApplication.createRoom(
             propertyId = pid,
             roomTypeId = request.roomTypeId,
@@ -42,17 +45,21 @@ class RoomApi(
     }
 
     @GetMapping
-    fun getAll(@PathVariable pid: String): List<RoomResponse> {
-        propertyAccessChecker.requireAccess(pid)
+    fun getAll(
+        @PathVariable pid: String,
+        @AuthenticationPrincipal member: Member?
+    ): List<RoomResponse> {
+        memberAccessApplication.requirePropertyAccess(member, pid)
         return roomApplication.getRoomsByProperty(pid).map { RoomResponse.from(it) }
     }
 
     @GetMapping("/{id}")
     fun getOne(
         @PathVariable pid: String,
-        @PathVariable id: String
+        @PathVariable id: String,
+        @AuthenticationPrincipal member: Member?
     ): RoomResponse {
-        propertyAccessChecker.requireAccess(pid)
+        memberAccessApplication.requirePropertyAccess(member, pid)
         return RoomResponse.from(roomApplication.getRoom(id))
     }
 
@@ -60,9 +67,10 @@ class RoomApi(
     fun updateMemo(
         @PathVariable pid: String,
         @PathVariable id: String,
-        @RequestParam memo: String?
+        @RequestParam memo: String?,
+        @AuthenticationPrincipal member: Member?
     ): RoomResponse {
-        propertyAccessChecker.requireAccess(pid)
+        memberAccessApplication.requirePropertyAccess(member, pid)
         return RoomResponse.from(roomApplication.updateMemo(id, memo))
     }
 
@@ -70,9 +78,10 @@ class RoomApi(
     fun changeStatus(
         @PathVariable pid: String,
         @PathVariable id: String,
-        @RequestBody @Valid request: UpdateRoomStatusRequest
+        @RequestBody @Valid request: UpdateRoomStatusRequest,
+        @AuthenticationPrincipal member: Member?
     ): RoomResponse {
-        propertyAccessChecker.requireAccess(pid)
+        memberAccessApplication.requirePropertyAccess(member, pid)
         val room = when (request.action) {
             RoomStatusAction.CHECK_IN -> roomApplication.checkIn(id)
             RoomStatusAction.CHECK_OUT -> roomApplication.checkOut(id)
