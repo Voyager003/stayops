@@ -55,7 +55,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
         override fun generate(): String = "test-id"
     }
 
-    val service = CustomerReservationApplication(
+    val creationApplication = CustomerReservationCreationApplication(
         propertyRepository = propertyRepository,
         roomTypeRepository = roomTypeRepository,
         guestRepository = guestRepository,
@@ -63,11 +63,30 @@ class CustomerReservationApplicationTest : BehaviorSpec({
         ratePlanRepository = ratePlanRepository,
         reservationRepository = reservationRepository,
         reservationPaymentPort = reservationPaymentPort,
-        inventoryReservationPort = inventoryReservationPort,
         rateResolverService = rateResolverService,
-        eventPublisher = eventPublisher,
         clock = clock,
         idGenerator = idGenerator
+    )
+    val queryApplication = CustomerReservationQueryApplication(
+        reservationRepository = reservationRepository,
+        reservationPaymentPort = reservationPaymentPort
+    )
+    val paymentApplication = CustomerReservationPaymentApplication(
+        reservationRepository = reservationRepository,
+        reservationPaymentPort = reservationPaymentPort,
+        clock = clock
+    )
+    val cancellationApplication = CustomerReservationCancellationApplication(
+        reservationRepository = reservationRepository,
+        reservationPaymentPort = reservationPaymentPort,
+        inventoryReservationPort = inventoryReservationPort,
+        eventPublisher = eventPublisher
+    )
+    val service = CustomerReservationApplication(
+        creationApplication = creationApplication,
+        queryApplication = queryApplication,
+        paymentApplication = paymentApplication,
+        cancellationApplication = cancellationApplication
     )
 
     val checkIn = LocalDate.of(2026, 4, 1)
