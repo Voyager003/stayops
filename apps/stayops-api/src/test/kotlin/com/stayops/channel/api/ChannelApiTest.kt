@@ -1,6 +1,7 @@
 package com.stayops.channel.api
 
 import com.stayops.channel.application.service.ChannelApplication
+import com.stayops.channel.application.service.MockOtaSimulationApplication
 import com.stayops.channel.domain.service.MockOtaRandomBookingResult
 import com.stayops.member.application.service.MemberAccessApplication
 import io.mockk.every
@@ -15,16 +16,17 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 class ChannelApiTest {
 
     private val channelApplication = mockk<ChannelApplication>()
+    private val mockOtaSimulationApplication = mockk<MockOtaSimulationApplication>()
     private val memberAccessApplication = mockk<MemberAccessApplication>(relaxed = true)
     private val mockMvc: MockMvc = MockMvcBuilders
-        .standaloneSetup(ChannelApi(channelApplication, memberAccessApplication))
+        .standaloneSetup(ChannelApi(channelApplication, mockOtaSimulationApplication, memberAccessApplication))
         .setCustomArgumentResolvers(AuthenticationPrincipalArgumentResolver())
         .build()
 
     @Test
     fun `OTA 랜덤 예약 시뮬레이션 요청은 접근 권한 확인 후 application에 위임한다`() {
         every {
-            channelApplication.simulateRandomBooking("prop-1", "ch-1")
+            mockOtaSimulationApplication.simulateRandomBooking("prop-1", "ch-1")
         } returns MockOtaRandomBookingResult(
             status = "sent",
             bookingId = "booking-1",
@@ -44,6 +46,6 @@ class ChannelApiTest {
             }
 
         verify { memberAccessApplication.requirePropertyAccess(any(), "prop-1") }
-        verify { channelApplication.simulateRandomBooking("prop-1", "ch-1") }
+        verify { mockOtaSimulationApplication.simulateRandomBooking("prop-1", "ch-1") }
     }
 }

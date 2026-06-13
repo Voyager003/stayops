@@ -1,7 +1,7 @@
 package com.stayops.channel.api
 
 import com.stayops.channel.application.dto.InventoryCompareResult
-import com.stayops.channel.application.service.ChannelApplication
+import com.stayops.channel.application.service.ChannelInventoryComparisonApplication
 import com.stayops.member.application.service.MemberAccessApplication
 import com.stayops.member.domain.model.Member
 import org.springframework.format.annotation.DateTimeFormat
@@ -18,7 +18,7 @@ import java.time.LocalDate
 @RequestMapping("/api/v1/properties/{propertyId}/channels/{channelId}/inventory")
 class ChannelInventoryApi(
     private val memberAccessApplication: MemberAccessApplication,
-    private val channelApplication: ChannelApplication
+    private val channelInventoryComparisonApplication: ChannelInventoryComparisonApplication
 ) {
 
     @GetMapping
@@ -31,7 +31,7 @@ class ChannelInventoryApi(
         @AuthenticationPrincipal member: Member?
     ): ResponseEntity<InventoryCompareResult> {
         memberAccessApplication.requirePropertyAccess(member, propertyId)
-        val result = channelApplication.compareInventory(
+        val result = channelInventoryComparisonApplication.compareInventory(
             propertyId = propertyId,
             channelId = channelId,
             roomTypeId = roomTypeId,

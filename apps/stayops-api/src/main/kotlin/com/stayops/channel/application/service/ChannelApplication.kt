@@ -1,17 +1,10 @@
 package com.stayops.channel.application.service
 
-import com.stayops.channel.application.dto.InventoryCompareItem
-import com.stayops.channel.application.dto.InventoryCompareResult
 import com.stayops.channel.domain.model.Channel
-import com.stayops.channel.domain.model.ChannelType
 import com.stayops.channel.domain.repository.ChannelRepository
-import com.stayops.channel.domain.service.ChannelInventoryQueryAdapter
-import com.stayops.channel.domain.service.MockOtaRandomBookingResult
-import com.stayops.channel.domain.service.MockOtaSimulationPort
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.IdGenerator
-import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -26,8 +19,6 @@ class ChannelApplication(
     private val roomTypeRepository: RoomTypeRepository,
     private val roomInventoryRepository: RoomInventoryRepository,
     private val channelSyncApplication: ChannelSyncApplication,
-    private val inventoryQueryAdapter: ChannelInventoryQueryAdapter,
-    private val mockOtaSimulationPort: MockOtaSimulationPort,
     private val clock: Clock,
     private val idGenerator: IdGenerator,
     @Value("\${mock-ota.endpoint}") private val otaEndpoint: String
@@ -129,63 +120,6 @@ class ChannelApplication(
         findChannel(propertyId, channelId)
         channelRepository.deleteById(channelId)
         log.info("채널 삭제: channelId={}, propertyId={}", channelId, propertyId)
-    }
-
-    fun compareInventory(
-        propertyId: String,
-        channelId: String,
-        roomTypeId: String,
-        startDate: LocalDate,
-        endDate: LocalDate
-    ): InventoryCompareResult {
-        val channel = findChannel(propertyId, channelId)
-        val apiEndpoint = channel.connectionInfo?.apiEndpoint
-            ?: throw BusinessException(
-                code = "DIRECT_CHANNEL_NOT_SUPPORTED",
-                message = "OTA 채널만 재고를 조회할 수 있습니다"
-            )
-
-        val otaSnapshots = inventoryQueryAdapter.fetchInventory(apiEndpoint, roomTypeId, startDate, endDate)
-        val otaByDate = otaSnapshots.associateBy { it.date.toString() }
-
-        val pmsInventories = roomInventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(
-            propertyId, roomTypeId, startDate, endDate
-        )
-        val pmsByDate = pmsInventories.associateBy { it.date.toString() }
-
-        val allDates = (otaByDate.keys + pmsByDate.keys).sorted()
-        val items = allDates.map { date ->
-            val pmsAvailable = pmsByDate[date]?.availableCount ?: 0
-            val otaAvailable = otaByDate[date]?.availableCount ?: 0
-            InventoryCompareItem(
-                date = date,
-                pmsAvailableCount = pmsAvailable,
-                otaAvailableCount = otaAvailable,
-                isSynced = pmsAvailable == otaAvailable
-            )
-        }
-
-        return InventoryCompareResult(
-            channelCode = channel.code,
-            channelName = channel.name,
-            items = items
-        )
-    }
-
-    fun simulateRandomBooking(propertyId: String, channelId: String): MockOtaRandomBookingResult {
-        val channel = findChannel(propertyId, channelId)
-        if (channel.type != ChannelType.OTA) {
-            throw BusinessException(
-                code = "DIRECT_CHANNEL_NOT_SUPPORTED",
-                message = "OTA 채널만 예약 시뮬레이션을 실행할 수 있습니다"
-            )
-        }
-
-        return mockOtaSimulationPort.simulateRandomBooking(
-            endpoint = otaEndpoint,
-            propertyId = propertyId,
-            channelCode = channel.code
-        )
     }
 
 }

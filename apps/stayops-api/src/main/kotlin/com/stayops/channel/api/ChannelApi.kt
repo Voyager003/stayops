@@ -5,6 +5,7 @@ import com.stayops.channel.api.dto.CreateChannelRequest
 import com.stayops.channel.api.dto.RandomBookingSimulationResponse
 import com.stayops.channel.api.dto.UpdateChannelRequest
 import com.stayops.channel.application.service.ChannelApplication
+import com.stayops.channel.application.service.MockOtaSimulationApplication
 import com.stayops.member.application.service.MemberAccessApplication
 import com.stayops.member.domain.model.Member
 import jakarta.validation.Valid
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/v1/properties/{propertyId}/channels")
 class ChannelApi(
     private val channelApplication: ChannelApplication,
+    private val mockOtaSimulationApplication: MockOtaSimulationApplication,
     private val memberAccessApplication: MemberAccessApplication
 ) {
 
@@ -133,7 +135,7 @@ class ChannelApi(
         @AuthenticationPrincipal member: Member?
     ): ResponseEntity<RandomBookingSimulationResponse> {
         memberAccessApplication.requirePropertyAccess(member, propertyId)
-        val result = channelApplication.simulateRandomBooking(propertyId, channelId)
+        val result = mockOtaSimulationApplication.simulateRandomBooking(propertyId, channelId)
         return ResponseEntity.ok(RandomBookingSimulationResponse.from(result))
     }
 
