@@ -34,8 +34,26 @@ class RoomInventoryApplicationTest : BehaviorSpec({
     val idGenerator = object : IdGenerator {
         override fun generate() = "inv-new"
     }
+    val inventoryAccess = RoomInventoryAccessApplication(
+        inventoryRepository = inventoryRepository,
+        cache = cache
+    )
+    val syncApplication = RoomInventorySyncApplication(
+        inventoryRepository = inventoryRepository,
+        roomRepository = roomRepository,
+        availabilitySyncPort = availabilitySyncPort,
+        clock = fixedClock,
+        idGenerator = idGenerator
+    )
+    val managementApplication = RoomInventoryManagementApplication(
+        inventoryRepository = inventoryRepository,
+        inventoryAccess = inventoryAccess,
+        availabilitySyncPort = availabilitySyncPort
+    )
     val inventoryApplication = RoomInventoryApplication(
-        inventoryRepository, cache, roomRepository, availabilitySyncPort, fixedClock, idGenerator
+        inventoryRepository = inventoryRepository,
+        syncApplication = syncApplication,
+        managementApplication = managementApplication
     )
 
     val today = LocalDate.of(2026, 3, 12)
