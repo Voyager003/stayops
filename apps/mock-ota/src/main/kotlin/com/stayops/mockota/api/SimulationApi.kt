@@ -1,7 +1,7 @@
 package com.stayops.mockota.api
 
 import com.stayops.mockota.model.MockBooking
-import com.stayops.mockota.repository.OtaInventoryRepository
+import com.stayops.mockota.dao.OtaInventoryDao
 import com.stayops.mockota.service.FailureMode
 import com.stayops.mockota.service.FailureSimulatorService
 import com.stayops.mockota.service.WebhookSenderService
@@ -18,7 +18,7 @@ import java.time.LocalDate
 class SimulationApi(
     private val webhookSender: WebhookSenderService,
     private val failureSimulator: FailureSimulatorService,
-    private val otaInventoryRepository: OtaInventoryRepository
+    private val otaInventoryDao: OtaInventoryDao
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -65,7 +65,7 @@ class SimulationApi(
             request.channelCode
         )
 
-        val availableInventory = otaInventoryRepository.findByAvailableCountGreaterThan(0)
+        val availableInventory = otaInventoryDao.findByAvailableCountGreaterThan(0)
         if (availableInventory.isEmpty()) {
             log.warn(
                 "랜덤 예약 시뮬레이션 실패: 예약 가능한 재고 없음 propertyId={}, channelCode={}",
@@ -81,7 +81,7 @@ class SimulationApi(
         val checkInDate = LocalDate.parse(selected.date)
 
         // OTA 재고 즉시 차감
-        otaInventoryRepository.save(selected.copy(availableCount = selected.availableCount - 1))
+        otaInventoryDao.save(selected.copy(availableCount = selected.availableCount - 1))
 
         val booking = MockBooking(
             roomTypeCode = selected.roomTypeId,

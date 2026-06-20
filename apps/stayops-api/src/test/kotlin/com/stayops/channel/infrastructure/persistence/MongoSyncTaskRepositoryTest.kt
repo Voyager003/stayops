@@ -1,5 +1,6 @@
 package com.stayops.channel.infrastructure.persistence
 
+import com.stayops.channel.infrastructure.persistence.dao.SyncTaskMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.channel.domain.model.SyncTask
 import com.stayops.channel.domain.model.SyncTaskStatus
@@ -20,13 +21,13 @@ import java.time.Instant
 @Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class MongoSyncTaskRepositoryTest @Autowired constructor(
     private val syncTaskRepository: SyncTaskRepository,
-    private val mongoDataRepository: SyncTaskMongoDataRepository,
+    private val mongoDao: SyncTaskMongoDao,
     private val clock: Clock
 ) {
 
     @BeforeEach
     fun setUp() {
-        mongoDataRepository.deleteAll()
+        mongoDao.deleteAll()
     }
 
     private fun newTask(

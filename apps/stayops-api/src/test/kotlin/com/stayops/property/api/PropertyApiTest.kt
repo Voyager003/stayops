@@ -3,12 +3,12 @@ package com.stayops.property.api
 import com.stayops.TestcontainersConfiguration
 import com.stayops.property.api.dto.CreatePropertyRequest
 import com.stayops.property.api.dto.UpdatePropertyRequest
-import com.stayops.property.infrastructure.persistence.PropertyMongoDataRepository
-import com.stayops.channel.infrastructure.persistence.ChannelMongoDataRepository
+import com.stayops.property.infrastructure.persistence.dao.PropertyMongoDao
+import com.stayops.channel.infrastructure.persistence.dao.ChannelMongoDao
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
 import com.stayops.member.infrastructure.persistence.MemberDocument
-import com.stayops.member.infrastructure.persistence.MemberMongoDataRepository
+import com.stayops.member.infrastructure.persistence.dao.MemberMongoDao
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -33,9 +33,9 @@ import tools.jackson.databind.ObjectMapper
 class PropertyApiTest @Autowired constructor(
     private val context: WebApplicationContext,
     private val objectMapper: ObjectMapper,
-    private val mongoDataRepository: PropertyMongoDataRepository,
-    private val memberMongoDataRepository: MemberMongoDataRepository,
-    private val channelMongoDataRepository: ChannelMongoDataRepository
+    private val mongoDao: PropertyMongoDao,
+    private val memberMongoDao: MemberMongoDao,
+    private val channelMongoDao: ChannelMongoDao
 ) {
     private lateinit var mockMvc: MockMvc
 
@@ -45,10 +45,10 @@ class PropertyApiTest @Autowired constructor(
             id = "test-admin", email = "admin@test.com",
             passwordHash = "hashed", name = "테스트관리자", role = MemberRole.ADMIN
         )
-        memberMongoDataRepository.deleteAll()
-        channelMongoDataRepository.deleteAll()
-        mongoDataRepository.deleteAll()
-        memberMongoDataRepository.save(MemberDocument.from(admin))
+        memberMongoDao.deleteAll()
+        channelMongoDao.deleteAll()
+        mongoDao.deleteAll()
+        memberMongoDao.save(MemberDocument.from(admin))
         SecurityContextHolder.getContext().authentication =
             UsernamePasswordAuthenticationToken(admin, null, emptyList())
         mockMvc = MockMvcBuilders.webAppContextSetup(context).build()

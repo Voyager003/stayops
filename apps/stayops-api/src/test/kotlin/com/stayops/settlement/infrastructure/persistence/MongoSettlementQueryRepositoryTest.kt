@@ -3,7 +3,7 @@ package com.stayops.settlement.infrastructure.persistence
 import com.stayops.TestcontainersConfiguration
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.infrastructure.persistence.ReservationDocument
-import com.stayops.reservation.infrastructure.persistence.ReservationMongoDataRepository
+import com.stayops.reservation.infrastructure.persistence.dao.ReservationMongoDao
 import com.stayops.settlement.application.service.SettlementQueryRepository
 import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money
@@ -23,13 +23,13 @@ import java.time.LocalDate
 @Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class MongoSettlementQueryRepositoryTest @Autowired constructor(
     private val settlementQueryRepository: SettlementQueryRepository,
-    private val reservationMongoDataRepository: ReservationMongoDataRepository,
+    private val reservationMongoDao: ReservationMongoDao,
     private val clock: Clock
 ) {
 
     @BeforeEach
     fun setUp() {
-        reservationMongoDataRepository.deleteAll()
+        reservationMongoDao.deleteAll()
     }
 
     private fun reservationDoc(
@@ -74,11 +74,11 @@ class MongoSettlementQueryRepositoryTest @Autowired constructor(
 
         @Test
         fun `CHECKED_OUT과 NO_SHOW 예약만 집계한다`() {
-            reservationMongoDataRepository.save(reservationDoc("rsv-1", status = ReservationStatus.CHECKED_OUT))
-            reservationMongoDataRepository.save(reservationDoc("rsv-2", status = ReservationStatus.NO_SHOW))
-            reservationMongoDataRepository.save(reservationDoc("rsv-3", status = ReservationStatus.CANCELLED))
-            reservationMongoDataRepository.save(reservationDoc("rsv-4", status = ReservationStatus.CONFIRMED))
-            reservationMongoDataRepository.save(reservationDoc("rsv-5", status = ReservationStatus.PENDING))
+            reservationMongoDao.save(reservationDoc("rsv-1", status = ReservationStatus.CHECKED_OUT))
+            reservationMongoDao.save(reservationDoc("rsv-2", status = ReservationStatus.NO_SHOW))
+            reservationMongoDao.save(reservationDoc("rsv-3", status = ReservationStatus.CANCELLED))
+            reservationMongoDao.save(reservationDoc("rsv-4", status = ReservationStatus.CONFIRMED))
+            reservationMongoDao.save(reservationDoc("rsv-5", status = ReservationStatus.PENDING))
 
             val results = settlementQueryRepository.findChannelSettlements(
                 "prop-1", LocalDate.of(2026, 4, 1), LocalDate.of(2026, 4, 30)
@@ -91,9 +91,9 @@ class MongoSettlementQueryRepositoryTest @Autowired constructor(
 
         @Test
         fun `채널별로 그룹핑하여 집계한다`() {
-            reservationMongoDataRepository.save(reservationDoc("rsv-1", status = ReservationStatus.CHECKED_OUT))
-            reservationMongoDataRepository.save(reservationDoc("rsv-2", status = ReservationStatus.CHECKED_OUT))
-            reservationMongoDataRepository.save(reservationDoc(
+            reservationMongoDao.save(reservationDoc("rsv-1", status = ReservationStatus.CHECKED_OUT))
+            reservationMongoDao.save(reservationDoc("rsv-2", status = ReservationStatus.CHECKED_OUT))
+            reservationMongoDao.save(reservationDoc(
                 "rsv-3", status = ReservationStatus.CHECKED_OUT,
                 channelCode = "AGODA", commissionRate = BigDecimal("0.15"),
                 totalAmount = BigDecimal(200_000),
@@ -122,13 +122,13 @@ class MongoSettlementQueryRepositoryTest @Autowired constructor(
 
         @Test
         fun `기간 외 체크아웃 예약은 제외한다`() {
-            reservationMongoDataRepository.save(
+            reservationMongoDao.save(
                 reservationDoc("rsv-1", status = ReservationStatus.CHECKED_OUT, checkOut = "2026-04-15")
             )
-            reservationMongoDataRepository.save(
+            reservationMongoDao.save(
                 reservationDoc("rsv-2", status = ReservationStatus.CHECKED_OUT, checkOut = "2026-03-15")
             )
-            reservationMongoDataRepository.save(
+            reservationMongoDao.save(
                 reservationDoc("rsv-3", status = ReservationStatus.CHECKED_OUT, checkOut = "2026-05-15")
             )
 
@@ -142,10 +142,10 @@ class MongoSettlementQueryRepositoryTest @Autowired constructor(
 
         @Test
         fun `다른 propertyId의 예약은 제외한다`() {
-            reservationMongoDataRepository.save(
+            reservationMongoDao.save(
                 reservationDoc("rsv-1", propertyId = "prop-1", status = ReservationStatus.CHECKED_OUT)
             )
-            reservationMongoDataRepository.save(
+            reservationMongoDao.save(
                 reservationDoc("rsv-2", propertyId = "prop-2", status = ReservationStatus.CHECKED_OUT)
             )
 

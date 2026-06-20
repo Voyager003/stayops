@@ -3,16 +3,16 @@ package com.stayops.rate.infrastructure.persistence
 import com.stayops.rate.domain.model.RatePlan
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
+import com.stayops.rate.infrastructure.persistence.dao.RatePlanMongoDao
 import jakarta.annotation.PostConstruct
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
-import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
 @Repository
 class MongoRatePlanRepository(
-    private val mongo: RatePlanMongoDataRepository,
+    private val mongo: RatePlanMongoDao,
     private val mongoTemplate: MongoTemplate
 ) : RatePlanRepository {
 
@@ -43,12 +43,4 @@ class MongoRatePlanRepository(
         mongo.findByPropertyId(propertyId).map { it.toDomain() }
 
     override fun deleteById(id: String) = mongo.deleteById(id)
-}
-
-interface RatePlanMongoDataRepository : MongoRepository<RatePlanDocument, String> {
-    fun findByPropertyIdAndRoomTypeIdAndStatus(
-        propertyId: String, roomTypeId: String, status: RatePlanStatus
-    ): List<RatePlanDocument>
-
-    fun findByPropertyId(propertyId: String): List<RatePlanDocument>
 }

@@ -1,5 +1,6 @@
 package com.stayops.channel.infrastructure.persistence
 
+import com.stayops.channel.infrastructure.persistence.dao.ChannelMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.model.ChannelStatus
@@ -19,12 +20,12 @@ import java.math.BigDecimal
 @Import(TestcontainersConfiguration::class)
 class MongoChannelRepositoryTest @Autowired constructor(
     private val channelRepository: ChannelRepository,
-    private val mongoDataRepository: ChannelMongoDataRepository
+    private val mongoDao: ChannelMongoDao
 ) {
 
     @BeforeEach
     fun setUp() {
-        mongoDataRepository.deleteAll()
+        mongoDao.deleteAll()
     }
 
     private fun directChannel(

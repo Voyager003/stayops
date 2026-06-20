@@ -3,18 +3,18 @@ package com.stayops.reservation
 import com.stayops.TestcontainersConfiguration
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.infrastructure.persistence.ChannelDocument
-import com.stayops.channel.infrastructure.persistence.ChannelMongoDataRepository
+import com.stayops.channel.infrastructure.persistence.dao.ChannelMongoDao
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.infrastructure.persistence.GuestDocument
-import com.stayops.guest.infrastructure.persistence.GuestMongoDataRepository
+import com.stayops.guest.infrastructure.persistence.dao.GuestMongoDao
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.infrastructure.persistence.RoomInventoryDocument
-import com.stayops.inventory.infrastructure.persistence.RoomInventoryMongoDataRepository
+import com.stayops.inventory.infrastructure.persistence.dao.RoomInventoryMongoDao
 import com.stayops.reservation.application.service.ReservationApplication
-import com.stayops.reservation.infrastructure.persistence.ReservationMongoDataRepository
+import com.stayops.reservation.infrastructure.persistence.dao.ReservationMongoDao
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.infrastructure.persistence.RoomTypeDocument
-import com.stayops.room.infrastructure.persistence.RoomTypeMongoDataRepository
+import com.stayops.room.infrastructure.persistence.dao.RoomTypeMongoDao
 import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money
 import org.assertj.core.api.Assertions.assertThat
@@ -55,11 +55,11 @@ import java.util.concurrent.atomic.AtomicInteger
 @Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class MultiChannelConcurrentReservationTest @Autowired constructor(
     private val reservationApplication: ReservationApplication,
-    private val reservationMongoDataRepository: ReservationMongoDataRepository,
-    private val roomTypeMongoDataRepository: RoomTypeMongoDataRepository,
-    private val channelMongoDataRepository: ChannelMongoDataRepository,
-    private val inventoryMongoDataRepository: RoomInventoryMongoDataRepository,
-    private val guestMongoDataRepository: GuestMongoDataRepository,
+    private val reservationMongoDao: ReservationMongoDao,
+    private val roomTypeMongoDao: RoomTypeMongoDao,
+    private val channelMongoDao: ChannelMongoDao,
+    private val inventoryMongoDao: RoomInventoryMongoDao,
+    private val guestMongoDao: GuestMongoDao,
     private val clock: Clock
 ) {
 
@@ -71,11 +71,11 @@ class MultiChannelConcurrentReservationTest @Autowired constructor(
     fun setUp() {
         date = LocalDate.now(clock).plusDays(7)
 
-        reservationMongoDataRepository.deleteAll()
-        inventoryMongoDataRepository.deleteAll()
-        roomTypeMongoDataRepository.deleteAll()
-        channelMongoDataRepository.deleteAll()
-        guestMongoDataRepository.deleteAll()
+        reservationMongoDao.deleteAll()
+        inventoryMongoDao.deleteAll()
+        roomTypeMongoDao.deleteAll()
+        channelMongoDao.deleteAll()
+        guestMongoDao.deleteAll()
 
         // RoomType
         val roomType = RoomType.create(
@@ -83,7 +83,7 @@ class MultiChannelConcurrentReservationTest @Autowired constructor(
             name = "스탠다드", description = "마지막 1실 테스트", maxOccupancy = 2,
             basePrice = Money.won(150_000)
         )
-        roomTypeMongoDataRepository.save(RoomTypeDocument.from(roomType))
+        roomTypeMongoDao.save(RoomTypeDocument.from(roomType))
 
         // 3개 채널: DIRECT + 2개 OTA
         val direct = Channel.createDirect(id = "ch-direct", propertyId = propertyId)
@@ -99,9 +99,9 @@ class MultiChannelConcurrentReservationTest @Autowired constructor(
             commissionRate = BigDecimal("0.18"),
             apiEndpoint = "https://mock-ota/booking"
         )
-        channelMongoDataRepository.save(ChannelDocument.from(direct))
-        channelMongoDataRepository.save(ChannelDocument.from(agoda))
-        channelMongoDataRepository.save(ChannelDocument.from(booking))
+        channelMongoDao.save(ChannelDocument.from(direct))
+        channelMongoDao.save(ChannelDocument.from(agoda))
+        channelMongoDao.save(ChannelDocument.from(booking))
 
         // Guest 3명 (각 채널별 다른 고객)
         listOf("guest-direct", "guest-agoda", "guest-booking").forEachIndexed { i, gid ->
@@ -109,7 +109,7 @@ class MultiChannelConcurrentReservationTest @Autowired constructor(
                 id = gid, propertyId = propertyId,
                 name = "Customer-$i", phone = "010-0000-${1000 + i}"
             )
-            guestMongoDataRepository.save(GuestDocument.from(guest))
+            guestMongoDao.save(GuestDocument.from(guest))
         }
 
         // Inventory: 마지막 1실 (totalCount=1, reservedCount=0, blockedCount=0)
@@ -121,7 +121,7 @@ class MultiChannelConcurrentReservationTest @Autowired constructor(
             createdAt = now,
             updatedAt = now
         )
-        inventoryMongoDataRepository.save(RoomInventoryDocument.from(inventory))
+        inventoryMongoDao.save(RoomInventoryDocument.from(inventory))
     }
 
     @Test
@@ -180,10 +180,10 @@ class MultiChannelConcurrentReservationTest @Autowired constructor(
         assertThat(failCount.get()).isEqualTo(2)
 
         // Then: DB에 정확히 1건의 Reservation만 존재
-        assertThat(reservationMongoDataRepository.count()).isEqualTo(1)
+        assertThat(reservationMongoDao.count()).isEqualTo(1)
 
         // Then: Inventory의 reservedCount는 정확히 1
-        val finalInventory = inventoryMongoDataRepository.findAll().first()
+        val finalInventory = inventoryMongoDao.findAll().first()
         assertThat(finalInventory.reservedCount)
             .withFailMessage(
                 "Inventory.reservedCount=%d (예상: 1). over-reservation 또는 부분 차감 잔존 가능성",

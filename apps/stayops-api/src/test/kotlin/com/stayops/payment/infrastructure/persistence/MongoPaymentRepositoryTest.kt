@@ -1,5 +1,6 @@
 package com.stayops.payment.infrastructure.persistence
 
+import com.stayops.payment.infrastructure.persistence.dao.PaymentMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.payment.domain.model.Payment
 import com.stayops.payment.domain.model.PaymentStatus
@@ -18,12 +19,12 @@ import java.time.Instant
 @Import(TestcontainersConfiguration::class)
 class MongoPaymentRepositoryTest @Autowired constructor(
     private val paymentRepository: PaymentRepository,
-    private val mongoDataRepository: PaymentMongoDataRepository
+    private val mongoDao: PaymentMongoDao
 ) {
 
     @BeforeEach
     fun setUp() {
-        mongoDataRepository.deleteAll()
+        mongoDao.deleteAll()
     }
 
     private fun newPayment(

@@ -1,5 +1,6 @@
 package com.stayops.reservation.infrastructure.persistence
 
+import com.stayops.reservation.infrastructure.persistence.dao.ReservationMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.reservation.domain.model.*
 import com.stayops.reservation.domain.repository.ReservationRepository
@@ -24,7 +25,7 @@ import java.time.LocalDate
 @Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class MongoReservationRepositoryTest @Autowired constructor(
     private val reservationRepository: ReservationRepository,
-    private val mongoDataRepository: ReservationMongoDataRepository,
+    private val mongoDao: ReservationMongoDao,
     private val mongoTemplate: MongoTemplate,
     private val clock: Clock,
     private val timeProperties: StayopsTimeProperties
@@ -32,7 +33,7 @@ class MongoReservationRepositoryTest @Autowired constructor(
 
     @BeforeEach
     fun setUp() {
-        mongoDataRepository.deleteAll()
+        mongoDao.deleteAll()
     }
 
     private fun newReservation(

@@ -3,6 +3,7 @@ package com.stayops.channel.infrastructure.persistence
 import com.stayops.channel.domain.model.SyncTask
 import com.stayops.channel.domain.model.SyncTaskStatus
 import com.stayops.channel.domain.repository.SyncTaskRepository
+import com.stayops.channel.infrastructure.persistence.dao.SyncTaskMongoDao
 import com.stayops.shared.exception.ConflictException
 import jakarta.annotation.PostConstruct
 import org.bson.Document
@@ -14,7 +15,6 @@ import org.springframework.data.mongodb.core.FindAndModifyOptions
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.data.mongodb.core.query.Update
-import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Repository
@@ -22,7 +22,7 @@ import java.time.Instant
 
 @Repository
 class MongoSyncTaskRepository(
-    private val mongo: SyncTaskMongoDataRepository,
+    private val mongo: SyncTaskMongoDao,
     private val mongoTemplate: MongoTemplate
 ) : SyncTaskRepository {
 
@@ -118,13 +118,4 @@ class MongoSyncTaskRepository(
         val results = mongoTemplate.aggregate(aggregation, "sync_tasks", StatusCount::class.java)
         return results.mappedResults.associate { it.status to it.count }
     }
-}
-
-interface SyncTaskMongoDataRepository : MongoRepository<SyncTaskDocument, String> {
-    fun findByPropertyIdAndStatus(propertyId: String, status: SyncTaskStatus): List<SyncTaskDocument>
-    fun findByPropertyIdAndChannelCodeAndStatus(
-        propertyId: String,
-        channelCode: String,
-        status: SyncTaskStatus
-    ): List<SyncTaskDocument>
 }

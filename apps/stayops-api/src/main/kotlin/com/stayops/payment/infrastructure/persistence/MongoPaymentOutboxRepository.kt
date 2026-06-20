@@ -4,6 +4,7 @@ import com.stayops.payment.domain.model.PaymentOutboxStatus
 import com.stayops.payment.domain.model.PaymentOutboxType
 import com.stayops.payment.domain.model.PaymentOutboxMessage
 import com.stayops.payment.domain.repository.PaymentOutboxRepository
+import com.stayops.payment.infrastructure.persistence.dao.PaymentOutboxMongoDao
 import com.stayops.shared.exception.ConflictException
 import jakarta.annotation.PostConstruct
 import org.bson.Document
@@ -13,14 +14,13 @@ import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
 import org.springframework.data.mongodb.core.index.Index
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
-import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 import java.time.Instant
 
 @Repository
 class MongoPaymentOutboxRepository(
-    private val mongo: PaymentOutboxMongoDataRepository,
+    private val mongo: PaymentOutboxMongoDao,
     private val mongoTemplate: MongoTemplate
 ) : PaymentOutboxRepository {
 
@@ -72,8 +72,4 @@ class MongoPaymentOutboxRepository(
         val query = Query(Criteria().orOperator(pending, expiredLease))
         return mongoTemplate.find(query, PaymentOutboxDocument::class.java).map { it.toDomain() }
     }
-}
-
-interface PaymentOutboxMongoDataRepository : MongoRepository<PaymentOutboxDocument, String> {
-    fun findByPaymentIdAndType(paymentId: String, type: PaymentOutboxType): PaymentOutboxDocument?
 }

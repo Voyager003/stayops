@@ -4,8 +4,8 @@ import com.stayops.TestcontainersConfiguration
 import com.stayops.inventory.api.dto.InventoryUpdateAction
 import com.stayops.inventory.api.dto.UpdateInventoryRequest
 import com.stayops.inventory.application.service.RoomInventoryApplication
-import com.stayops.inventory.infrastructure.persistence.RoomInventoryMongoDataRepository
-import com.stayops.room.infrastructure.persistence.RoomMongoDataRepository
+import com.stayops.inventory.infrastructure.persistence.dao.RoomInventoryMongoDao
+import com.stayops.room.infrastructure.persistence.dao.RoomMongoDao
 import com.stayops.room.infrastructure.persistence.RoomDocument
 import com.stayops.room.domain.model.RoomStatus
 import com.stayops.member.domain.model.Member
@@ -38,8 +38,8 @@ import java.time.LocalDate
 class RoomInventoryApiTest @Autowired constructor(
     private val context: WebApplicationContext,
     private val objectMapper: ObjectMapper,
-    private val inventoryMongoRepo: RoomInventoryMongoDataRepository,
-    private val roomMongoRepo: RoomMongoDataRepository,
+    private val inventoryMongoDao: RoomInventoryMongoDao,
+    private val roomMongoDao: RoomMongoDao,
     private val inventoryApplication: RoomInventoryApplication,
     private val redisTemplate: StringRedisTemplate,
     private val clock: Clock
@@ -63,14 +63,14 @@ class RoomInventoryApiTest @Autowired constructor(
         SecurityContextHolder.getContext().authentication =
             UsernamePasswordAuthenticationToken(admin, null, emptyList())
         mockMvc = MockMvcBuilders.webAppContextSetup(context).build()
-        inventoryMongoRepo.deleteAll()
-        roomMongoRepo.deleteAll()
+        inventoryMongoDao.deleteAll()
+        roomMongoDao.deleteAll()
         redisTemplate.connectionFactory?.connection?.serverCommands()?.flushAll()
 
         // 테스트용 객실 3개 생성 + 재고 자동 생성 (기본 마감 — blockedCount=3)
         val now = Instant.now(clock)
         listOf("101", "102", "103").forEach { num ->
-            roomMongoRepo.save(
+            roomMongoDao.save(
                 RoomDocument(
                     id = "room-$num", propertyId = pid, roomTypeId = roomTypeId,
                     roomNumber = num, floor = 1, status = RoomStatus.AVAILABLE,

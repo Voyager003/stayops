@@ -4,7 +4,7 @@ import com.stayops.TestcontainersConfiguration
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
 import com.stayops.member.infrastructure.persistence.MemberDocument
-import com.stayops.member.infrastructure.persistence.MemberMongoDataRepository
+import com.stayops.member.infrastructure.persistence.dao.MemberMongoDao
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -26,7 +26,7 @@ import org.springframework.web.context.WebApplicationContext
 @Import(TestcontainersConfiguration::class)
 class CsrfSecurityIntegrationTest @Autowired constructor(
     private val context: WebApplicationContext,
-    private val memberMongoDataRepository: MemberMongoDataRepository,
+    private val memberMongoDao: MemberMongoDao,
     private val passwordEncoder: PasswordEncoder
 ) {
 
@@ -38,8 +38,8 @@ class CsrfSecurityIntegrationTest @Autowired constructor(
             .apply<DefaultMockMvcBuilder>(springSecurity())
             .build()
 
-        memberMongoDataRepository.deleteAll()
-        memberMongoDataRepository.save(
+        memberMongoDao.deleteAll()
+        memberMongoDao.save(
             MemberDocument.from(
                 Member.create(
                     id = "csrf-test-owner",

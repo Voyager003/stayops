@@ -1,7 +1,7 @@
 package com.stayops.inventory.infrastructure.cache
 
 import com.stayops.inventory.domain.model.RoomInventory
-import com.stayops.inventory.domain.repository.RoomInventoryCache
+import com.stayops.inventory.domain.cache.RoomInventoryCache
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.stereotype.Service
 import tools.jackson.databind.ObjectMapper

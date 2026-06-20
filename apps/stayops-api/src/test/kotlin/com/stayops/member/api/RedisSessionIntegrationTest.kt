@@ -5,7 +5,7 @@ import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
 import com.stayops.member.domain.model.PropertyRole
 import com.stayops.member.infrastructure.persistence.MemberDocument
-import com.stayops.member.infrastructure.persistence.MemberMongoDataRepository
+import com.stayops.member.infrastructure.persistence.dao.MemberMongoDao
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -25,14 +25,14 @@ import java.util.Base64
 @Import(TestcontainersConfiguration::class)
 class RedisSessionIntegrationTest @Autowired constructor(
     @LocalServerPort private val port: Int,
-    private val memberMongoDataRepository: MemberMongoDataRepository,
+    private val memberMongoDao: MemberMongoDao,
     private val passwordEncoder: PasswordEncoder,
     private val redisTemplate: StringRedisTemplate
 ) {
 
     @BeforeEach
     fun setUp() {
-        memberMongoDataRepository.deleteAll()
+        memberMongoDao.deleteAll()
         redisTemplate.keys("spring:session:*").forEach { redisTemplate.delete(it) }
 
         val member = Member.create(
@@ -42,7 +42,7 @@ class RedisSessionIntegrationTest @Autowired constructor(
             name = "세션테스트",
             role = MemberRole.OWNER
         ).grantAccess("prop-1", PropertyRole.OWNER)
-        memberMongoDataRepository.save(MemberDocument.from(member))
+        memberMongoDao.save(MemberDocument.from(member))
     }
 
     private data class CsrfExchange(
@@ -189,7 +189,7 @@ class RedisSessionIntegrationTest @Autowired constructor(
                 name = "세션테스트고객",
                 role = MemberRole.CUSTOMER
             )
-            memberMongoDataRepository.save(MemberDocument.from(customer))
+            memberMongoDao.save(MemberDocument.from(customer))
         }
 
         private fun customerLoginAndGetSession(): LoginSession {

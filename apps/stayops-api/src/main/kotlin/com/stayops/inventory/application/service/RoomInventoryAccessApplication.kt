@@ -1,7 +1,7 @@
 package com.stayops.inventory.application.service
 
 import com.stayops.inventory.domain.model.RoomInventory
-import com.stayops.inventory.domain.repository.RoomInventoryCache
+import com.stayops.inventory.domain.cache.RoomInventoryCache
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory

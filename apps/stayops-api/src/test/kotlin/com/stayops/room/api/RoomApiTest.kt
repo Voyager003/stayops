@@ -4,7 +4,7 @@ import com.stayops.TestcontainersConfiguration
 import com.stayops.room.api.dto.CreateRoomRequest
 import com.stayops.room.api.dto.UpdateRoomStatusRequest
 import com.stayops.room.api.dto.RoomStatusAction
-import com.stayops.room.infrastructure.persistence.RoomMongoDataRepository
+import com.stayops.room.infrastructure.persistence.dao.RoomMongoDao
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
 import org.junit.jupiter.api.AfterEach
@@ -30,7 +30,7 @@ import tools.jackson.databind.ObjectMapper
 class RoomApiTest @Autowired constructor(
     private val context: WebApplicationContext,
     private val objectMapper: ObjectMapper,
-    private val mongoDataRepository: RoomMongoDataRepository
+    private val mongoDao: RoomMongoDao
 ) {
     private lateinit var mockMvc: MockMvc
 
@@ -46,7 +46,7 @@ class RoomApiTest @Autowired constructor(
         SecurityContextHolder.getContext().authentication =
             UsernamePasswordAuthenticationToken(admin, null, emptyList())
         mockMvc = MockMvcBuilders.webAppContextSetup(context).build()
-        mongoDataRepository.deleteAll()
+        mongoDao.deleteAll()
     }
 
     @AfterEach

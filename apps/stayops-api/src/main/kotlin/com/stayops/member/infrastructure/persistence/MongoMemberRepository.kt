@@ -2,13 +2,13 @@ package com.stayops.member.infrastructure.persistence
 
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.repository.MemberRepository
-import org.springframework.data.mongodb.repository.MongoRepository
+import com.stayops.member.infrastructure.persistence.dao.MemberMongoDao
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
 @Repository
 class MongoMemberRepository(
-    private val mongo: MemberMongoDataRepository
+    private val mongo: MemberMongoDao
 ) : MemberRepository {
 
     override fun save(member: Member): Member =
@@ -22,9 +22,4 @@ class MongoMemberRepository(
 
     override fun existsByEmail(email: String): Boolean =
         mongo.existsByEmail(email)
-}
-
-interface MemberMongoDataRepository : MongoRepository<MemberDocument, String> {
-    fun findByEmail(email: String): MemberDocument?
-    fun existsByEmail(email: String): Boolean
 }

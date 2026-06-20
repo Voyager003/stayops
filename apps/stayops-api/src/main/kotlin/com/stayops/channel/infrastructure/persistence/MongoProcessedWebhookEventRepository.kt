@@ -2,18 +2,18 @@ package com.stayops.channel.infrastructure.persistence
 
 import com.stayops.channel.domain.model.ProcessedWebhookEvent
 import com.stayops.channel.domain.repository.ProcessedWebhookEventRepository
+import com.stayops.channel.infrastructure.persistence.dao.ProcessedWebhookEventMongoDao
 import jakarta.annotation.PostConstruct
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.index.Index
-import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.stereotype.Repository
 import java.time.Duration
 
 @Repository
 class MongoProcessedWebhookEventRepository(
-    private val mongo: ProcessedWebhookEventMongoDataRepository,
+    private val mongo: ProcessedWebhookEventMongoDao,
     private val mongoTemplate: MongoTemplate
 ) : ProcessedWebhookEventRepository {
 
@@ -37,5 +37,3 @@ class MongoProcessedWebhookEventRepository(
             false
         }
 }
-
-interface ProcessedWebhookEventMongoDataRepository : MongoRepository<ProcessedWebhookEventDocument, String>

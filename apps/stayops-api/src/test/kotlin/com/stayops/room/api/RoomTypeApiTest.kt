@@ -3,7 +3,7 @@ package com.stayops.room.api
 import com.stayops.TestcontainersConfiguration
 import com.stayops.room.api.dto.CreateRoomTypeRequest
 import com.stayops.room.api.dto.UpdateRoomTypeRequest
-import com.stayops.room.infrastructure.persistence.RoomTypeMongoDataRepository
+import com.stayops.room.infrastructure.persistence.dao.RoomTypeMongoDao
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
 import org.junit.jupiter.api.AfterEach
@@ -31,7 +31,7 @@ import java.math.BigDecimal
 class RoomTypeApiTest @Autowired constructor(
     private val context: WebApplicationContext,
     private val objectMapper: ObjectMapper,
-    private val mongoDataRepository: RoomTypeMongoDataRepository
+    private val mongoDao: RoomTypeMongoDao
 ) {
     private lateinit var mockMvc: MockMvc
 
@@ -47,7 +47,7 @@ class RoomTypeApiTest @Autowired constructor(
         SecurityContextHolder.getContext().authentication =
             UsernamePasswordAuthenticationToken(admin, null, emptyList())
         mockMvc = MockMvcBuilders.webAppContextSetup(context).build()
-        mongoDataRepository.deleteAll()
+        mongoDao.deleteAll()
     }
 
     @AfterEach

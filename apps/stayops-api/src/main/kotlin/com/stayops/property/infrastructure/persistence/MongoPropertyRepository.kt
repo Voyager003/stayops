@@ -2,13 +2,13 @@ package com.stayops.property.infrastructure.persistence
 
 import com.stayops.property.domain.model.Property
 import com.stayops.property.domain.repository.PropertyRepository
-import org.springframework.data.mongodb.repository.MongoRepository
+import com.stayops.property.infrastructure.persistence.dao.PropertyMongoDao
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
 @Repository
 class MongoPropertyRepository(
-    private val mongo: PropertyMongoDataRepository
+    private val mongo: PropertyMongoDao
 ) : PropertyRepository {
 
     override fun save(property: Property): Property =
@@ -25,8 +25,4 @@ class MongoPropertyRepository(
 
     override fun findAll(): List<Property> =
         mongo.findAll().map { it.toDomain() }
-}
-
-interface PropertyMongoDataRepository : MongoRepository<PropertyDocument, String> {
-    fun findByOwnerId(ownerId: String): List<PropertyDocument>
 }
