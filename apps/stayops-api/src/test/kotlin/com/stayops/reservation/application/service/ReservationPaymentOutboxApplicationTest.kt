@@ -1,6 +1,6 @@
 package com.stayops.reservation.application.service
 
-import com.stayops.inventory.application.port.InventoryReservationPort
+import com.stayops.inventory.application.service.InventoryReservationService
 import com.stayops.payment.domain.model.Payment
 import com.stayops.payment.domain.model.PaymentCancelReason
 import com.stayops.payment.domain.model.PaymentOutboxMessage
@@ -43,7 +43,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
     val outboxRepository = mockk<PaymentOutboxRepository>()
     val paymentRepository = mockk<PaymentRepository>()
     val reservationRepository = mockk<ReservationRepository>()
-    val inventoryReservationPort = mockk<InventoryReservationPort>()
+    val inventoryReservationService = mockk<InventoryReservationService>()
     val paymentGateway = mockk<PaymentGateway>()
     val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
     val fixedInstant = Instant.parse("2026-04-13T10:00:00Z")
@@ -56,7 +56,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         outboxRepository = outboxRepository,
         paymentRepository = paymentRepository,
         reservationRepository = reservationRepository,
-        inventoryReservationPort = inventoryReservationPort,
+        inventoryReservationService = inventoryReservationService,
         paymentGateway = paymentGateway,
         eventPublisher = eventPublisher,
         clock = clock,
@@ -125,8 +125,8 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         every { paymentRepository.save(any()) } answers { firstArg() }
         every { reservationRepository.save(any()) } answers { firstArg() }
         every { outboxRepository.findByPaymentIdAndType(any(), any()) } returns null
-        every { inventoryReservationPort.reserve(any(), any(), any()) } returns Unit
-        every { inventoryReservationPort.release(any(), any(), any()) } returns Unit
+        every { inventoryReservationService.reserve(any(), any(), any()) } returns Unit
+        every { inventoryReservationService.release(any(), any(), any()) } returns Unit
     }
 
     given("결제 승인 Outbox 처리 시") {
@@ -156,7 +156,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
 
                 application.processPendingMessages(workerId = "worker-1")
 
-                verify(exactly = 2) { inventoryReservationPort.reserve("prop-1", "rt-1", any()) }
+                verify(exactly = 2) { inventoryReservationService.reserve("prop-1", "rt-1", any()) }
                 verify { paymentRepository.save(match { it.status == PaymentStatus.APPROVED }) }
                 verify(exactly = 0) { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
                 verify {
@@ -187,7 +187,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
 
                 application.processPendingMessages(workerId = "worker-1")
 
-                verify(exactly = 2) { inventoryReservationPort.reserve("prop-1", "rt-1", any()) }
+                verify(exactly = 2) { inventoryReservationService.reserve("prop-1", "rt-1", any()) }
                 verify { paymentRepository.save(match { it.status == PaymentStatus.APPROVED }) }
                 verify(exactly = 0) { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
                 verify { eventPublisher.publishEvent(any<ReservationCreated>()) }
@@ -205,7 +205,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
                 application.processPendingMessages(workerId = "worker-1")
 
                 verify(exactly = 0) { paymentGateway.confirm(any(), any(), any(), any()) }
-                verify(exactly = 0) { inventoryReservationPort.reserve(any(), any(), any()) }
+                verify(exactly = 0) { inventoryReservationService.reserve(any(), any(), any()) }
                 verify(exactly = 0) { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
                 verify(exactly = 0) { eventPublisher.publishEvent(any<ReservationCreated>()) }
                 verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
@@ -235,7 +235,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
                     cardNumber = null,
                     cardCompany = null
                 )
-                every { inventoryReservationPort.reserve("prop-1", "rt-1", checkIn) } throws
+                every { inventoryReservationService.reserve("prop-1", "rt-1", checkIn) } throws
                     IllegalArgumentException("가용 객실이 없습니다: available=0")
 
                 application.processPendingMessages(workerId = "worker-1")
@@ -278,13 +278,13 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
                     cardNumber = null,
                     cardCompany = null
                 )
-                every { inventoryReservationPort.reserve("prop-1", "rt-1", checkIn) } returns Unit
-                every { inventoryReservationPort.reserve("prop-1", "rt-1", checkIn.plusDays(1)) } throws
+                every { inventoryReservationService.reserve("prop-1", "rt-1", checkIn) } returns Unit
+                every { inventoryReservationService.reserve("prop-1", "rt-1", checkIn.plusDays(1)) } throws
                     ConflictException("INVENTORY_CONFLICT", "재고 변경 충돌이 발생했습니다")
 
                 application.processPendingMessages(workerId = "worker-1")
 
-                verify(exactly = 1) { inventoryReservationPort.release("prop-1", "rt-1", checkIn) }
+                verify(exactly = 1) { inventoryReservationService.release("prop-1", "rt-1", checkIn) }
                 verify(exactly = 0) { paymentRepository.save(match { it.status == PaymentStatus.CANCEL_REQUESTED }) }
                 verify(exactly = 0) { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
                 verify {

@@ -1,6 +1,6 @@
 package com.stayops.reservation.application.service
 
-import com.stayops.inventory.application.port.InventoryReservationPort
+import com.stayops.inventory.application.service.InventoryReservationService
 import com.stayops.reservation.application.port.ReservationPaymentPort
 import com.stayops.reservation.application.port.ReservationPaymentSnapshot
 import com.stayops.reservation.application.port.ReservationPaymentStatus
@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional
 class CustomerReservationCancellationApplication(
     private val reservationRepository: ReservationRepository,
     private val reservationPaymentPort: ReservationPaymentPort,
-    private val inventoryReservationPort: InventoryReservationPort,
+    private val inventoryReservationService: InventoryReservationService,
     private val eventPublisher: ApplicationEventPublisher
 ) {
 
@@ -54,7 +54,7 @@ class CustomerReservationCancellationApplication(
             )
 
             reservation.dateRange.allDates().forEach { date ->
-                inventoryReservationPort.release(reservation.propertyId, reservation.roomTypeId, date)
+                inventoryReservationService.release(reservation.propertyId, reservation.roomTypeId, date)
             }
             eventPublisher.publishEvent(
                 ReservationCancelled(

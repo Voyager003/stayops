@@ -4,7 +4,7 @@ import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
-import com.stayops.inventory.application.port.InventoryReservationPort
+import com.stayops.inventory.application.service.InventoryReservationService
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.rate.domain.model.RatePlanStatus
@@ -46,7 +46,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
     val ratePlanRepository = mockk<RatePlanRepository>()
     val reservationRepository = mockk<ReservationRepository>()
     val reservationPaymentPort = mockk<ReservationPaymentPort>()
-    val inventoryReservationPort = mockk<InventoryReservationPort>()
+    val inventoryReservationService = mockk<InventoryReservationService>()
     val rateResolverService = RateResolverService()
     val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
     val fixedInstant = Instant.parse("2026-04-08T10:00:00Z")
@@ -79,7 +79,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
     val cancellationApplication = CustomerReservationCancellationApplication(
         reservationRepository = reservationRepository,
         reservationPaymentPort = reservationPaymentPort,
-        inventoryReservationPort = inventoryReservationPort,
+        inventoryReservationService = inventoryReservationService,
         eventPublisher = eventPublisher
     )
     val service = CustomerReservationApplication(
@@ -175,7 +175,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
         every { roomTypeRepository.findById("rt-1") } returns activeRoomType()
         every { channelRepository.findByPropertyIdAndCode("prop-1", "DIRECT") } returns directChannel()
         every { ratePlanRepository.findByPropertyIdAndRoomTypeIdAndStatus("prop-1", "rt-1", RatePlanStatus.ACTIVE) } returns emptyList()
-        justRun { inventoryReservationPort.reserve(any(), any(), any()) }
+        justRun { inventoryReservationService.reserve(any(), any(), any()) }
         every { reservationRepository.save(any()) } answers { firstArg() }
         every { reservationPaymentPort.createPendingPayment(any(), any(), any()) } returns pendingPayment()
     }
@@ -247,7 +247,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
                 result.payment.status shouldBe ReservationPaymentStatus.PENDING
                 result.payment.memberId shouldBe "member-1"
                 verify { guestRepository.save(any()) }
-                verify(exactly = 0) { inventoryReservationPort.reserve(any(), any(), any()) }
+                verify(exactly = 0) { inventoryReservationService.reserve(any(), any(), any()) }
             }
         }
 
@@ -308,7 +308,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
                     )
                 }
                 ex.code shouldBe "DUPLICATE_RESERVATION"
-                verify(exactly = 0) { inventoryReservationPort.reserve(any(), any(), any()) }
+                verify(exactly = 0) { inventoryReservationService.reserve(any(), any(), any()) }
                 verify(exactly = 0) { reservationRepository.save(any()) }
             }
         }
@@ -497,7 +497,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             every { reservationRepository.save(any()) } answers { firstArg() }
             every { reservationPaymentPort.cancelPendingByCustomerRequest("rsv-1") } returns
                 payment.fail("고객 요청에 의한 취소")
-            justRun { inventoryReservationPort.release(any(), any(), any()) }
+            justRun { inventoryReservationService.release(any(), any(), any()) }
 
             val result = service.cancelReservation(memberId = "member-1", reservationId = "rsv-1")
 
@@ -506,7 +506,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
                 result.payment.status shouldBe ReservationPaymentStatus.FAILED
                 result.payment.failReason shouldBe "고객 요청에 의한 취소"
                 verify(exactly = 1) { reservationPaymentPort.cancelPendingByCustomerRequest("rsv-1") }
-                verify(exactly = 0) { inventoryReservationPort.release(any(), any(), any()) }
+                verify(exactly = 0) { inventoryReservationService.release(any(), any(), any()) }
             }
         }
 
@@ -520,7 +520,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             every { reservationPaymentPort.cancelPendingByCustomerRequest("rsv-1") } returns
                 payment.fail("고객 요청에 의한 취소")
             every { reservationPaymentPort.requestCancelByCustomerRequest("rsv-1", "member-1") } returns payment.requestCancel()
-            justRun { inventoryReservationPort.release(any(), any(), any()) }
+            justRun { inventoryReservationService.release(any(), any(), any()) }
 
             val result = service.cancelReservation(memberId = "member-1", reservationId = "rsv-1")
 
@@ -529,7 +529,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
                 result.payment.status shouldBe ReservationPaymentStatus.CANCEL_REQUESTED
                 verify(exactly = 0) { reservationPaymentPort.cancelPendingByCustomerRequest("rsv-1") }
                 verify(exactly = 1) { reservationPaymentPort.requestCancelByCustomerRequest("rsv-1", "member-1") }
-                verify(exactly = 2) { inventoryReservationPort.release("prop-1", "rt-1", any()) }
+                verify(exactly = 2) { inventoryReservationService.release("prop-1", "rt-1", any()) }
             }
         }
 
@@ -541,14 +541,14 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             every { reservationPaymentPort.findByReservationId("rsv-1") } returns payment
             every { reservationRepository.save(any()) } answers { firstArg() }
             every { reservationPaymentPort.requestCancelByCustomerRequest("rsv-1", "member-1") } returns payment.requestCancel()
-            justRun { inventoryReservationPort.release(any(), any(), any()) }
+            justRun { inventoryReservationService.release(any(), any(), any()) }
 
             val result = service.cancelReservation(memberId = "member-1", reservationId = "rsv-1")
 
             then("예약 취소 + 결제 취소 요청 + Outbox 생성 + 재고 복원") {
                 result.reservation.status shouldBe ReservationStatus.CANCELLED
                 result.payment.status shouldBe ReservationPaymentStatus.CANCEL_REQUESTED
-                verify(exactly = 2) { inventoryReservationPort.release("prop-1", "rt-1", any()) }
+                verify(exactly = 2) { inventoryReservationService.release("prop-1", "rt-1", any()) }
                 verify(exactly = 1) { reservationPaymentPort.requestCancelByCustomerRequest("rsv-1", "member-1") }
             }
         }
@@ -561,7 +561,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             every { reservationPaymentPort.findByReservationId("rsv-1") } returns payment
             every { reservationRepository.save(any()) } answers { firstArg() }
             every { reservationPaymentPort.requestCancelByCustomerRequest("rsv-1", "member-1") } returns payment
-            justRun { inventoryReservationPort.release(any(), any(), any()) }
+            justRun { inventoryReservationService.release(any(), any(), any()) }
 
             val result = service.cancelReservation(memberId = "member-1", reservationId = "rsv-1")
 
@@ -569,7 +569,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
                 result.reservation.status shouldBe ReservationStatus.CANCELLED
                 result.payment.status shouldBe ReservationPaymentStatus.CANCEL_REQUESTED
                 verify(exactly = 1) { reservationPaymentPort.requestCancelByCustomerRequest("rsv-1", "member-1") }
-                verify(exactly = 2) { inventoryReservationPort.release("prop-1", "rt-1", any()) }
+                verify(exactly = 2) { inventoryReservationService.release("prop-1", "rt-1", any()) }
             }
         }
     }

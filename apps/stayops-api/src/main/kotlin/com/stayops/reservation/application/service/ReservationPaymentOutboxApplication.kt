@@ -1,6 +1,6 @@
 package com.stayops.reservation.application.service
 
-import com.stayops.inventory.application.port.InventoryReservationPort
+import com.stayops.inventory.application.service.InventoryReservationService
 import com.stayops.payment.domain.model.Payment
 import com.stayops.payment.domain.model.PaymentCancelReason
 import com.stayops.payment.domain.model.PaymentOutboxMessage
@@ -31,7 +31,7 @@ class ReservationPaymentOutboxApplication(
     private val outboxRepository: PaymentOutboxRepository,
     private val paymentRepository: PaymentRepository,
     private val reservationRepository: ReservationRepository,
-    private val inventoryReservationPort: InventoryReservationPort,
+    private val inventoryReservationService: InventoryReservationService,
     private val paymentGateway: PaymentGateway,
     private val eventPublisher: ApplicationEventPublisher,
     private val clock: Clock,
@@ -198,7 +198,7 @@ class ReservationPaymentOutboxApplication(
         val reservedDates = mutableListOf<LocalDate>()
         try {
             reservation.dateRange.allDates().forEach { date ->
-                inventoryReservationPort.reserve(reservation.propertyId, reservation.roomTypeId, date)
+                inventoryReservationService.reserve(reservation.propertyId, reservation.roomTypeId, date)
                 reservedDates += date
             }
         } catch (e: IllegalArgumentException) {
@@ -276,7 +276,7 @@ class ReservationPaymentOutboxApplication(
     private fun releaseReservedInventory(reservation: Reservation, reservedDates: List<LocalDate>) {
         reservedDates.forEach { date ->
             try {
-                inventoryReservationPort.release(reservation.propertyId, reservation.roomTypeId, date)
+                inventoryReservationService.release(reservation.propertyId, reservation.roomTypeId, date)
             } catch (e: Exception) {
                 log.error("결제 승인 중 재고 보상 해제 실패: reservationId={}, date={}", reservation.id, date, e)
             }

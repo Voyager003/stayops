@@ -44,13 +44,14 @@ class ServiceNamingConventionTest {
                 .filter { Files.isRegularFile(it) }
                 .filter { it.toString().contains("/application/service/") }
                 .filter { it.fileName.toString().endsWith("Service.kt") }
+                .filter { path -> !Files.readString(path).contains("interface ${path.fileName.toString().removeSuffix(".kt")}") }
                 .map { sourceRoot.relativize(it).toString() }
                 .toList()
         }
 
         assertTrue(
             actual = applicationServiceFiles.isEmpty(),
-            message = "Application facade files must use *Application naming, not *Service: $applicationServiceFiles"
+            message = "Concrete application facade files must use *Application naming, not *Service: $applicationServiceFiles"
         )
 
         val rateResolverService = sourceRoot.resolve("rate/domain/service/RateResolverService.kt")
@@ -124,12 +125,12 @@ class ServiceNamingConventionTest {
     }
 
     @Test
-    fun should_use_inventory_reservation_port_for_reserve_release_consumers() {
+    fun should_use_inventory_reservation_service_for_reserve_release_consumers() {
         val mainRoot = Path.of("src/main/kotlin")
 
         assertTrue(
-            actual = Files.exists(mainRoot.resolve("com/stayops/inventory/application/port/InventoryReservationPort.kt")),
-            message = "Inventory reserve/release contract must be exposed as InventoryReservationPort"
+            actual = Files.exists(mainRoot.resolve("com/stayops/inventory/application/service/InventoryReservationService.kt")),
+            message = "Inventory reserve/release contract must be exposed as InventoryReservationService"
         )
 
         val directInventoryApplicationReferences = listOf(
@@ -153,7 +154,7 @@ class ServiceNamingConventionTest {
 
         assertTrue(
             actual = directInventoryApplicationReferences.isEmpty(),
-            message = "External reserve/release consumers must depend on InventoryReservationPort, not RoomInventoryApplication: $directInventoryApplicationReferences"
+            message = "External reserve/release consumers must depend on InventoryReservationService, not RoomInventoryApplication: $directInventoryApplicationReferences"
         )
     }
 

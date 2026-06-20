@@ -1,6 +1,5 @@
 package com.stayops.inventory.application.service
 
-import com.stayops.inventory.application.port.InventoryReservationPort
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.LocalDate
@@ -8,7 +7,7 @@ import java.time.LocalDate
 @Service
 class RoomInventoryReservationApplication(
     private val inventoryAccess: RoomInventoryAccessApplication
-) : InventoryReservationPort {
+) : InventoryReservationService {
 
     private val log = LoggerFactory.getLogger(javaClass)
 

@@ -1,8 +1,8 @@
-package com.stayops.inventory.application.port
+package com.stayops.inventory.application.service
 
 import java.time.LocalDate
 
-interface InventoryReservationPort {
+interface InventoryReservationService {
     fun reserve(propertyId: String, roomTypeId: String, date: LocalDate)
 
     fun release(propertyId: String, roomTypeId: String, date: LocalDate)

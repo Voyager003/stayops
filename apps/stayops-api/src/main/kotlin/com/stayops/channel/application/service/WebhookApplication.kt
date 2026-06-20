@@ -9,7 +9,7 @@ import com.stayops.channel.domain.repository.ProcessedWebhookEventRepository
 import com.stayops.channel.domain.service.SignatureVerifier
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
-import com.stayops.inventory.application.port.InventoryReservationPort
+import com.stayops.inventory.application.service.InventoryReservationService
 import com.stayops.reservation.application.port.ReservationPaymentPort
 import com.stayops.reservation.domain.event.ReservationCancelled
 import com.stayops.reservation.domain.event.ReservationCreated
@@ -38,7 +38,7 @@ class WebhookApplication(
     private val channelSyncApplication: ChannelSyncApplication,
     private val reservationRepository: ReservationRepository,
     private val reservationPaymentPort: ReservationPaymentPort,
-    private val inventoryReservationPort: InventoryReservationPort,
+    private val inventoryReservationService: InventoryReservationService,
     private val guestRepository: GuestRepository,
     private val eventPublisher: ApplicationEventPublisher,
     private val roomTypeRepository: RoomTypeRepository,
@@ -120,7 +120,7 @@ class WebhookApplication(
         // 1. Reserve inventory for each date
         val dateRange = DateRange.of(checkInDate, checkOutDate)
         dateRange.allDates().forEach { date ->
-            inventoryReservationPort.reserve(propertyId, roomTypeId, date)
+            inventoryReservationService.reserve(propertyId, roomTypeId, date)
         }
 
         // 2. Create or find guest (OTA guests have no phone — use placeholder)
@@ -208,7 +208,7 @@ class WebhookApplication(
         val saved = reservationRepository.save(cancelled)
 
         reservation.dateRange.allDates().forEach { date ->
-            inventoryReservationPort.release(reservation.propertyId, reservation.roomTypeId, date)
+            inventoryReservationService.release(reservation.propertyId, reservation.roomTypeId, date)
         }
 
         eventPublisher.publishEvent(
