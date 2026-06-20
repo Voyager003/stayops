@@ -2,8 +2,7 @@ package com.stayops.member.domain.model
 
 import java.time.Instant
 
-@ConsistentCopyVisibility
-data class Member private constructor(
+class Member private constructor(
     val id: String,
     val email: String,
     val passwordHash: String,
@@ -26,7 +25,7 @@ data class Member private constructor(
         require(propertyAccess.none { it.propertyId == propertyId }) {
             "이미 해당 숙소에 대한 접근 권한이 있습니다: $propertyId"
         }
-        return copy(
+        return copyState(
             propertyAccess = propertyAccess + PropertyAccess(propertyId, role),
             updatedAt = Instant.now()
         )
@@ -36,18 +35,50 @@ data class Member private constructor(
         require(propertyAccess.any { it.propertyId == propertyId }) {
             "해당 숙소에 대한 접근 권한이 없습니다: $propertyId"
         }
-        return copy(
+        return copyState(
             propertyAccess = propertyAccess.filter { it.propertyId != propertyId },
             updatedAt = Instant.now()
         )
     }
 
-    fun recordLogin(): Member = copy(lastLoginAt = Instant.now(), updatedAt = Instant.now())
+    fun recordLogin(): Member = copyState(lastLoginAt = Instant.now(), updatedAt = Instant.now())
 
     fun deactivate(): Member {
         check(status == MemberStatus.ACTIVE) { "이미 비활성화된 회원입니다." }
-        return copy(status = MemberStatus.INACTIVE, updatedAt = Instant.now())
+        return copyState(status = MemberStatus.INACTIVE, updatedAt = Instant.now())
     }
+
+    private fun copyState(
+        propertyAccess: List<PropertyAccess> = this.propertyAccess,
+        status: MemberStatus = this.status,
+        lastLoginAt: Instant? = this.lastLoginAt,
+        updatedAt: Instant = this.updatedAt
+    ): Member = Member(
+        id = id,
+        email = email,
+        passwordHash = passwordHash,
+        name = name,
+        role = role,
+        propertyAccess = propertyAccess,
+        status = status,
+        lastLoginAt = lastLoginAt,
+        version = version,
+        createdAt = createdAt,
+        updatedAt = updatedAt
+    )
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as Member
+
+        return id == other.id
+    }
+
+    override fun hashCode(): Int = 31 * javaClass.hashCode() + id.hashCode()
+
+    override fun toString(): String = "Member(id=$id, role=$role, status=$status)"
 
     companion object {
         private const val serialVersionUID = 1L
