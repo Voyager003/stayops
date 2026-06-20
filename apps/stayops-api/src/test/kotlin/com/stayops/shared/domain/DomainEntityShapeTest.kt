@@ -1,6 +1,7 @@
 package com.stayops.shared.domain
 
 import com.stayops.channel.domain.model.SyncTask
+import com.stayops.guest.domain.model.Guest
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.member.domain.model.Member
 import com.stayops.payment.domain.model.Payment
@@ -17,6 +18,7 @@ class DomainEntityShapeTest : BehaviorSpec({
                 Reservation::class,
                 Payment::class,
                 RoomInventory::class,
+                Guest::class,
                 Member::class,
                 PaymentOutboxMessage::class,
                 SyncTask::class

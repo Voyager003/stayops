@@ -184,4 +184,49 @@ class GuestTest : BehaviorSpec({
             }
         }
     }
+
+    given("Guest 동일성을 비교할 때") {
+        `when`("같은 ID의 Guest 방문 이력이 다르면") {
+            then("같은 도메인 객체로 판단한다") {
+                val guest = newGuest()
+                val visited = guest.recordVisit(Money.of(100_000), 2, visitDate)
+
+                (guest == visited) shouldBe true
+                guest.hashCode() shouldBe visited.hashCode()
+            }
+        }
+
+        `when`("다른 ID의 Guest가 동일한 속성을 가지면") {
+            then("다른 도메인 객체로 판단한다") {
+                val first = newGuest(id = "guest-1")
+                val second = newGuest(id = "guest-2")
+
+                (first == second) shouldBe false
+            }
+        }
+
+        `when`("방문 기록 전 Guest를 Set에 보관하면") {
+            then("방문 기록 후 Guest를 같은 항목으로 찾는다") {
+                val guest = newGuest()
+                val guests = setOf(guest)
+
+                guests.contains(guest.recordVisit(Money.of(100_000), 2, visitDate)) shouldBe true
+            }
+        }
+    }
+
+    given("Guest를 문자열로 표현할 때") {
+        then("개인정보와 메모를 노출하지 않는다") {
+            val guest = newGuest(
+                phone = "010-1234-5678",
+                email = "guest@example.com",
+                memo = "private memo"
+            )
+            val text = guest.toString()
+
+            text.contains("010-1234-5678") shouldBe false
+            text.contains("guest@example.com") shouldBe false
+            text.contains("private memo") shouldBe false
+        }
+    }
 })

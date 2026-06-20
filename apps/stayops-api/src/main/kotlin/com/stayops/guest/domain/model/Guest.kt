@@ -5,8 +5,7 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-@ConsistentCopyVisibility
-data class Guest private constructor(
+class Guest private constructor(
     val id: String,
     val propertyId: String,
     val name: String,
@@ -21,7 +20,7 @@ data class Guest private constructor(
 ) {
     fun recordVisit(spend: Money, stayNights: Int, visitDate: LocalDate): Guest {
         val updatedSummary = visitSummary.recordVisit(spend, stayNights, visitDate)
-        return copy(
+        return copyState(
             visitSummary = updatedSummary,
             tier = calculateTier(updatedSummary),
             updatedAt = Instant.now()
@@ -30,12 +29,45 @@ data class Guest private constructor(
 
     fun update(name: String, memo: String?): Guest {
         require(name.isNotBlank()) { "이름은 공백일 수 없습니다." }
-        return copy(
+        return copyState(
             name = name,
             memo = memo,
             updatedAt = Instant.now()
         )
     }
+
+    private fun copyState(
+        name: String = this.name,
+        tier: GuestTier = this.tier,
+        memo: String? = this.memo,
+        visitSummary: VisitSummary = this.visitSummary,
+        updatedAt: Instant = this.updatedAt
+    ): Guest = Guest(
+        id = id,
+        propertyId = propertyId,
+        name = name,
+        phone = phone,
+        email = email,
+        tier = tier,
+        memo = memo,
+        visitSummary = visitSummary,
+        version = version,
+        createdAt = createdAt,
+        updatedAt = updatedAt
+    )
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as Guest
+
+        return id == other.id
+    }
+
+    override fun hashCode(): Int = 31 * javaClass.hashCode() + id.hashCode()
+
+    override fun toString(): String = "Guest(id=$id, propertyId=$propertyId, tier=$tier)"
 
     private fun calculateTier(summary: VisitSummary): GuestTier = when {
         summary.totalVisits >= 20 || summary.totalSpend.amount >= BigDecimal(5_000_000) -> GuestTier.VIP
