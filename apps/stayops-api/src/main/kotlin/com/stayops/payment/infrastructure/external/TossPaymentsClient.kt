@@ -36,10 +36,7 @@ class TossPaymentsClient(
             orderId = response.orderId,
             method = response.method,
             approvedAt = response.approvedAt?.let { OffsetDateTime.parse(it).toInstant() },
-            totalAmount = response.totalAmount,
-            receiptUrl = response.receipt?.url,
-            cardNumber = response.card?.number,
-            cardCompany = response.card?.company
+            totalAmount = response.totalAmount
         )
     }
 

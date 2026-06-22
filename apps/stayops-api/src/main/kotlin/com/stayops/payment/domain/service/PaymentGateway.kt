@@ -14,10 +14,7 @@ data class PaymentConfirmResult(
     val orderId: String,
     val method: String?,
     val approvedAt: Instant?,
-    val totalAmount: BigDecimal,
-    val receiptUrl: String?,
-    val cardNumber: String?,
-    val cardCompany: String?
+    val totalAmount: BigDecimal
 )
 
 data class PaymentCancelResult(

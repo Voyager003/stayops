@@ -28,10 +28,7 @@ class LoadtestPaymentGateway(
             orderId = orderId,
             method = "LOADTEST",
             approvedAt = Instant.now(),
-            totalAmount = amount,
-            receiptUrl = null,
-            cardNumber = null,
-            cardCompany = "LOADTEST"
+            totalAmount = amount
         )
     }
 

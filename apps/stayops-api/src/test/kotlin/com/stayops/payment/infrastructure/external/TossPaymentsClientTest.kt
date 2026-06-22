@@ -81,13 +81,6 @@ class TossPaymentsClientTest : BehaviorSpec({
             then("totalAmount가 매핑된다") {
                 result.totalAmount shouldBe BigDecimal(200_000)
             }
-            then("카드 정보가 매핑된다") {
-                result.cardNumber shouldBe "4330****1234"
-                result.cardCompany shouldBe "현대"
-            }
-            then("영수증 URL이 매핑된다") {
-                result.receiptUrl shouldBe "https://receipt.toss.im/abc"
-            }
             then("멱등성 키를 헤더로 전달한다") {
                 request.getHeader("Idempotency-Key") shouldBe "payment-confirm:pay-1:STAYOPS-rsv-1-123"
             }
@@ -117,10 +110,12 @@ class TossPaymentsClientTest : BehaviorSpec({
                 "payment-confirm:pay-5:STAYOPS-rsv-5-555"
             )
 
-            then("카드/영수증 필드는 null이다") {
-                result.cardNumber shouldBe null
-                result.cardCompany shouldBe null
-                result.receiptUrl shouldBe null
+            then("핵심 승인 정보만 반환한다") {
+                result.paymentKey shouldBe "toss_pk_simple"
+                result.orderId shouldBe "STAYOPS-rsv-5-555"
+                result.method shouldBe "계좌이체"
+                result.totalAmount shouldBe BigDecimal(100_000)
+                result.approvedAt shouldNotBe null
             }
         }
 

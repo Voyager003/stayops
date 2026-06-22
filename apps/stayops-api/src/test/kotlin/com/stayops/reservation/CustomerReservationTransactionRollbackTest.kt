@@ -196,10 +196,7 @@ class CustomerReservationTransactionRollbackTest @Autowired constructor(
                 orderId = result.payment.orderId,
                 method = "카드",
                 approvedAt = Instant.parse("2026-04-13T10:00:00Z"),
-                totalAmount = BigDecimal(200_000),
-                receiptUrl = null,
-                cardNumber = null,
-                cardCompany = null
+                totalAmount = BigDecimal(200_000)
             )
 
             // When: 승인 요청 접수 후 worker가 PG 승인 성공, night1 reserve 성공, night2 reserve 실패를 처리

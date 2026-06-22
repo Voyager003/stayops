@@ -148,10 +148,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
                     orderId = message.orderId,
                     method = "카드",
                     approvedAt = fixedInstant,
-                    totalAmount = BigDecimal(200_000),
-                    receiptUrl = null,
-                    cardNumber = null,
-                    cardCompany = null
+                    totalAmount = BigDecimal(200_000)
                 )
 
                 application.processPendingMessages(workerId = "worker-1")
@@ -230,10 +227,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
                     orderId = message.orderId,
                     method = "카드",
                     approvedAt = fixedInstant,
-                    totalAmount = BigDecimal(200_000),
-                    receiptUrl = null,
-                    cardNumber = null,
-                    cardCompany = null
+                    totalAmount = BigDecimal(200_000)
                 )
                 every { inventoryReservationService.reserve("prop-1", "rt-1", checkIn) } throws
                     IllegalArgumentException("가용 객실이 없습니다: available=0")
@@ -273,10 +267,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
                     orderId = message.orderId,
                     method = "카드",
                     approvedAt = fixedInstant,
-                    totalAmount = BigDecimal(200_000),
-                    receiptUrl = null,
-                    cardNumber = null,
-                    cardCompany = null
+                    totalAmount = BigDecimal(200_000)
                 )
                 every { inventoryReservationService.reserve("prop-1", "rt-1", checkIn) } returns Unit
                 every { inventoryReservationService.reserve("prop-1", "rt-1", checkIn.plusDays(1)) } throws

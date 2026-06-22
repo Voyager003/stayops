@@ -147,10 +147,7 @@ class ReservationPaymentOutboxApplication(
                     orderId = inquiry.orderId,
                     method = "unknown",
                     approvedAt = clock.instant(),
-                    totalAmount = inquiry.totalAmount,
-                    receiptUrl = null,
-                    cardNumber = null,
-                    cardCompany = null
+                    totalAmount = inquiry.totalAmount
                 ),
                 now = clock.instant()
             )

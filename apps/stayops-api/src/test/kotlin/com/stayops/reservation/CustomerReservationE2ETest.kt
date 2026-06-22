@@ -153,8 +153,7 @@ class CustomerReservationE2ETest @Autowired constructor(
                 orderId = reservationResult.payment.orderId,
                 method = "카드",
                 approvedAt = Instant.now(clock),
-                totalAmount = BigDecimal(200_000),
-                receiptUrl = null, cardNumber = null, cardCompany = null
+                totalAmount = BigDecimal(200_000)
             )
 
             val requested = customerReservationApplication.confirmPayment(
@@ -268,8 +267,7 @@ class CustomerReservationE2ETest @Autowired constructor(
                 orderId = reservationResult.payment.orderId,
                 method = "카드",
                 approvedAt = Instant.now(clock),
-                totalAmount = BigDecimal(200_000),
-                receiptUrl = null, cardNumber = null, cardCompany = null
+                totalAmount = BigDecimal(200_000)
             )
 
             val firstResult = customerReservationApplication.confirmPayment(
@@ -332,8 +330,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
                 paymentKey = "toss_pk_inv", orderId = reservationResult.payment.orderId,
                 method = "카드", approvedAt = Instant.now(clock),
-                totalAmount = BigDecimal(200_000),
-                receiptUrl = null, cardNumber = null, cardCompany = null
+                totalAmount = BigDecimal(200_000)
             )
             customerReservationApplication.confirmPayment(
                 memberId = "customer-e2e",
