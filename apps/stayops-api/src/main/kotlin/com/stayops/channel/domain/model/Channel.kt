@@ -3,8 +3,7 @@ package com.stayops.channel.domain.model
 import java.math.BigDecimal
 import java.time.Instant
 
-@ConsistentCopyVisibility
-data class Channel private constructor(
+class Channel private constructor(
     val id: String,
     val propertyId: String,
     val code: String,
@@ -22,22 +21,47 @@ data class Channel private constructor(
         check(status != ChannelStatus.ACTIVE) {
             "이미 ACTIVE 상태입니다: $code"
         }
-        return copy(status = ChannelStatus.ACTIVE, updatedAt = Instant.now())
+        return copyState(status = ChannelStatus.ACTIVE, updatedAt = Instant.now())
     }
 
     fun deactivate(): Channel {
         check(status == ChannelStatus.ACTIVE) {
             "ACTIVE 상태에서만 비활성화할 수 있습니다: $status"
         }
-        return copy(status = ChannelStatus.INACTIVE, updatedAt = Instant.now())
+        return copyState(status = ChannelStatus.INACTIVE, updatedAt = Instant.now())
     }
 
     fun suspend(): Channel {
         check(status == ChannelStatus.ACTIVE) {
             "ACTIVE 상태에서만 정지할 수 있습니다: $status"
         }
-        return copy(status = ChannelStatus.SUSPENDED, updatedAt = Instant.now())
+        return copyState(status = ChannelStatus.SUSPENDED, updatedAt = Instant.now())
     }
+
+    private fun copyState(
+        status: ChannelStatus = this.status,
+        updatedAt: Instant = this.updatedAt
+    ): Channel = Channel(
+        id = id,
+        propertyId = propertyId,
+        code = code,
+        name = name,
+        type = type,
+        commissionRate = commissionRate,
+        connectionInfo = connectionInfo,
+        status = status,
+        version = version,
+        createdAt = createdAt,
+        updatedAt = updatedAt
+    )
+
+    override fun equals(other: Any?): Boolean =
+        this === other || (other is Channel && id == other.id)
+
+    override fun hashCode(): Int = id.hashCode()
+
+    override fun toString(): String =
+        "Channel(id=$id, propertyId=$propertyId, code=$code, type=$type, status=$status)"
 
     companion object {
         private const val DIRECT_CODE = "DIRECT"
