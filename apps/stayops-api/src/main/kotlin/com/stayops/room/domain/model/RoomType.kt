@@ -4,8 +4,7 @@ import com.stayops.shared.domain.Money
 import java.math.BigDecimal
 import java.time.Instant
 
-@ConsistentCopyVisibility
-data class RoomType private constructor(
+class RoomType private constructor(
     val id: String,
     val propertyId: String,
     val name: String,
@@ -33,7 +32,7 @@ data class RoomType private constructor(
         require(name.isNotBlank()) { "객실타입 이름은 비어있을 수 없습니다" }
         require(maxOccupancy >= 1) { "최대 수용 인원은 1 이상이어야 합니다: $maxOccupancy" }
         require(basePrice.amount > BigDecimal.ZERO) { "기본 요금은 0보다 커야 합니다: ${basePrice.amount}" }
-        return copy(
+        return copyState(
             name = name,
             description = description,
             maxOccupancy = maxOccupancy,
@@ -42,6 +41,26 @@ data class RoomType private constructor(
             updatedAt = Instant.now()
         )
     }
+
+    private fun copyState(
+        name: String = this.name,
+        description: String = this.description,
+        maxOccupancy: Int = this.maxOccupancy,
+        basePrice: Money = this.basePrice,
+        amenities: List<String> = this.amenities,
+        updatedAt: Instant = this.updatedAt
+    ): RoomType = RoomType(
+        id = this.id,
+        propertyId = this.propertyId,
+        name = name,
+        description = description,
+        maxOccupancy = maxOccupancy,
+        basePrice = basePrice,
+        amenities = amenities,
+        version = this.version,
+        createdAt = this.createdAt,
+        updatedAt = updatedAt
+    )
 
     companion object {
         fun create(
@@ -93,4 +112,15 @@ data class RoomType private constructor(
             updatedAt = updatedAt
         )
     }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is RoomType) return false
+        return id == other.id
+    }
+
+    override fun hashCode(): Int = id.hashCode()
+
+    override fun toString(): String =
+        "RoomType(id=$id, propertyId=$propertyId, name=$name, maxOccupancy=$maxOccupancy)"
 }
