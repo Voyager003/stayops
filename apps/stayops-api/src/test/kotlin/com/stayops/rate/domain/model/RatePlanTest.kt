@@ -5,6 +5,7 @@ import com.stayops.shared.domain.Money
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import java.time.DayOfWeek
 import java.time.LocalDate
 
@@ -158,6 +159,60 @@ class RatePlanTest : BehaviorSpec({
             }
             then("월요일은 기본 가격이다") {
                 weekdayPlan.priceForDate(LocalDate.of(2026, 3, 16)) shouldBe basePrice // 월요일
+            }
+        }
+    }
+
+    given("RatePlan 동일성 비교 시") {
+        val ratePlan = RatePlan.create(
+            id = "rp-identity-1",
+            propertyId = "prop-1",
+            roomTypeId = "rt-1",
+            name = "기본 요금",
+            type = RatePlanType.SEASONAL,
+            dateRange = null,
+            dayOfWeekRules = null,
+            channelCode = null,
+            price = basePrice,
+            priority = 10
+        )
+
+        `when`("같은 ID를 가진 요금제의 상태와 요금 정보가 변경되면") {
+            val changed = ratePlan.deactivate().updateInfo(
+                name = "비수기 요금",
+                dateRange = null,
+                dayOfWeekRules = null,
+                channelCode = null,
+                price = Money.of(80_000),
+                priority = 20
+            )
+
+            then("동일한 요금제로 판단한다") {
+                changed shouldBe ratePlan
+                changed.hashCode() shouldBe ratePlan.hashCode()
+            }
+
+            then("기존 요금제를 담은 Set에서 조회할 수 있다") {
+                setOf(ratePlan).contains(changed) shouldBe true
+            }
+        }
+
+        `when`("도메인 속성이 같아도 ID가 다르면") {
+            val other = RatePlan.create(
+                id = "rp-identity-2",
+                propertyId = ratePlan.propertyId,
+                roomTypeId = ratePlan.roomTypeId,
+                name = ratePlan.name,
+                type = ratePlan.type,
+                dateRange = ratePlan.dateRange,
+                dayOfWeekRules = ratePlan.dayOfWeekRules,
+                channelCode = ratePlan.channelCode,
+                price = ratePlan.price,
+                priority = ratePlan.priority
+            )
+
+            then("다른 요금제로 판단한다") {
+                other shouldNotBe ratePlan
             }
         }
     }
