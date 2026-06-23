@@ -1,7 +1,7 @@
 package com.stayops.reservation.application.service
 
-import com.stayops.reservation.application.port.ReservationPaymentPort
-import com.stayops.reservation.application.port.ReservationPaymentStatus
+import com.stayops.reservation.application.required.ReservationPaymentService
+import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.shared.exception.BusinessException
@@ -16,7 +16,7 @@ import java.time.Clock
 @Service
 class CustomerReservationPaymentApplication(
     private val reservationRepository: ReservationRepository,
-    private val reservationPaymentPort: ReservationPaymentPort,
+    private val reservationPaymentPort: ReservationPaymentService,
     private val clock: Clock
 ) {
 

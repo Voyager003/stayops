@@ -1,7 +1,7 @@
 package com.stayops.inventory.application.service
 
-import com.stayops.inventory.application.port.AvailabilitySyncPort
-import com.stayops.inventory.application.port.RoomInventorySyncPort
+import com.stayops.inventory.application.required.AvailabilitySyncRequester
+import com.stayops.inventory.application.provided.RoomInventorySynchronizer
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.room.domain.repository.RoomRepository
@@ -15,10 +15,10 @@ import java.time.LocalDate
 class RoomInventorySyncApplication(
     private val inventoryRepository: RoomInventoryRepository,
     private val roomRepository: RoomRepository,
-    private val availabilitySyncPort: AvailabilitySyncPort,
+    private val availabilitySyncPort: AvailabilitySyncRequester,
     private val clock: Clock,
     private val idGenerator: IdGenerator
-) : RoomInventorySyncPort {
+) : RoomInventorySynchronizer {
 
     private val log = LoggerFactory.getLogger(javaClass)
 

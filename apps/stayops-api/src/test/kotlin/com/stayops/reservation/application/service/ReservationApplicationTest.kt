@@ -4,14 +4,14 @@ import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
-import com.stayops.inventory.application.service.InventoryReservationService
+import com.stayops.inventory.application.provided.InventoryReservationService
 import com.stayops.rate.domain.model.RatePlan
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolverService
-import com.stayops.reservation.application.port.ReservationPaymentPort
-import com.stayops.reservation.application.port.ReservationPaymentSnapshot
-import com.stayops.reservation.application.port.ReservationPaymentStatus
+import com.stayops.reservation.application.required.ReservationPaymentService
+import com.stayops.reservation.application.required.ReservationPaymentSnapshot
+import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.model.RoomType
@@ -40,7 +40,7 @@ class ReservationApplicationTest : BehaviorSpec({
     val inventoryReservationService = mockk<InventoryReservationService>()
     val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
     val rateResolverService = RateResolverService()
-    val reservationPaymentPort = mockk<ReservationPaymentPort>()
+    val reservationPaymentPort = mockk<ReservationPaymentService>()
     val reservationCancellationPolicy = ReservationCancellationPolicy(reservationPaymentPort)
     val idGenerator = object : IdGenerator {
         override fun generate(): String = "test-id"

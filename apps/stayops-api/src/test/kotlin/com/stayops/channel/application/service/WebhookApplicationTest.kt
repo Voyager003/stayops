@@ -4,11 +4,11 @@ import com.stayops.channel.domain.model.*
 import com.stayops.channel.domain.repository.ChannelMappingRepository
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.repository.ProcessedWebhookEventRepository
-import com.stayops.channel.domain.service.SignatureVerifier
+import com.stayops.channel.application.required.WebhookSignatureVerifier
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
-import com.stayops.inventory.application.service.InventoryReservationService
-import com.stayops.reservation.application.port.ReservationPaymentPort
+import com.stayops.inventory.application.provided.InventoryReservationService
+import com.stayops.reservation.application.required.ReservationPaymentService
 import com.stayops.reservation.domain.event.ReservationCancelled
 import com.stayops.reservation.domain.event.ReservationCreated
 import com.stayops.reservation.domain.model.GuestInfo
@@ -34,10 +34,10 @@ class WebhookApplicationTest : BehaviorSpec({
     val channelRepository = mockk<ChannelRepository>()
     val mappingRepository = mockk<ChannelMappingRepository>()
     val processedEventRepository = mockk<ProcessedWebhookEventRepository>()
-    val signatureVerifier = mockk<SignatureVerifier>()
+    val signatureVerifier = mockk<WebhookSignatureVerifier>()
     val channelSyncApplication = mockk<ChannelSyncApplication>()
     val reservationRepository = mockk<ReservationRepository>()
-    val reservationPaymentPort = mockk<ReservationPaymentPort>()
+    val reservationPaymentPort = mockk<ReservationPaymentService>()
     val inventoryReservationService = mockk<InventoryReservationService>()
     val guestRepository = mockk<GuestRepository>()
     val eventPublisher = mockk<ApplicationEventPublisher>()

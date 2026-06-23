@@ -1,9 +1,9 @@
 package com.stayops.inventory.application.service
 
 import com.stayops.inventory.domain.model.RoomInventory
-import com.stayops.inventory.domain.cache.RoomInventoryCache
+import com.stayops.inventory.application.required.RoomInventoryCache
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
-import com.stayops.inventory.application.port.AvailabilitySyncPort
+import com.stayops.inventory.application.required.AvailabilitySyncRequester
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.shared.exception.ConflictException
@@ -29,7 +29,7 @@ class RoomInventoryApplicationTest : BehaviorSpec({
     val inventoryRepository = mockk<RoomInventoryRepository>()
     val cache = mockk<RoomInventoryCache>()
     val roomRepository = mockk<RoomRepository>()
-    val availabilitySyncPort = mockk<AvailabilitySyncPort>(relaxed = true)
+    val availabilitySyncPort = mockk<AvailabilitySyncRequester>(relaxed = true)
     val fixedClock = Clock.fixed(Instant.parse("2026-03-12T00:00:00Z"), ZoneId.of("Asia/Seoul"))
     val idGenerator = object : IdGenerator {
         override fun generate() = "inv-new"

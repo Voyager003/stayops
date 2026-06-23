@@ -2,7 +2,7 @@ package com.stayops.channel.api
 
 import com.stayops.channel.application.service.ChannelApplication
 import com.stayops.channel.application.service.MockOtaSimulationApplication
-import com.stayops.channel.domain.service.MockOtaRandomBookingResult
+import com.stayops.channel.application.required.MockOtaRandomBookingResult
 import com.stayops.member.application.service.MemberAccessApplication
 import io.mockk.every
 import io.mockk.mockk

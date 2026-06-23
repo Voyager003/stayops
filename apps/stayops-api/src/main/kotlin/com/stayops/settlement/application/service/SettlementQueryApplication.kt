@@ -4,13 +4,14 @@ import com.stayops.settlement.application.dto.ChannelSettlement
 import com.stayops.settlement.application.dto.DailySettlement
 import com.stayops.settlement.application.dto.MonthlySettlement
 import com.stayops.settlement.application.dto.SettlementSummary
+import com.stayops.settlement.application.required.SettlementQueryReader
 import com.stayops.shared.domain.Money
 import org.springframework.stereotype.Service
 import java.time.LocalDate
 
 @Service
 class SettlementQueryApplication(
-    private val settlementQueryRepository: SettlementQueryRepository
+    private val settlementQueryRepository: SettlementQueryReader
 ) {
 
     fun getSettlementSummary(

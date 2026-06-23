@@ -2,8 +2,8 @@ package com.stayops.channel.application.service
 
 import com.stayops.channel.domain.model.ChannelType
 import com.stayops.channel.domain.repository.ChannelRepository
-import com.stayops.channel.domain.service.MockOtaRandomBookingResult
-import com.stayops.channel.domain.service.MockOtaSimulationPort
+import com.stayops.channel.application.required.MockOtaRandomBookingResult
+import com.stayops.channel.application.required.MockOtaBookingSimulator
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.NotFoundException
 import org.springframework.beans.factory.annotation.Value
@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service
 @Service
 class MockOtaSimulationApplication(
     private val channelRepository: ChannelRepository,
-    private val mockOtaSimulationPort: MockOtaSimulationPort,
+    private val mockOtaBookingSimulator: MockOtaBookingSimulator,
     @Value("\${mock-ota.endpoint}") private val otaEndpoint: String
 ) {
     fun simulateRandomBooking(propertyId: String, channelId: String): MockOtaRandomBookingResult {
@@ -28,7 +28,7 @@ class MockOtaSimulationApplication(
             )
         }
 
-        return mockOtaSimulationPort.simulateRandomBooking(
+        return mockOtaBookingSimulator.simulateRandomBooking(
             endpoint = otaEndpoint,
             propertyId = propertyId,
             channelCode = channel.code

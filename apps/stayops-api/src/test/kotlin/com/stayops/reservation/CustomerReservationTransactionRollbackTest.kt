@@ -15,11 +15,11 @@ import com.stayops.payment.domain.model.PaymentOutboxType
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentOutboxRepository
 import com.stayops.payment.domain.repository.PaymentRepository
-import com.stayops.payment.domain.service.PaymentConfirmResult
-import com.stayops.payment.domain.service.PaymentGateway
+import com.stayops.payment.application.required.PaymentConfirmResult
+import com.stayops.payment.application.required.PaymentGateway
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
-import com.stayops.reservation.application.port.ReservationPaymentStatus
+import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.model.Room

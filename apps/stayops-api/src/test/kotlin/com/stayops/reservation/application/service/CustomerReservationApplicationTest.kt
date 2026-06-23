@@ -4,15 +4,15 @@ import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
-import com.stayops.inventory.application.service.InventoryReservationService
+import com.stayops.inventory.application.provided.InventoryReservationService
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolverService
-import com.stayops.reservation.application.port.ReservationPaymentPort
-import com.stayops.reservation.application.port.ReservationPaymentSnapshot
-import com.stayops.reservation.application.port.ReservationPaymentStatus
+import com.stayops.reservation.application.required.ReservationPaymentService
+import com.stayops.reservation.application.required.ReservationPaymentSnapshot
+import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.*
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.model.RoomType
@@ -45,7 +45,7 @@ class CustomerReservationApplicationTest : BehaviorSpec({
     val channelRepository = mockk<ChannelRepository>()
     val ratePlanRepository = mockk<RatePlanRepository>()
     val reservationRepository = mockk<ReservationRepository>()
-    val reservationPaymentPort = mockk<ReservationPaymentPort>()
+    val reservationPaymentPort = mockk<ReservationPaymentService>()
     val inventoryReservationService = mockk<InventoryReservationService>()
     val rateResolverService = RateResolverService()
     val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)

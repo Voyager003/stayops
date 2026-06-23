@@ -1,6 +1,6 @@
 package com.stayops.room.application.service
 
-import com.stayops.inventory.application.port.RoomInventorySyncPort
+import com.stayops.inventory.application.provided.RoomInventorySynchronizer
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomStatus
 import com.stayops.room.domain.repository.RoomRepository
@@ -18,7 +18,7 @@ import io.mockk.verify
 class RoomApplicationTest : BehaviorSpec({
 
     val roomRepository = mockk<RoomRepository>()
-    val roomInventorySyncPort = mockk<RoomInventorySyncPort>()
+    val roomInventorySyncPort = mockk<RoomInventorySynchronizer>()
     val idGenerator = object : IdGenerator {
         override fun generate() = "room-new"
     }

@@ -1,6 +1,6 @@
 package com.stayops.room.application.service
 
-import com.stayops.inventory.application.port.RoomInventorySyncPort
+import com.stayops.inventory.application.provided.RoomInventorySynchronizer
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.shared.domain.IdGenerator
@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service
 @Service
 class RoomApplication(
     private val roomRepository: RoomRepository,
-    private val roomInventorySyncPort: RoomInventorySyncPort,
+    private val roomInventorySyncPort: RoomInventorySynchronizer,
     private val idGenerator: IdGenerator
 ) {
     private val log = LoggerFactory.getLogger(javaClass)

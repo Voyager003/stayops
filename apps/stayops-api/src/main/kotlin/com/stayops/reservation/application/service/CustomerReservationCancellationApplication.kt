@@ -1,9 +1,9 @@
 package com.stayops.reservation.application.service
 
-import com.stayops.inventory.application.service.InventoryReservationService
-import com.stayops.reservation.application.port.ReservationPaymentPort
-import com.stayops.reservation.application.port.ReservationPaymentSnapshot
-import com.stayops.reservation.application.port.ReservationPaymentStatus
+import com.stayops.inventory.application.provided.InventoryReservationService
+import com.stayops.reservation.application.required.ReservationPaymentService
+import com.stayops.reservation.application.required.ReservationPaymentSnapshot
+import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.domain.event.ReservationCancelled
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationStatus
@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class CustomerReservationCancellationApplication(
     private val reservationRepository: ReservationRepository,
-    private val reservationPaymentPort: ReservationPaymentPort,
+    private val reservationPaymentPort: ReservationPaymentService,
     private val inventoryReservationService: InventoryReservationService,
     private val eventPublisher: ApplicationEventPublisher
 ) {

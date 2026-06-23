@@ -8,8 +8,8 @@ import com.stayops.payment.domain.model.ProcessedPaymentWebhookEvent
 import com.stayops.payment.domain.repository.PaymentOutboxRepository
 import com.stayops.payment.domain.repository.PaymentRepository
 import com.stayops.payment.domain.repository.ProcessedPaymentWebhookEventRepository
-import com.stayops.payment.domain.service.PaymentGateway
-import com.stayops.payment.domain.service.PaymentInquiryResult
+import com.stayops.payment.application.required.PaymentGateway
+import com.stayops.payment.application.required.PaymentInquiryResult
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.BusinessException
 import org.slf4j.LoggerFactory

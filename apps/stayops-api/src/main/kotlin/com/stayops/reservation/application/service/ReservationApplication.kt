@@ -2,12 +2,12 @@ package com.stayops.reservation.application.service
 
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.guest.domain.repository.GuestRepository
-import com.stayops.inventory.application.service.InventoryReservationService
+import com.stayops.inventory.application.provided.InventoryReservationService
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolverService
-import com.stayops.reservation.application.port.ReservationPaymentPort
-import com.stayops.reservation.application.port.ReservationPaymentStatus
+import com.stayops.reservation.application.required.ReservationPaymentService
+import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.domain.event.ReservationCancelled
 import com.stayops.reservation.domain.event.ReservationCreated
 import com.stayops.reservation.domain.model.GuestInfo
@@ -38,7 +38,7 @@ class ReservationApplication(
     private val inventoryReservationService: InventoryReservationService,
     private val eventPublisher: ApplicationEventPublisher,
     private val rateResolverService: RateResolverService,
-    private val reservationPaymentPort: ReservationPaymentPort,
+    private val reservationPaymentPort: ReservationPaymentService,
     private val reservationCancellationPolicy: ReservationCancellationPolicy,
     private val idGenerator: IdGenerator
 ) {

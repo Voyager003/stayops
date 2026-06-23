@@ -35,7 +35,7 @@ class ChannelEventHandlerTest : BehaviorSpec({
                         inventoryWithAvailable(checkIn, 9)
                 every { inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate("prop-1", "rt-1", checkIn.plusDays(1)) } returns
                         inventoryWithAvailable(checkIn.plusDays(1), 8)
-                justRun { channelSyncApplication.createAvailabilitySyncTasks(any(), any(), any(), any()) }
+                justRun { channelSyncApplication.requestAvailabilitySync(any(), any(), any(), any()) }
 
                 sut.onReservationCreated(
                     ReservationCreated(
@@ -47,7 +47,7 @@ class ChannelEventHandlerTest : BehaviorSpec({
                     )
                 )
 
-                verify(exactly = 2) { channelSyncApplication.createAvailabilitySyncTasks(any(), any(), any(), any()) }
+                verify(exactly = 2) { channelSyncApplication.requestAvailabilitySync(any(), any(), any(), any()) }
             }
         }
     }
@@ -58,7 +58,7 @@ class ChannelEventHandlerTest : BehaviorSpec({
                 clearAllMocks()
                 every { inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate("prop-1", "rt-1", any()) } returns
                         inventoryWithAvailable(checkIn, 10)
-                justRun { channelSyncApplication.createAvailabilitySyncTasks(any(), any(), any(), any()) }
+                justRun { channelSyncApplication.requestAvailabilitySync(any(), any(), any(), any()) }
 
                 sut.onReservationCancelled(
                     ReservationCancelled(
@@ -69,7 +69,7 @@ class ChannelEventHandlerTest : BehaviorSpec({
                     )
                 )
 
-                verify(exactly = 2) { channelSyncApplication.createAvailabilitySyncTasks(any(), any(), any(), any()) }
+                verify(exactly = 2) { channelSyncApplication.requestAvailabilitySync(any(), any(), any(), any()) }
             }
         }
     }

@@ -2,8 +2,8 @@ package com.stayops.reservation.api.customer
 
 import com.stayops.reservation.application.service.CustomerReservationApplication
 import com.stayops.reservation.application.service.CustomerReservationResult
-import com.stayops.reservation.application.port.ReservationPaymentSnapshot
-import com.stayops.reservation.application.port.ReservationPaymentStatus
+import com.stayops.reservation.application.required.ReservationPaymentSnapshot
+import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.*
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money

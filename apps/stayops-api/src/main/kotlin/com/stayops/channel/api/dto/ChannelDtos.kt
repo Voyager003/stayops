@@ -3,7 +3,7 @@ package com.stayops.channel.api.dto
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.model.ChannelStatus
 import com.stayops.channel.domain.model.ChannelType
-import com.stayops.channel.domain.service.MockOtaRandomBookingResult
+import com.stayops.channel.application.required.MockOtaRandomBookingResult
 import jakarta.validation.constraints.DecimalMin
 import jakarta.validation.constraints.NotBlank
 import java.math.BigDecimal

@@ -2,8 +2,8 @@ package com.stayops.channel.application.service
 
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
-import com.stayops.channel.domain.service.ChannelInventoryQueryAdapter
-import com.stayops.channel.domain.service.ExternalInventorySnapshot
+import com.stayops.channel.application.required.ChannelInventorySnapshotReader
+import com.stayops.channel.application.required.ExternalInventorySnapshot
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.shared.exception.BusinessException
@@ -21,12 +21,12 @@ class ChannelInventoryComparisonApplicationTest : BehaviorSpec({
 
     val channelRepository = mockk<ChannelRepository>()
     val roomInventoryRepository = mockk<RoomInventoryRepository>()
-    val inventoryQueryAdapter = mockk<ChannelInventoryQueryAdapter>()
+    val inventorySnapshotReader = mockk<ChannelInventorySnapshotReader>()
 
     val sut = ChannelInventoryComparisonApplication(
         channelRepository = channelRepository,
         roomInventoryRepository = roomInventoryRepository,
-        inventoryQueryAdapter = inventoryQueryAdapter
+        inventorySnapshotReader = inventorySnapshotReader
     )
 
     val fixedInstant = Instant.parse("2026-04-08T10:00:00Z")
@@ -62,7 +62,7 @@ class ChannelInventoryComparisonApplicationTest : BehaviorSpec({
                 clearAllMocks()
                 every { channelRepository.findById("ch-1") } returns otaChannel()
                 every {
-                    inventoryQueryAdapter.fetchInventory("https://mock-ota/ari", "rt-1", startDate, endDate)
+                    inventorySnapshotReader.fetchInventory("https://mock-ota/ari", "rt-1", startDate, endDate)
                 } returns listOf(
                     ExternalInventorySnapshot("rt-1", startDate, 5),
                     ExternalInventorySnapshot("rt-1", endDate, 5)
@@ -92,7 +92,7 @@ class ChannelInventoryComparisonApplicationTest : BehaviorSpec({
                 clearAllMocks()
                 every { channelRepository.findById("ch-1") } returns otaChannel()
                 every {
-                    inventoryQueryAdapter.fetchInventory("https://mock-ota/ari", "rt-1", startDate, endDate)
+                    inventorySnapshotReader.fetchInventory("https://mock-ota/ari", "rt-1", startDate, endDate)
                 } returns listOf(ExternalInventorySnapshot("rt-1", startDate, 3))
                 every {
                     roomInventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(

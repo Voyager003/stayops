@@ -1,6 +1,6 @@
 package com.stayops.reservation.application.service
 
-import com.stayops.inventory.application.service.InventoryReservationService
+import com.stayops.inventory.application.provided.InventoryReservationService
 import com.stayops.payment.domain.model.Payment
 import com.stayops.payment.domain.model.PaymentCancelReason
 import com.stayops.payment.domain.model.PaymentOutboxMessage
@@ -9,10 +9,10 @@ import com.stayops.payment.domain.model.PaymentOutboxType
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentOutboxRepository
 import com.stayops.payment.domain.repository.PaymentRepository
-import com.stayops.payment.domain.service.PaymentConfirmResult
-import com.stayops.payment.domain.service.PaymentGateway
-import com.stayops.payment.domain.service.PaymentGatewayException
-import com.stayops.payment.domain.service.PaymentInquiryResult
+import com.stayops.payment.application.required.PaymentConfirmResult
+import com.stayops.payment.application.required.PaymentGateway
+import com.stayops.payment.application.required.PaymentGatewayException
+import com.stayops.payment.application.required.PaymentInquiryResult
 import com.stayops.reservation.domain.event.ReservationCreated
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationStatus

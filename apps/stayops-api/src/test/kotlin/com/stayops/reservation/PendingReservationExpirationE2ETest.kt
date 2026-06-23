@@ -8,7 +8,7 @@ import com.stayops.reservation.application.service.CustomerReservationApplicatio
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.inventory.application.service.RoomInventoryApplication
-import com.stayops.payment.domain.service.PaymentGateway
+import com.stayops.payment.application.required.PaymentGateway
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.reservation.domain.model.ReservationStatus

@@ -129,8 +129,8 @@ class ServiceNamingConventionTest {
         val mainRoot = Path.of("src/main/kotlin")
 
         assertTrue(
-            actual = Files.exists(mainRoot.resolve("com/stayops/inventory/application/service/InventoryReservationService.kt")),
-            message = "Inventory reserve/release contract must be exposed as InventoryReservationService"
+            actual = Files.exists(mainRoot.resolve("com/stayops/inventory/application/provided/InventoryReservationService.kt")),
+            message = "Inventory reserve/release contract must be exposed as provided InventoryReservationService"
         )
 
         val directInventoryApplicationReferences = listOf(
@@ -159,17 +159,17 @@ class ServiceNamingConventionTest {
     }
 
     @Test
-    fun should_use_availability_sync_port_for_inventory_to_channel_sync() {
+    fun should_use_availability_sync_requester_for_inventory_to_channel_sync() {
         val mainRoot = Path.of("src/main/kotlin")
 
         assertTrue(
-            actual = Files.exists(mainRoot.resolve("com/stayops/inventory/application/port/AvailabilitySyncPort.kt")),
-            message = "Inventory availability sync must be exposed as AvailabilitySyncPort"
+            actual = Files.exists(mainRoot.resolve("com/stayops/inventory/application/required/AvailabilitySyncRequester.kt")),
+            message = "Inventory availability sync must be exposed as AvailabilitySyncRequester"
         )
 
         assertTrue(
-            actual = Files.exists(mainRoot.resolve("com/stayops/channel/infrastructure/sync/ChannelAvailabilitySyncAdapter.kt")),
-            message = "Channel must adapt Inventory AvailabilitySyncPort without Inventory depending on ChannelSyncApplication"
+            actual = Files.exists(mainRoot.resolve("com/stayops/channel/application/service/ChannelSyncApplication.kt")),
+            message = "ChannelSyncApplication must implement Inventory AvailabilitySyncRequester directly"
         )
 
         val directChannelApplicationReferences = Files.walk(mainRoot.resolve("com/stayops/inventory")).use { paths ->
@@ -186,17 +186,17 @@ class ServiceNamingConventionTest {
 
         assertTrue(
             actual = directChannelApplicationReferences.isEmpty(),
-            message = "Inventory must depend on AvailabilitySyncPort, not ChannelSyncApplication: $directChannelApplicationReferences"
+            message = "Inventory must depend on AvailabilitySyncRequester, not ChannelSyncApplication: $directChannelApplicationReferences"
         )
     }
 
     @Test
-    fun should_use_room_inventory_sync_port_for_room_to_inventory_sync() {
+    fun should_use_room_inventory_synchronizer_for_room_to_inventory_sync() {
         val mainRoot = Path.of("src/main/kotlin")
 
         assertTrue(
-            actual = Files.exists(mainRoot.resolve("com/stayops/inventory/application/port/RoomInventorySyncPort.kt")),
-            message = "Room-triggered inventory sync must be exposed as RoomInventorySyncPort"
+            actual = Files.exists(mainRoot.resolve("com/stayops/inventory/application/provided/RoomInventorySynchronizer.kt")),
+            message = "Room-triggered inventory sync must be exposed as RoomInventorySynchronizer"
         )
 
         val directInventoryApplicationReferences = Files.walk(mainRoot.resolve("com/stayops/room")).use { paths ->
@@ -213,21 +213,21 @@ class ServiceNamingConventionTest {
 
         assertTrue(
             actual = directInventoryApplicationReferences.isEmpty(),
-            message = "Room must depend on RoomInventorySyncPort, not RoomInventoryApplication: $directInventoryApplicationReferences"
+            message = "Room must depend on RoomInventorySynchronizer, not RoomInventoryApplication: $directInventoryApplicationReferences"
         )
     }
 
     @Test
-    fun should_use_reservation_payment_port_for_customer_reservation_payment_collaboration() {
+    fun should_use_reservation_payment_service_for_customer_reservation_payment_collaboration() {
         val mainRoot = Path.of("src/main/kotlin")
 
         assertTrue(
-            actual = Files.exists(mainRoot.resolve("com/stayops/reservation/application/port/ReservationPaymentPort.kt")),
-            message = "Customer reservation payment collaboration must be exposed as ReservationPaymentPort"
+            actual = Files.exists(mainRoot.resolve("com/stayops/reservation/application/required/ReservationPaymentService.kt")),
+            message = "Customer reservation payment collaboration must be exposed as ReservationPaymentService"
         )
         assertTrue(
-            actual = Files.exists(mainRoot.resolve("com/stayops/payment/infrastructure/reservation/PaymentReservationAdapter.kt")),
-            message = "Payment must adapt ReservationPaymentPort without CustomerReservationApplication depending on Payment internals"
+            actual = Files.exists(mainRoot.resolve("com/stayops/payment/application/service/ReservationPaymentApplication.kt")),
+            message = "Payment application must implement ReservationPaymentService without CustomerReservationApplication depending on Payment internals"
         )
 
         val checkedRoots = listOf(
@@ -262,7 +262,7 @@ class ServiceNamingConventionTest {
 
         assertTrue(
             actual = directPaymentReferences.isEmpty(),
-            message = "Customer reservation use cases and API DTOs must depend on ReservationPaymentPort, not Payment internals: $directPaymentReferences"
+            message = "Customer reservation use cases and API DTOs must depend on ReservationPaymentService, not Payment internals: $directPaymentReferences"
         )
     }
 

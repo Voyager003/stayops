@@ -3,7 +3,7 @@ package com.stayops.shared.exception
 import com.mongodb.MongoSocketReadException
 import com.mongodb.MongoTimeoutException
 import com.mongodb.ServerAddress
-import com.stayops.payment.domain.service.PaymentGatewayException
+import com.stayops.payment.application.required.PaymentGatewayException
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe

@@ -2,8 +2,8 @@ package com.stayops.channel.application.service
 
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
-import com.stayops.channel.domain.service.MockOtaRandomBookingResult
-import com.stayops.channel.domain.service.MockOtaSimulationPort
+import com.stayops.channel.application.required.MockOtaRandomBookingResult
+import com.stayops.channel.application.required.MockOtaBookingSimulator
 import com.stayops.shared.exception.BusinessException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
@@ -17,11 +17,11 @@ import java.math.BigDecimal
 class MockOtaSimulationApplicationTest : BehaviorSpec({
 
     val channelRepository = mockk<ChannelRepository>()
-    val mockOtaSimulationPort = mockk<MockOtaSimulationPort>()
+    val mockOtaBookingSimulator = mockk<MockOtaBookingSimulator>()
 
     val sut = MockOtaSimulationApplication(
         channelRepository = channelRepository,
-        mockOtaSimulationPort = mockOtaSimulationPort,
+        mockOtaBookingSimulator = mockOtaBookingSimulator,
         otaEndpoint = "https://mock-ota/ari"
     )
 
@@ -40,7 +40,7 @@ class MockOtaSimulationApplicationTest : BehaviorSpec({
                 clearAllMocks()
                 every { channelRepository.findById("ch-1") } returns otaChannel()
                 every {
-                    mockOtaSimulationPort.simulateRandomBooking("https://mock-ota/ari", "prop-1", "AGODA")
+                    mockOtaBookingSimulator.simulateRandomBooking("https://mock-ota/ari", "prop-1", "AGODA")
                 } returns MockOtaRandomBookingResult(
                     status = "sent",
                     bookingId = "booking-1",
@@ -54,7 +54,7 @@ class MockOtaSimulationApplicationTest : BehaviorSpec({
                 result.bookingId shouldBe "booking-1"
                 result.guestName shouldBe "김민수"
                 verify {
-                    mockOtaSimulationPort.simulateRandomBooking("https://mock-ota/ari", "prop-1", "AGODA")
+                    mockOtaBookingSimulator.simulateRandomBooking("https://mock-ota/ari", "prop-1", "AGODA")
                 }
             }
         }

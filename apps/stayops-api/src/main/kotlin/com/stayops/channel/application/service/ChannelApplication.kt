@@ -51,7 +51,7 @@ class ChannelApplication(
                 propertyId, roomType.id, today, endDate
             )
             for (inventory in inventories) {
-                channelSyncApplication.createAvailabilitySyncTasks(
+                channelSyncApplication.requestAvailabilitySync(
                     propertyId, roomType.id, inventory.date, inventory.availableCount
                 )
             }

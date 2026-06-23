@@ -1,6 +1,6 @@
 package com.stayops.reservation.application.service
 
-import com.stayops.reservation.application.port.ReservationPaymentPort
+import com.stayops.reservation.application.required.ReservationPaymentService
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.shared.domain.PagedResult
 import com.stayops.shared.exception.ForbiddenException
@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class CustomerReservationQueryApplication(
     private val reservationRepository: ReservationRepository,
-    private val reservationPaymentPort: ReservationPaymentPort
+    private val reservationPaymentPort: ReservationPaymentService
 ) {
 
     @Transactional(readOnly = true)

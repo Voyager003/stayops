@@ -1,6 +1,6 @@
 package com.stayops.inventory.application.service
 
-import com.stayops.inventory.application.port.AvailabilitySyncPort
+import com.stayops.inventory.application.required.AvailabilitySyncRequester
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.shared.exception.ConflictException
@@ -13,7 +13,7 @@ import java.time.LocalDate
 class RoomInventoryManagementApplication(
     private val inventoryRepository: RoomInventoryRepository,
     private val inventoryAccess: RoomInventoryAccessApplication,
-    private val availabilitySyncPort: AvailabilitySyncPort
+    private val availabilitySyncPort: AvailabilitySyncRequester
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)

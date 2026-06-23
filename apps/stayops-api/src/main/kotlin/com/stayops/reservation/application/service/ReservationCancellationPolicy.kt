@@ -1,14 +1,14 @@
 package com.stayops.reservation.application.service
 
-import com.stayops.reservation.application.port.ReservationPaymentPort
-import com.stayops.reservation.application.port.ReservationPaymentStatus
+import com.stayops.reservation.application.required.ReservationPaymentService
+import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationStatus
 import org.springframework.stereotype.Component
 
 @Component
 class ReservationCancellationPolicy(
-    private val reservationPaymentPort: ReservationPaymentPort
+    private val reservationPaymentPort: ReservationPaymentService
 ) {
     fun shouldReleaseInventoryOnCancel(reservation: Reservation): Boolean {
         if (reservation.status == ReservationStatus.CONFIRMED) {

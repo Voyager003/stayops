@@ -1,8 +1,8 @@
 package com.stayops.reservation.application.service
 
-import com.stayops.reservation.application.port.ReservationPaymentPort
-import com.stayops.reservation.application.port.ReservationPaymentSnapshot
-import com.stayops.reservation.application.port.ReservationPaymentStatus
+import com.stayops.reservation.application.required.ReservationPaymentService
+import com.stayops.reservation.application.required.ReservationPaymentSnapshot
+import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationChannel
@@ -20,7 +20,7 @@ import java.time.LocalDate
 
 class ReservationCancellationPolicyTest : BehaviorSpec({
 
-    val reservationPaymentPort = mockk<ReservationPaymentPort>()
+    val reservationPaymentPort = mockk<ReservationPaymentService>()
     val policy = ReservationCancellationPolicy(reservationPaymentPort)
 
     fun reservation(

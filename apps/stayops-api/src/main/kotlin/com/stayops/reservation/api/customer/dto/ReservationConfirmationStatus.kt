@@ -1,6 +1,6 @@
 package com.stayops.reservation.api.customer.dto
 
-import com.stayops.reservation.application.port.ReservationPaymentStatus
+import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.ReservationStatus
 
 enum class ReservationConfirmationStatus {

@@ -6,11 +6,11 @@ import com.stayops.channel.domain.model.ProcessedWebhookEvent
 import com.stayops.channel.domain.repository.ChannelMappingRepository
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.repository.ProcessedWebhookEventRepository
-import com.stayops.channel.domain.service.SignatureVerifier
+import com.stayops.channel.application.required.WebhookSignatureVerifier
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
-import com.stayops.inventory.application.service.InventoryReservationService
-import com.stayops.reservation.application.port.ReservationPaymentPort
+import com.stayops.inventory.application.provided.InventoryReservationService
+import com.stayops.reservation.application.required.ReservationPaymentService
 import com.stayops.reservation.domain.event.ReservationCancelled
 import com.stayops.reservation.domain.event.ReservationCreated
 import com.stayops.reservation.domain.model.ReservationChannel
@@ -34,10 +34,10 @@ class WebhookApplication(
     private val channelRepository: ChannelRepository,
     private val channelMappingRepository: ChannelMappingRepository,
     private val processedEventRepository: ProcessedWebhookEventRepository,
-    private val signatureVerifier: SignatureVerifier,
+    private val signatureVerifier: WebhookSignatureVerifier,
     private val channelSyncApplication: ChannelSyncApplication,
     private val reservationRepository: ReservationRepository,
-    private val reservationPaymentPort: ReservationPaymentPort,
+    private val reservationPaymentPort: ReservationPaymentService,
     private val inventoryReservationService: InventoryReservationService,
     private val guestRepository: GuestRepository,
     private val eventPublisher: ApplicationEventPublisher,

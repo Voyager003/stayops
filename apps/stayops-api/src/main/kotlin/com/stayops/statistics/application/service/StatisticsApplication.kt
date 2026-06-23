@@ -7,6 +7,7 @@ import com.stayops.statistics.application.dto.ChannelStatistics
 import com.stayops.statistics.application.dto.MonthlyStatistics
 import com.stayops.statistics.application.dto.RoomAnalysis
 import com.stayops.statistics.application.dto.RoomStatistics
+import com.stayops.statistics.application.required.StatisticsQueryReader
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -15,7 +16,7 @@ import java.time.YearMonth
 
 @Service
 class StatisticsApplication(
-    private val statisticsQueryRepository: StatisticsQueryRepository,
+    private val statisticsQueryRepository: StatisticsQueryReader,
     private val channelRepository: ChannelRepository,
     private val roomRepository: RoomRepository
 ) {

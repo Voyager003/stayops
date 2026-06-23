@@ -3,7 +3,7 @@ package com.stayops.channel.application.service
 import com.stayops.channel.application.dto.InventoryCompareItem
 import com.stayops.channel.application.dto.InventoryCompareResult
 import com.stayops.channel.domain.repository.ChannelRepository
-import com.stayops.channel.domain.service.ChannelInventoryQueryAdapter
+import com.stayops.channel.application.required.ChannelInventorySnapshotReader
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.NotFoundException
@@ -14,7 +14,7 @@ import java.time.LocalDate
 class ChannelInventoryComparisonApplication(
     private val channelRepository: ChannelRepository,
     private val roomInventoryRepository: RoomInventoryRepository,
-    private val inventoryQueryAdapter: ChannelInventoryQueryAdapter
+    private val inventorySnapshotReader: ChannelInventorySnapshotReader
 ) {
     fun compareInventory(
         propertyId: String,
@@ -34,7 +34,7 @@ class ChannelInventoryComparisonApplication(
                 message = "OTA 채널만 재고를 조회할 수 있습니다"
             )
 
-        val otaSnapshots = inventoryQueryAdapter.fetchInventory(apiEndpoint, roomTypeId, startDate, endDate)
+        val otaSnapshots = inventorySnapshotReader.fetchInventory(apiEndpoint, roomTypeId, startDate, endDate)
         val otaByDate = otaSnapshots.associateBy { it.date.toString() }
 
         val pmsInventories = roomInventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(

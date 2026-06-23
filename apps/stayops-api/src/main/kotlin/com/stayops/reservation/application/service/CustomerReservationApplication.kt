@@ -1,6 +1,6 @@
 package com.stayops.reservation.application.service
 
-import com.stayops.reservation.application.port.ReservationPaymentSnapshot
+import com.stayops.reservation.application.required.ReservationPaymentSnapshot
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.shared.domain.PagedResult
 import org.springframework.stereotype.Service

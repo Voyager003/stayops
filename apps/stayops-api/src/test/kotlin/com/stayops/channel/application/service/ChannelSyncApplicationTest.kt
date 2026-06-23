@@ -3,9 +3,9 @@ package com.stayops.channel.application.service
 import com.stayops.channel.domain.model.*
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.repository.SyncTaskRepository
-import com.stayops.channel.domain.service.ChannelAdapterProvider
-import com.stayops.channel.domain.service.ChannelSyncAdapter
-import com.stayops.channel.domain.service.SyncResult
+import com.stayops.channel.application.required.ChannelAvailabilityPublisherProvider
+import com.stayops.channel.application.required.ChannelAvailabilityPublisher
+import com.stayops.channel.application.required.SyncResult
 import com.stayops.shared.domain.IdGenerator
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
@@ -20,8 +20,8 @@ class ChannelSyncApplicationTest : BehaviorSpec({
 
     val channelRepository = mockk<ChannelRepository>()
     val syncTaskRepository = mockk<SyncTaskRepository>()
-    val adapterProvider = mockk<ChannelAdapterProvider>()
-    val syncAdapter = mockk<ChannelSyncAdapter>()
+    val publisherProvider = mockk<ChannelAvailabilityPublisherProvider>()
+    val availabilityPublisher = mockk<ChannelAvailabilityPublisher>()
     val fixedClock = Clock.fixed(Instant.parse("2026-04-08T10:00:00Z"), ZoneId.of("Asia/Seoul"))
     val idGenerator = object : IdGenerator {
         override fun generate() = "task-1"
@@ -30,7 +30,7 @@ class ChannelSyncApplicationTest : BehaviorSpec({
     val sut = ChannelSyncApplication(
         channelRepository = channelRepository,
         syncTaskRepository = syncTaskRepository,
-        adapterProvider = adapterProvider,
+        publisherProvider = publisherProvider,
         clock = fixedClock,
         idGenerator = idGenerator
     )
@@ -57,7 +57,7 @@ class ChannelSyncApplicationTest : BehaviorSpec({
     fun claimedTask(task: SyncTask = sampleTask(), workerId: String = "sync-task-worker") =
         task.startProcessing(workerId, fixedClock.instant().plusSeconds(60), fixedClock.instant())
 
-    // -- createAvailabilitySyncTasks --
+    // -- requestAvailabilitySync --
 
     given("활성 OTA 채널이 2개인 숙소에서") {
         `when`("재고 변경 시 SyncTask를 생성하면") {
@@ -67,7 +67,7 @@ class ChannelSyncApplicationTest : BehaviorSpec({
                         listOf(directChannel(), otaChannel("AGODA"), otaChannel("BOOKING"))
                 every { syncTaskRepository.save(any()) } answers { firstArg() }
 
-                sut.createAvailabilitySyncTasks("prop-1", "rt-1", LocalDate.of(2026, 3, 20), 5)
+                sut.requestAvailabilitySync("prop-1", "rt-1", LocalDate.of(2026, 3, 20), 5)
 
                 verify(exactly = 2) { syncTaskRepository.save(any()) }
             }
@@ -84,8 +84,8 @@ class ChannelSyncApplicationTest : BehaviorSpec({
                     listOf(claimedTask(), null)
                 every { syncTaskRepository.save(any()) } answers { firstArg() }
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel()
-                every { adapterProvider.getAdapter("AGODA") } returns syncAdapter
-                every { syncAdapter.pushAvailability(any(), any(), any(), any(), any()) } returns SyncResult(success = true)
+                every { publisherProvider.getPublisher("AGODA") } returns availabilityPublisher
+                every { availabilityPublisher.pushAvailability(any(), any(), any(), any(), any()) } returns SyncResult(success = true)
 
                 sut.processPendingTasks()
 
@@ -93,7 +93,7 @@ class ChannelSyncApplicationTest : BehaviorSpec({
                     syncTaskRepository.save(match { it.status == SyncTaskStatus.COMPLETED })
                 }
                 verify {
-                    syncAdapter.pushAvailability(
+                    availabilityPublisher.pushAvailability(
                         endpoint = "https://mock-ota:8081/api/v1/ari/availability",
                         apiKey = null,
                         externalRoomTypeCode = "rt-1",
@@ -136,8 +136,8 @@ class ChannelSyncApplicationTest : BehaviorSpec({
                     task
                 }
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel()
-                every { adapterProvider.getAdapter("AGODA") } returns syncAdapter
-                every { syncAdapter.pushAvailability(any(), any(), any(), any(), any()) } returns SyncResult(success = true)
+                every { publisherProvider.getPublisher("AGODA") } returns availabilityPublisher
+                every { availabilityPublisher.pushAvailability(any(), any(), any(), any(), any()) } returns SyncResult(success = true)
 
                 sut.processPendingTasks()
 
@@ -157,8 +157,8 @@ class ChannelSyncApplicationTest : BehaviorSpec({
                     listOf(claimedTask(), null)
                 every { syncTaskRepository.save(any()) } answers { firstArg() }
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel()
-                every { adapterProvider.getAdapter("AGODA") } returns syncAdapter
-                every { syncAdapter.pushAvailability(any(), any(), any(), any(), any()) } returns
+                every { publisherProvider.getPublisher("AGODA") } returns availabilityPublisher
+                every { availabilityPublisher.pushAvailability(any(), any(), any(), any(), any()) } returns
                         SyncResult(success = false, errorMessage = "Connection timeout")
 
                 sut.processPendingTasks()
@@ -187,15 +187,15 @@ class ChannelSyncApplicationTest : BehaviorSpec({
                 every { syncTaskRepository.save(match { it.id == "task-2" }) } answers { firstArg() }
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel("AGODA")
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "BOOKING") } returns otaChannel("BOOKING")
-                every { adapterProvider.getAdapter("AGODA") } returns syncAdapter
-                every { adapterProvider.getAdapter("BOOKING") } returns syncAdapter
-                every { syncAdapter.pushAvailability(any(), any(), any(), any(), any()) } returns SyncResult(success = true)
+                every { publisherProvider.getPublisher("AGODA") } returns availabilityPublisher
+                every { publisherProvider.getPublisher("BOOKING") } returns availabilityPublisher
+                every { availabilityPublisher.pushAvailability(any(), any(), any(), any(), any()) } returns SyncResult(success = true)
 
                 sut.processPendingTasks()
 
                 // task2는 정상 처리됨
                 verify(exactly = 2) {
-                    syncAdapter.pushAvailability(any(), any(), any(), any(), any())
+                    availabilityPublisher.pushAvailability(any(), any(), any(), any(), any())
                 }
             }
         }

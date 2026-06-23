@@ -8,7 +8,7 @@ import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolverService
-import com.stayops.reservation.application.port.ReservationPaymentPort
+import com.stayops.reservation.application.required.ReservationPaymentService
 import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationChannel
@@ -36,7 +36,7 @@ class CustomerReservationCreationApplication(
     private val channelRepository: ChannelRepository,
     private val ratePlanRepository: RatePlanRepository,
     private val reservationRepository: ReservationRepository,
-    private val reservationPaymentPort: ReservationPaymentPort,
+    private val reservationPaymentPort: ReservationPaymentService,
     private val rateResolverService: RateResolverService,
     private val clock: Clock,
     private val idGenerator: IdGenerator

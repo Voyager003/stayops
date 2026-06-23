@@ -22,7 +22,7 @@ class ChannelEventHandler(
                 event.propertyId, event.roomTypeId, date
             )
             if (inventory != null) {
-                channelSyncApplication.createAvailabilitySyncTasks(
+                channelSyncApplication.requestAvailabilitySync(
                     propertyId = event.propertyId,
                     roomTypeId = event.roomTypeId,
                     date = date,
@@ -40,7 +40,7 @@ class ChannelEventHandler(
                 event.propertyId, event.roomTypeId, date
             )
             if (inventory != null) {
-                channelSyncApplication.createAvailabilitySyncTasks(
+                channelSyncApplication.requestAvailabilitySync(
                     propertyId = event.propertyId,
                     roomTypeId = event.roomTypeId,
                     date = date,
