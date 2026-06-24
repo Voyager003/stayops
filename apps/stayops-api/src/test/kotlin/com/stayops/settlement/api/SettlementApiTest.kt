@@ -1,16 +1,16 @@
 package com.stayops.settlement.api
 
-import com.stayops.property.domain.repository.PropertyRepository
+import com.stayops.member.application.service.MemberAccessApplication
 import com.stayops.settlement.application.dto.ChannelSettlement
 import com.stayops.settlement.application.dto.SettlementSummary
 import com.stayops.settlement.application.service.SettlementQueryApplication
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.GlobalExceptionHandler
-import com.stayops.member.infrastructure.security.PropertyAccessChecker
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
@@ -19,10 +19,10 @@ import java.time.LocalDate
 class SettlementApiTest {
 
     private val settlementQueryApplication = mockk<SettlementQueryApplication>()
-    private val propertyAccessChecker = mockk<PropertyAccessChecker>(relaxed = true)
-    private val propertyRepository = mockk<PropertyRepository>()
+    private val memberAccessApplication = mockk<MemberAccessApplication>(relaxed = true)
     private val mockMvc: MockMvc = MockMvcBuilders
-        .standaloneSetup(SettlementApi(settlementQueryApplication, propertyAccessChecker, propertyRepository))
+        .standaloneSetup(SettlementApi(settlementQueryApplication, memberAccessApplication))
+        .setCustomArgumentResolvers(AuthenticationPrincipalArgumentResolver())
         .setControllerAdvice(GlobalExceptionHandler())
         .build()
 

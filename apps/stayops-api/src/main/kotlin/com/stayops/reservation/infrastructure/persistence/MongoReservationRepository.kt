@@ -5,7 +5,9 @@ import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationSearchCriteria
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
+import com.stayops.reservation.infrastructure.persistence.dao.ReservationMongoDao
 import com.stayops.shared.domain.PagedResult
+import com.stayops.shared.time.StayopsTimeProperties
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import jakarta.annotation.PostConstruct
@@ -14,17 +16,16 @@ import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
-import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 
 @Repository
 class MongoReservationRepository(
-    private val mongo: ReservationMongoDataRepository,
-    private val mongoTemplate: MongoTemplate
+    private val mongo: ReservationMongoDao,
+    private val mongoTemplate: MongoTemplate,
+    private val timeProperties: StayopsTimeProperties
 ) : ReservationRepository {
 
     @PostConstruct
@@ -129,7 +130,7 @@ class MongoReservationRepository(
     }
 
     override fun countByPropertyIdAndCreatedDate(propertyId: String, date: LocalDate): Int {
-        val zone = ZoneId.of("Asia/Seoul")
+        val zone = timeProperties.defaultZone()
         val startOfDay = date.atStartOfDay(zone).toInstant()
         val startOfNextDay = date.plusDays(1).atStartOfDay(zone).toInstant()
         val query = Query(
@@ -212,8 +213,9 @@ class MongoReservationRepository(
                 DateType.CREATED -> "createdAt"
             }
             if (dateField == "createdAt") {
-                val startInstant = criteria.startDate.atStartOfDay(java.time.ZoneId.of("Asia/Seoul")).toInstant()
-                val endInstant = criteria.endDate.plusDays(1).atStartOfDay(java.time.ZoneId.of("Asia/Seoul")).toInstant()
+                val zone = timeProperties.defaultZone()
+                val startInstant = criteria.startDate.atStartOfDay(zone).toInstant()
+                val endInstant = criteria.endDate.plusDays(1).atStartOfDay(zone).toInstant()
                 criteriaList.add(Criteria.where(dateField).gte(startInstant).lt(endInstant))
             } else {
                 criteriaList.add(Criteria.where(dateField).gte(criteria.startDate.toString()).lte(criteria.endDate.toString()))
@@ -242,17 +244,4 @@ class MongoReservationRepository(
             totalPages = totalPages
         )
     }
-}
-
-interface ReservationMongoDataRepository : MongoRepository<ReservationDocument, String> {
-    fun findByPropertyId(propertyId: String): List<ReservationDocument>
-    fun findByPropertyIdAndStatus(propertyId: String, status: ReservationStatus): List<ReservationDocument>
-    fun findByPropertyIdAndGuestId(propertyId: String, guestId: String): List<ReservationDocument>
-    fun findByPropertyIdAndChannelChannelCode(propertyId: String, channelCode: String): List<ReservationDocument>
-    fun findByPropertyIdAndChannelChannelCodeAndChannelExternalReservationId(
-        propertyId: String,
-        channelCode: String,
-        externalReservationId: String
-    ): ReservationDocument?
-    fun findByMemberId(memberId: String): List<ReservationDocument>
 }

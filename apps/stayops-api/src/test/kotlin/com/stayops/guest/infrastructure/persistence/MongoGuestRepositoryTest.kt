@@ -1,5 +1,6 @@
 package com.stayops.guest.infrastructure.persistence
 
+import com.stayops.guest.infrastructure.persistence.dao.GuestMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.model.GuestTier
@@ -22,13 +23,13 @@ import java.time.LocalDate
 @Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class MongoGuestRepositoryTest @Autowired constructor(
     private val guestRepository: GuestRepository,
-    private val mongoDataRepository: GuestMongoDataRepository,
+    private val mongoDao: GuestMongoDao,
     private val clock: Clock
 ) {
 
     @BeforeEach
     fun setUp() {
-        mongoDataRepository.deleteAll()
+        mongoDao.deleteAll()
     }
 
     private fun newGuest(

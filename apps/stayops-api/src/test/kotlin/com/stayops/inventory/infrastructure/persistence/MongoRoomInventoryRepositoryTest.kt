@@ -1,5 +1,6 @@
 package com.stayops.inventory.infrastructure.persistence
 
+import com.stayops.inventory.infrastructure.persistence.dao.RoomInventoryMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
@@ -21,14 +22,14 @@ import java.time.LocalDate
 @Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class MongoRoomInventoryRepositoryTest @Autowired constructor(
     private val inventoryRepository: RoomInventoryRepository,
-    private val mongoDataRepository: RoomInventoryMongoDataRepository,
+    private val mongoDao: RoomInventoryMongoDao,
     private val clock: Clock
 ) {
     private val today = LocalDate.now(clock).plusDays(7)
 
     @BeforeEach
     fun setUp() {
-        mongoDataRepository.deleteAll()
+        mongoDao.deleteAll()
     }
 
     private fun newInventory(

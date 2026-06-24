@@ -8,8 +8,8 @@ import com.stayops.payment.domain.model.PaymentOutboxType
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentOutboxRepository
 import com.stayops.payment.domain.repository.PaymentRepository
-import com.stayops.payment.domain.service.PaymentGateway
-import com.stayops.payment.domain.service.PaymentInquiryResult
+import com.stayops.payment.application.required.PaymentGateway
+import com.stayops.payment.application.required.PaymentInquiryResult
 import com.stayops.shared.domain.Money
 import io.mockk.every
 import io.mockk.verify

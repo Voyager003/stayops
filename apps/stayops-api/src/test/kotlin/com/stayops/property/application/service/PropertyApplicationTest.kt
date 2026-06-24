@@ -2,6 +2,7 @@ package com.stayops.property.application.service
 
 import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo
+import com.stayops.property.application.dto.UpdatePropertyCommand
 import com.stayops.property.domain.model.Property
 import com.stayops.property.domain.model.PropertyType
 import com.stayops.property.domain.repository.PropertyRepository
@@ -124,6 +125,68 @@ class PropertyApplicationTest : BehaviorSpec({
             then("수정된 숙소를 반환한다") {
                 result.name shouldBe "광안리 펜션"
                 result.description shouldBe "새 설명"
+            }
+        }
+
+        `when`("command의 primitive 입력으로 수정하면") {
+            every { propertyRepository.findById("prop-1") } returns property
+            every { propertyRepository.save(any()) } answers { firstArg() }
+
+            val result = propertyApplication.updateProperty(
+                UpdatePropertyCommand(
+                    id = "prop-1",
+                    name = "송정 호텔",
+                    description = "command 기반 수정",
+                    street = "송정로 10",
+                    city = "부산",
+                    state = "부산광역시",
+                    zipCode = "48000",
+                    country = "KR",
+                    latitude = 35.1,
+                    longitude = 129.2,
+                    phone = "051-777-7777",
+                    email = "updated@test.com",
+                    website = "https://updated.test"
+                )
+            )
+
+            then("application에서 도메인 값을 조립해 수정 결과 view를 반환한다") {
+                result.name shouldBe "송정 호텔"
+                result.address.street shouldBe "송정로 10"
+                result.contactInfo.website shouldBe "https://updated.test"
+                verify {
+                    propertyRepository.save(match<Property> {
+                        it.address.latitude == 35.1 && it.contactInfo.email == "updated@test.com"
+                    })
+                }
+            }
+        }
+
+        `when`("command의 웹사이트 URL이 http 또는 https가 아니면") {
+            then("숙소를 저장하지 않고 예외가 발생한다") {
+                clearMocks(propertyRepository)
+                every { propertyRepository.findById("prop-1") } returns property
+
+                shouldThrow<IllegalArgumentException> {
+                    propertyApplication.updateProperty(
+                        UpdatePropertyCommand(
+                            id = "prop-1",
+                            name = "송정 호텔",
+                            description = "잘못된 URL",
+                            street = "송정로 10",
+                            city = "부산",
+                            state = "부산광역시",
+                            zipCode = "48000",
+                            country = "KR",
+                            latitude = null,
+                            longitude = null,
+                            phone = "051-777-7777",
+                            email = "updated@test.com",
+                            website = "ftp://updated.test"
+                        )
+                    )
+                }
+                verify(exactly = 0) { propertyRepository.save(any<Property>()) }
             }
         }
 

@@ -2,19 +2,18 @@ package com.stayops.inventory.infrastructure.persistence
 
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
+import com.stayops.inventory.infrastructure.persistence.dao.RoomInventoryMongoDao
 import com.stayops.shared.exception.ConflictException
 import jakarta.annotation.PostConstruct
 import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
-import org.springframework.data.mongodb.repository.MongoRepository
-import org.springframework.data.mongodb.repository.Query
 import org.springframework.stereotype.Repository
 import java.time.LocalDate
 
 @Repository
 class MongoRoomInventoryRepository(
-    private val mongo: RoomInventoryMongoDataRepository,
+    private val mongo: RoomInventoryMongoDao,
     private val mongoTemplate: MongoTemplate
 ) : RoomInventoryRepository {
 
@@ -53,20 +52,4 @@ class MongoRoomInventoryRepository(
         mongo.findByPropertyIdAndRoomTypeIdAndDateBetween(propertyId, roomTypeId, startDate.toString(), endDate.toString())
             .map { it.toDomain() }
 
-}
-
-interface RoomInventoryMongoDataRepository : MongoRepository<RoomInventoryDocument, String> {
-    fun findByPropertyIdAndRoomTypeIdAndDate(
-        propertyId: String,
-        roomTypeId: String,
-        date: String
-    ): RoomInventoryDocument?
-
-    @Query("{ 'propertyId': ?0, 'roomTypeId': ?1, 'date': { '\$gte': ?2, '\$lte': ?3 } }")
-    fun findByPropertyIdAndRoomTypeIdAndDateBetween(
-        propertyId: String,
-        roomTypeId: String,
-        startDate: String,
-        endDate: String
-    ): List<RoomInventoryDocument>
 }

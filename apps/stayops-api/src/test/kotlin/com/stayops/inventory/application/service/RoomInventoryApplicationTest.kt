@@ -1,9 +1,9 @@
 package com.stayops.inventory.application.service
 
 import com.stayops.inventory.domain.model.RoomInventory
-import com.stayops.inventory.domain.repository.RoomInventoryCache
+import com.stayops.inventory.application.required.RoomInventoryCache
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
-import com.stayops.inventory.application.port.AvailabilitySyncPort
+import com.stayops.inventory.application.required.AvailabilitySyncRequester
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.shared.exception.ConflictException
@@ -29,13 +29,31 @@ class RoomInventoryApplicationTest : BehaviorSpec({
     val inventoryRepository = mockk<RoomInventoryRepository>()
     val cache = mockk<RoomInventoryCache>()
     val roomRepository = mockk<RoomRepository>()
-    val availabilitySyncPort = mockk<AvailabilitySyncPort>(relaxed = true)
+    val availabilitySyncPort = mockk<AvailabilitySyncRequester>(relaxed = true)
     val fixedClock = Clock.fixed(Instant.parse("2026-03-12T00:00:00Z"), ZoneId.of("Asia/Seoul"))
     val idGenerator = object : IdGenerator {
         override fun generate() = "inv-new"
     }
+    val inventoryAccess = RoomInventoryAccessApplication(
+        inventoryRepository = inventoryRepository,
+        cache = cache
+    )
+    val syncApplication = RoomInventorySyncApplication(
+        inventoryRepository = inventoryRepository,
+        roomRepository = roomRepository,
+        availabilitySyncPort = availabilitySyncPort,
+        clock = fixedClock,
+        idGenerator = idGenerator
+    )
+    val managementApplication = RoomInventoryManagementApplication(
+        inventoryRepository = inventoryRepository,
+        inventoryAccess = inventoryAccess,
+        availabilitySyncPort = availabilitySyncPort
+    )
     val inventoryApplication = RoomInventoryApplication(
-        inventoryRepository, cache, roomRepository, availabilitySyncPort, fixedClock, idGenerator
+        inventoryRepository = inventoryRepository,
+        syncApplication = syncApplication,
+        managementApplication = managementApplication
     )
 
     val today = LocalDate.of(2026, 3, 12)

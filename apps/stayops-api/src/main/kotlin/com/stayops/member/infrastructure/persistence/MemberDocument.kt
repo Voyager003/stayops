@@ -1,6 +1,10 @@
 package com.stayops.member.infrastructure.persistence
 
-import com.stayops.member.domain.model.*
+import com.stayops.member.domain.model.Member
+import com.stayops.member.domain.model.MemberRole
+import com.stayops.member.domain.model.MemberStatus
+import com.stayops.member.domain.model.PropertyAccess
+import com.stayops.member.domain.model.PropertyRole
 import org.springframework.data.annotation.Id
 import org.springframework.data.annotation.Version
 import org.springframework.data.mongodb.core.index.Indexed

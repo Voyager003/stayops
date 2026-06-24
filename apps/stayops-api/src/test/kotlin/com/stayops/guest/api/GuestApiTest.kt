@@ -4,7 +4,7 @@ import com.stayops.TestcontainersConfiguration
 import com.stayops.guest.api.dto.UpdateGuestRequest
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.infrastructure.persistence.GuestDocument
-import com.stayops.guest.infrastructure.persistence.GuestMongoDataRepository
+import com.stayops.guest.infrastructure.persistence.dao.GuestMongoDao
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
 import org.junit.jupiter.api.AfterEach
@@ -29,7 +29,7 @@ import tools.jackson.databind.ObjectMapper
 class GuestApiTest @Autowired constructor(
     private val context: WebApplicationContext,
     private val objectMapper: ObjectMapper,
-    private val mongoDataRepository: GuestMongoDataRepository
+    private val mongoDao: GuestMongoDao
 ) {
     private lateinit var mockMvc: MockMvc
 
@@ -45,7 +45,7 @@ class GuestApiTest @Autowired constructor(
         SecurityContextHolder.getContext().authentication =
             UsernamePasswordAuthenticationToken(admin, null, emptyList())
         mockMvc = MockMvcBuilders.webAppContextSetup(context).build()
-        mongoDataRepository.deleteAll()
+        mongoDao.deleteAll()
     }
 
     @AfterEach
@@ -59,7 +59,7 @@ class GuestApiTest @Autowired constructor(
         phone: String = "010-1234-5678",
     ): Guest {
         val guest = Guest.create(id = id, propertyId = pid, name = name, phone = phone)
-        mongoDataRepository.save(GuestDocument.from(guest))
+        mongoDao.save(GuestDocument.from(guest))
         return guest
     }
 

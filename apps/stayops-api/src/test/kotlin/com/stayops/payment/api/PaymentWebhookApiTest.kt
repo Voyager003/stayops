@@ -2,7 +2,7 @@ package com.stayops.payment.api
 
 import com.stayops.payment.application.service.PaymentStatusChangedWebhookCommand
 import com.stayops.payment.application.service.PaymentWebhookApplication
-import com.stayops.payment.domain.service.PaymentGatewayException
+import com.stayops.payment.application.required.PaymentGatewayException
 import com.stayops.shared.exception.GlobalExceptionHandler
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks

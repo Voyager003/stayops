@@ -1,9 +1,9 @@
 package com.stayops.payment.infrastructure.external
 
-import com.stayops.payment.domain.service.PaymentCancelResult
-import com.stayops.payment.domain.service.PaymentConfirmResult
-import com.stayops.payment.domain.service.PaymentGateway
-import com.stayops.payment.domain.service.PaymentInquiryResult
+import com.stayops.payment.application.required.PaymentCancelResult
+import com.stayops.payment.application.required.PaymentConfirmResult
+import com.stayops.payment.application.required.PaymentGateway
+import com.stayops.payment.application.required.PaymentInquiryResult
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
@@ -36,10 +36,7 @@ class TossPaymentsClient(
             orderId = response.orderId,
             method = response.method,
             approvedAt = response.approvedAt?.let { OffsetDateTime.parse(it).toInstant() },
-            totalAmount = response.totalAmount,
-            receiptUrl = response.receipt?.url,
-            cardNumber = response.card?.number,
-            cardCompany = response.card?.company
+            totalAmount = response.totalAmount
         )
     }
 

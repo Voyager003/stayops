@@ -5,7 +5,7 @@ import com.mongodb.MongoNodeIsRecoveringException
 import com.mongodb.MongoNotPrimaryException
 import com.mongodb.MongoSocketException
 import com.mongodb.MongoTimeoutException
-import com.stayops.payment.domain.service.PaymentGatewayException
+import com.stayops.payment.application.required.PaymentGatewayException
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus

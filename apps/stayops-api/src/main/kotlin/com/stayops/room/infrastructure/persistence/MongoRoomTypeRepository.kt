@@ -2,13 +2,13 @@ package com.stayops.room.infrastructure.persistence
 
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomTypeRepository
-import org.springframework.data.mongodb.repository.MongoRepository
+import com.stayops.room.infrastructure.persistence.dao.RoomTypeMongoDao
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
 @Repository
 class MongoRoomTypeRepository(
-    private val mongo: RoomTypeMongoDataRepository
+    private val mongo: RoomTypeMongoDao
 ) : RoomTypeRepository {
 
     override fun save(roomType: RoomType): RoomType =
@@ -26,9 +26,4 @@ class MongoRoomTypeRepository(
     override fun deleteById(id: String) {
         mongo.deleteById(id)
     }
-}
-
-interface RoomTypeMongoDataRepository : MongoRepository<RoomTypeDocument, String> {
-    fun findByPropertyId(propertyId: String): List<RoomTypeDocument>
-    fun findByPropertyIdAndName(propertyId: String, name: String): RoomTypeDocument?
 }

@@ -2,6 +2,7 @@ package com.stayops.payment.infrastructure.external
 
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.nulls.shouldNotBeNull
 import java.math.BigDecimal
 
 class LoadtestPaymentGatewayTest : BehaviorSpec({
@@ -22,9 +23,7 @@ class LoadtestPaymentGatewayTest : BehaviorSpec({
                 result.orderId shouldBe "STAYOPS-reservation-1-1"
                 result.totalAmount shouldBe BigDecimal("40000")
                 result.method shouldBe "LOADTEST"
-                result.receiptUrl shouldBe null
-                result.cardNumber shouldBe null
-                result.cardCompany shouldBe "LOADTEST"
+                result.approvedAt.shouldNotBeNull()
             }
         }
 

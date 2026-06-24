@@ -1,7 +1,7 @@
 package com.stayops.mockota.api
 
 import com.stayops.mockota.model.OtaInventory
-import com.stayops.mockota.repository.OtaInventoryRepository
+import com.stayops.mockota.dao.OtaInventoryDao
 import com.stayops.mockota.service.FailureSimulatorService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
 @RequestMapping("/api/v1/ari")
 class AriReceiverApi(
     private val failureSimulator: FailureSimulatorService,
-    private val otaInventoryRepository: OtaInventoryRepository
+    private val otaInventoryDao: OtaInventoryDao
 ) {
 
     private val processedIdempotencyKeys = ConcurrentHashMap.newKeySet<String>()
@@ -54,11 +54,11 @@ class AriReceiverApi(
         val date = payload["date"]?.toString() ?: ""
         val availableCount = (payload["availableCount"] as? Number)?.toInt() ?: 0
 
-        val existing = otaInventoryRepository.findByRoomTypeIdAndDate(roomTypeId, date)
+        val existing = otaInventoryDao.findByRoomTypeIdAndDate(roomTypeId, date)
         if (existing != null) {
-            otaInventoryRepository.save(existing.copy(availableCount = availableCount, updatedAt = Instant.now()))
+            otaInventoryDao.save(existing.copy(availableCount = availableCount, updatedAt = Instant.now()))
         } else {
-            otaInventoryRepository.save(
+            otaInventoryDao.save(
                 OtaInventory(roomTypeId = roomTypeId, date = date, availableCount = availableCount)
             )
         }
@@ -67,7 +67,7 @@ class AriReceiverApi(
     }
 
     @GetMapping("/received")
-    fun getReceivedAri(): List<OtaInventory> = otaInventoryRepository.findAll()
+    fun getReceivedAri(): List<OtaInventory> = otaInventoryDao.findAll()
 
     @GetMapping("/inventory")
     fun getInventory(
@@ -75,12 +75,12 @@ class AriReceiverApi(
         @RequestParam startDate: String,
         @RequestParam endDate: String
     ): List<OtaInventory> {
-        return otaInventoryRepository.findByRoomTypeIdAndDateRange(roomTypeId, startDate, endDate)
+        return otaInventoryDao.findByRoomTypeIdAndDateRange(roomTypeId, startDate, endDate)
     }
 
     @PostMapping("/clear")
     fun clearReceived() {
-        otaInventoryRepository.deleteAll()
+        otaInventoryDao.deleteAll()
         processedIdempotencyKeys.clear()
     }
 }

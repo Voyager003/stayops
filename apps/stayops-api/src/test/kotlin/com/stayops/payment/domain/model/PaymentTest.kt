@@ -77,6 +77,41 @@ class PaymentTest : BehaviorSpec({
         }
     }
 
+    given("Payment 동일성 비교 시") {
+        `when`("같은 id의 결제가 서로 다른 상태를 가지면") {
+            val pending = pendingPayment()
+            val requested = pending.requestConfirm("toss_pk_123")
+
+            then("같은 결제로 판단한다") {
+                requested shouldBe pending
+                requested.hashCode() shouldBe pending.hashCode()
+            }
+        }
+
+        `when`("id가 다르면 나머지 값이 같아도") {
+            val first = pendingPayment()
+            val second = Payment.create(
+                id = "pay-2",
+                reservationId = first.reservationId,
+                memberId = first.memberId,
+                amount = first.amount
+            )
+
+            then("다른 결제로 판단한다") {
+                second shouldNotBe first
+            }
+        }
+
+        `when`("HashSet에 같은 id의 다른 상태 결제를 넣으면") {
+            val payments = hashSetOf(pendingPayment())
+            payments += pendingPayment().requestConfirm("toss_pk_123")
+
+            then("중복 추가되지 않는다") {
+                payments.size shouldBe 1
+            }
+        }
+    }
+
     // -- 상태 전이: PENDING → APPROVED --
 
     given("PENDING 상태의 Payment") {

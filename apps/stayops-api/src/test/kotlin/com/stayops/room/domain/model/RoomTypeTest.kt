@@ -4,6 +4,8 @@ import com.stayops.shared.domain.Money
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.string.shouldContain
 
 class RoomTypeTest : BehaviorSpec({
 
@@ -92,6 +94,58 @@ class RoomTypeTest : BehaviorSpec({
                 shouldThrow<IllegalArgumentException> {
                     roomType.updateInfo(maxOccupancy = 0)
                 }
+            }
+        }
+    }
+
+    given("객실타입 동일성 비교 시") {
+        `when`("같은 id를 가진 객체를 비교하면") {
+            val original = newRoomType()
+            val updated = original.updateInfo(
+                name = "스위트룸",
+                description = "완전히 다른 설명",
+                maxOccupancy = 4,
+                basePrice = Money.won(300_000),
+                amenities = listOf("TV", "욕조", "미니바")
+            )
+
+            then("동일한 객체로 본다") {
+                updated shouldBe original
+                updated.hashCode() shouldBe original.hashCode()
+            }
+
+            then("집합 조회에서도 같은 객체로 인식된다") {
+                setOf(original).contains(updated) shouldBe true
+            }
+        }
+
+        `when`("id가 다르면 나머지 값이 같아도 다른 객체로 본다") {
+            val original = newRoomType()
+            val other = RoomType.create(
+                id = "rt-2",
+                propertyId = original.propertyId,
+                name = original.name,
+                description = original.description,
+                maxOccupancy = original.maxOccupancy,
+                basePrice = original.basePrice,
+                amenities = original.amenities
+            )
+
+            then("동일하지 않다") {
+                other shouldNotBe original
+            }
+        }
+    }
+
+    given("객실타입 문자열 표현 시") {
+        `when`("toString을 호출하면") {
+            val roomType = newRoomType()
+
+            then("핵심 식별 정보가 포함된다") {
+                val description = roomType.toString()
+                description shouldContain "rt-1"
+                description shouldContain "prop-1"
+                description shouldContain "디럭스 더블"
             }
         }
     }

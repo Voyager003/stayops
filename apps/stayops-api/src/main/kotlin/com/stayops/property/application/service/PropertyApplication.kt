@@ -2,11 +2,14 @@ package com.stayops.property.application.service
 
 import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo
+import com.stayops.property.application.dto.PropertyView
+import com.stayops.property.application.dto.UpdatePropertyCommand
 import com.stayops.property.domain.model.Property
 import com.stayops.property.domain.model.PropertyType
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.NotFoundException
+import com.stayops.shared.time.TimeZonePolicy
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
@@ -24,7 +27,7 @@ class PropertyApplication(
         address: Address,
         contactInfo: ContactInfo,
         description: String,
-        timezone: String = "Asia/Seoul",
+        timezone: String = TimeZonePolicy.DEFAULT_ZONE_ID,
         currency: String = "KRW"
     ): Property {
         val property = Property.create(
@@ -51,6 +54,9 @@ class PropertyApplication(
     fun getAccessibleProperties(propertyIds: List<String>): List<Property> =
         propertyRepository.findByIds(propertyIds)
 
+    fun getAccessiblePropertyViews(propertyIds: List<String>): List<PropertyView> =
+        getAccessibleProperties(propertyIds).map { PropertyView.from(it) }
+
     fun getAllProperties(): List<Property> =
         propertyRepository.findAll()
 
@@ -61,12 +67,18 @@ class PropertyApplication(
         return propertyRepository.save(activated)
     }
 
+    fun activatePropertyView(id: String): PropertyView =
+        PropertyView.from(activateProperty(id))
+
     fun deactivateProperty(id: String): Property {
         val property = getProperty(id)
         val deactivated = property.deactivate()
         log.info("숙소 비활성화: propertyId={}", id)
         return propertyRepository.save(deactivated)
     }
+
+    fun deactivatePropertyView(id: String): PropertyView =
+        PropertyView.from(deactivateProperty(id))
 
     fun updateProperty(
         id: String,
@@ -80,4 +92,30 @@ class PropertyApplication(
         log.info("숙소 수정: propertyId={}, name={}", id, name)
         return propertyRepository.save(updated)
     }
+
+    fun updateProperty(command: UpdatePropertyCommand): PropertyView =
+        PropertyView.from(
+            updateProperty(
+                id = command.id,
+                name = command.name,
+                description = command.description,
+                address = Address.of(
+                    street = command.street,
+                    city = command.city,
+                    state = command.state,
+                    zipCode = command.zipCode,
+                    country = command.country,
+                    latitude = command.latitude,
+                    longitude = command.longitude
+                ),
+                contactInfo = ContactInfo.of(
+                    phone = command.phone,
+                    email = command.email,
+                    website = command.website
+                )
+            )
+        )
+
+    fun getPropertyView(id: String): PropertyView =
+        PropertyView.from(getProperty(id))
 }

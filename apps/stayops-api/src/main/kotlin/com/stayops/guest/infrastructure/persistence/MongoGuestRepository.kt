@@ -3,17 +3,16 @@ package com.stayops.guest.infrastructure.persistence
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.model.GuestTier
 import com.stayops.guest.domain.repository.GuestRepository
+import com.stayops.guest.infrastructure.persistence.dao.GuestMongoDao
 import jakarta.annotation.PostConstruct
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
-import org.springframework.data.mongodb.repository.MongoRepository
-import org.springframework.data.mongodb.repository.Query
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
 @Repository
 class MongoGuestRepository(
-    private val mongo: GuestMongoDataRepository,
+    private val mongo: GuestMongoDao,
     private val mongoTemplate: MongoTemplate
 ) : GuestRepository {
 
@@ -43,13 +42,4 @@ class MongoGuestRepository(
 
     override fun findByPropertyIdAndNameContaining(propertyId: String, name: String): List<Guest> =
         mongo.findByPropertyIdAndNameContaining(propertyId, name).map { it.toDomain() }
-}
-
-interface GuestMongoDataRepository : MongoRepository<GuestDocument, String> {
-    fun findByPropertyIdAndPhone(propertyId: String, phone: String): GuestDocument?
-    fun findByPropertyId(propertyId: String): List<GuestDocument>
-    fun findByPropertyIdAndTier(propertyId: String, tier: GuestTier): List<GuestDocument>
-
-    @Query("{ 'propertyId': ?0, 'name': { '\$regex': ?1 } }")
-    fun findByPropertyIdAndNameContaining(propertyId: String, name: String): List<GuestDocument>
 }

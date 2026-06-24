@@ -98,6 +98,45 @@ class PaymentOutboxMessageTest : BehaviorSpec({
         }
     }
 
+    given("PaymentOutboxMessage 동일성 비교 시") {
+        `when`("같은 id의 Outbox 메시지가 서로 다른 처리 상태를 가지면") {
+            val pending = confirmMessage()
+            val processing = pending.startProcessing("worker-1", now.plusSeconds(60), now)
+
+            then("같은 메시지로 판단한다") {
+                processing shouldBe pending
+                processing.hashCode() shouldBe pending.hashCode()
+            }
+        }
+
+        `when`("id가 다르면 같은 결제 작업이라도") {
+            val first = confirmMessage()
+            val second = PaymentOutboxMessage.createConfirm(
+                id = "outbox-99",
+                paymentId = first.paymentId,
+                reservationId = first.reservationId,
+                memberId = first.memberId,
+                paymentKey = first.paymentKey,
+                orderId = first.orderId,
+                amount = first.amount,
+                now = now
+            )
+
+            then("다른 메시지로 판단한다") {
+                second shouldNotBe first
+            }
+        }
+
+        `when`("HashSet에 같은 id의 다른 상태 메시지를 넣으면") {
+            val messages = hashSetOf(confirmMessage())
+            messages += confirmMessage().startProcessing("worker-1", now.plusSeconds(60), now)
+
+            then("중복 추가되지 않는다") {
+                messages.size shouldBe 1
+            }
+        }
+    }
+
     given("Outbox 메시지 처리 상태 전이 시") {
         `when`("PENDING 메시지 처리를 시작하면") {
             val processing = confirmMessage().startProcessing(

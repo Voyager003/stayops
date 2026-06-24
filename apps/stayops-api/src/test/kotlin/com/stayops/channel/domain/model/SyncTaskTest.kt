@@ -51,6 +51,36 @@ class SyncTaskTest : BehaviorSpec({
         }
     }
 
+    given("SyncTask 동일성 비교 시") {
+        `when`("같은 id의 SyncTask가 서로 다른 처리 상태를 가지면") {
+            val pending = pendingTask()
+            val processing = pending.startProcessing("worker-a", fixedNow.plusSeconds(60), fixedNow)
+
+            then("같은 작업으로 판단한다") {
+                processing shouldBe pending
+                processing.hashCode() shouldBe pending.hashCode()
+            }
+        }
+
+        `when`("id가 다르면 같은 payload의 작업이라도") {
+            val first = pendingTask()
+            val second = pendingTask(id = "task-2")
+
+            then("다른 작업으로 판단한다") {
+                second shouldNotBe first
+            }
+        }
+
+        `when`("HashSet에 같은 id의 다른 상태 작업을 넣으면") {
+            val tasks = hashSetOf(pendingTask())
+            tasks += pendingTask().startProcessing("worker-a", fixedNow.plusSeconds(60), fixedNow)
+
+            then("중복 추가되지 않는다") {
+                tasks.size shouldBe 1
+            }
+        }
+    }
+
     // -- 상태 전이: PENDING → IN_PROGRESS --
 
     given("PENDING 상태의 SyncTask") {

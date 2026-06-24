@@ -1,102 +1,130 @@
 package com.stayops.property.api
 
 import com.stayops.member.domain.model.Member
-import com.stayops.member.domain.model.MemberRole
+import com.stayops.member.application.service.MemberAccessApplication
+import com.stayops.member.api.security.MemberSessionAuthenticationUpdater
 import com.stayops.property.api.dto.CreatePropertyRequest
 import com.stayops.property.api.dto.PropertyResponse
 import com.stayops.property.api.dto.UpdatePropertyRequest
+import com.stayops.property.application.dto.CreatePropertyCommand
+import com.stayops.property.application.dto.UpdatePropertyCommand
 import com.stayops.property.application.service.PropertyApplication
 import com.stayops.property.application.service.PropertyOnboardingApplication
-import com.stayops.member.infrastructure.security.PropertyAccessChecker
-import com.stayops.property.domain.model.Address
-import com.stayops.property.domain.model.ContactInfo
-import jakarta.validation.Valid
-import org.springframework.http.HttpStatus
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
-import org.springframework.security.core.context.SecurityContextHolder
-import org.springframework.security.web.context.HttpSessionSecurityContextRepository
-import org.springframework.web.bind.annotation.*
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import jakarta.validation.Valid
+import org.springframework.http.HttpStatus
+import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.PutMapping
+import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.ResponseStatus
+import org.springframework.web.bind.annotation.RestController
 
 @RestController
 @RequestMapping("/api/v1/properties")
 class PropertyApi(
     private val propertyApplication: PropertyApplication,
     private val propertyOnboardingApplication: PropertyOnboardingApplication,
-    private val propertyAccessChecker: PropertyAccessChecker,
+    private val memberAccessApplication: MemberAccessApplication,
+    private val memberSessionAuthenticationUpdater: MemberSessionAuthenticationUpdater
 ) {
-    private val securityContextRepository = HttpSessionSecurityContextRepository()
-
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     fun create(
         @RequestBody @Valid request: CreatePropertyRequest,
+        @AuthenticationPrincipal currentMember: Member?,
         httpRequest: HttpServletRequest,
         httpResponse: HttpServletResponse
     ): PropertyResponse {
-        val currentMember = SecurityContextHolder.getContext().authentication?.principal as Member
+        val member = memberAccessApplication.requireAuthenticatedMember(currentMember)
         val result = propertyOnboardingApplication.onboardProperty(
-            ownerId = currentMember.id,
-            name = request.name,
-            type = request.type,
-            address = Address.of(request.address.street, request.address.city, request.address.state, request.address.zipCode, request.address.country, request.address.latitude, request.address.longitude),
-            contactInfo = ContactInfo.of(request.contactInfo.phone, request.contactInfo.email, request.contactInfo.website),
-            description = request.description,
-            timezone = request.timezone,
-            currency = request.currency
+            CreatePropertyCommand(
+                ownerId = member.id,
+                name = request.name,
+                type = request.type,
+                street = request.address.street,
+                city = request.address.city,
+                state = request.address.state,
+                zipCode = request.address.zipCode,
+                country = request.address.country,
+                latitude = request.address.latitude,
+                longitude = request.address.longitude,
+                phone = request.contactInfo.phone,
+                email = request.contactInfo.email,
+                website = request.contactInfo.website,
+                description = request.description,
+                timezone = request.timezone,
+                currency = request.currency
+            )
         )
 
-        // SecurityContext의 Member를 갱신하여 세션에 즉시 반영
-        val newAuth = UsernamePasswordAuthenticationToken(result.owner, null, emptyList())
-        val context = SecurityContextHolder.getContext()
-        context.authentication = newAuth
-        securityContextRepository.saveContext(context, httpRequest, httpResponse)
+        memberSessionAuthenticationUpdater.update(result.owner, httpRequest, httpResponse)
 
         return PropertyResponse.from(result.property)
     }
 
     @GetMapping
-    fun getAll(): List<PropertyResponse> {
-        val member = SecurityContextHolder.getContext().authentication?.principal as Member
-        if (member.role == MemberRole.ADMIN) {
-            return propertyApplication.getAllProperties().map { PropertyResponse.from(it) }
-        }
-        val accessibleIds = member.propertyAccess.map { it.propertyId }
-        return propertyApplication.getAccessibleProperties(accessibleIds)
+    fun getAll(@AuthenticationPrincipal member: Member?): List<PropertyResponse> {
+        val accessibleIds = memberAccessApplication.resolveAccessiblePropertyIds(member)
+        return propertyApplication.getAccessiblePropertyViews(accessibleIds)
             .map { PropertyResponse.from(it) }
     }
 
     @PatchMapping("/{pid}/activate")
-    fun activate(@PathVariable pid: String): PropertyResponse {
-        propertyAccessChecker.requireAccess(pid)
-        return PropertyResponse.from(propertyApplication.activateProperty(pid))
+    fun activate(
+        @PathVariable pid: String,
+        @AuthenticationPrincipal member: Member?
+    ): PropertyResponse {
+        memberAccessApplication.requirePropertyAccess(member, pid)
+        return PropertyResponse.from(propertyApplication.activatePropertyView(pid))
     }
 
     @PatchMapping("/{pid}/deactivate")
-    fun deactivate(@PathVariable pid: String): PropertyResponse {
-        propertyAccessChecker.requireAccess(pid)
-        return PropertyResponse.from(propertyApplication.deactivateProperty(pid))
+    fun deactivate(
+        @PathVariable pid: String,
+        @AuthenticationPrincipal member: Member?
+    ): PropertyResponse {
+        memberAccessApplication.requirePropertyAccess(member, pid)
+        return PropertyResponse.from(propertyApplication.deactivatePropertyView(pid))
     }
 
     @GetMapping("/{pid}")
-    fun getOne(@PathVariable pid: String): PropertyResponse {
-        propertyAccessChecker.requireAccess(pid)
-        return PropertyResponse.from(propertyApplication.getProperty(pid))
+    fun getOne(
+        @PathVariable pid: String,
+        @AuthenticationPrincipal member: Member?
+    ): PropertyResponse {
+        memberAccessApplication.requirePropertyAccess(member, pid)
+        return PropertyResponse.from(propertyApplication.getPropertyView(pid))
     }
 
     @PutMapping("/{pid}")
     fun update(
         @PathVariable pid: String,
-        @RequestBody @Valid request: UpdatePropertyRequest
+        @RequestBody @Valid request: UpdatePropertyRequest,
+        @AuthenticationPrincipal member: Member?
     ): PropertyResponse {
-        propertyAccessChecker.requireAccess(pid)
+        memberAccessApplication.requirePropertyAccess(member, pid)
         val property = propertyApplication.updateProperty(
-            id = pid,
-            name = request.name,
-            description = request.description,
-            address = Address.of(request.address.street, request.address.city, request.address.state, request.address.zipCode, request.address.country, request.address.latitude, request.address.longitude),
-            contactInfo = ContactInfo.of(request.contactInfo.phone, request.contactInfo.email, request.contactInfo.website)
+            UpdatePropertyCommand(
+                id = pid,
+                name = request.name,
+                description = request.description,
+                street = request.address.street,
+                city = request.address.city,
+                state = request.address.state,
+                zipCode = request.address.zipCode,
+                country = request.address.country,
+                latitude = request.address.latitude,
+                longitude = request.address.longitude,
+                phone = request.contactInfo.phone,
+                email = request.contactInfo.email,
+                website = request.contactInfo.website
+            )
         )
         return PropertyResponse.from(property)
     }

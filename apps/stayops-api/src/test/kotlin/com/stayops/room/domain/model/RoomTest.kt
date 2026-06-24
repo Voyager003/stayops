@@ -3,6 +3,8 @@ package com.stayops.room.domain.model
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.string.shouldNotContain
 
 class RoomTest : BehaviorSpec({
 
@@ -164,6 +166,45 @@ class RoomTest : BehaviorSpec({
                 shouldThrow<IllegalArgumentException> {
                     room.startMaintenance()
                 }
+            }
+        }
+    }
+
+    given("객실 동일성 비교 시") {
+        val room = newRoom()
+
+        `when`("같은 ID를 가진 객실의 상태와 메모가 변경되면") {
+            val changed = room.checkIn().updateMemo("연박 투숙객 요청사항")
+
+            then("동일한 객실로 판단한다") {
+                changed shouldBe room
+                changed.hashCode() shouldBe room.hashCode()
+            }
+
+            then("기존 객실을 담은 Set에서 조회할 수 있다") {
+                setOf(room).contains(changed) shouldBe true
+            }
+        }
+
+        `when`("도메인 속성이 같아도 ID가 다르면") {
+            val other = Room.create(
+                id = "room-2",
+                propertyId = room.propertyId,
+                roomTypeId = room.roomTypeId,
+                roomNumber = room.roomNumber,
+                floor = room.floor
+            )
+
+            then("다른 객실로 판단한다") {
+                other shouldNotBe room
+            }
+        }
+
+        `when`("객실을 문자열로 표현하면") {
+            val roomWithMemo = room.updateMemo("장기 투숙객 요청사항")
+
+            then("운영 메모를 노출하지 않는다") {
+                roomWithMemo.toString() shouldNotContain "장기 투숙객 요청사항"
             }
         }
     }

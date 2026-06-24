@@ -3,6 +3,7 @@ package com.stayops.channel.domain.model
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import java.math.BigDecimal
 
 class ChannelTest : BehaviorSpec({
@@ -235,6 +236,41 @@ class ChannelTest : BehaviorSpec({
                 shouldThrow<IllegalStateException> {
                     channel.suspend()
                 }
+            }
+        }
+    }
+
+    given("채널 동일성 비교 시") {
+        val channel = Channel.createOta(
+            id = "ch-20",
+            propertyId = "prop-1",
+            code = "AGODA",
+            name = "Agoda",
+            commissionRate = BigDecimal("0.15"),
+            apiEndpoint = otaEndpoint
+        )
+
+        `when`("같은 ID를 가진 채널의 상태가 변경되면") {
+            val deactivated = channel.deactivate()
+
+            then("동일한 채널로 판단한다") {
+                deactivated shouldBe channel
+                deactivated.hashCode() shouldBe channel.hashCode()
+            }
+        }
+
+        `when`("도메인 속성이 같아도 ID가 다르면") {
+            val other = Channel.createOta(
+                id = "ch-21",
+                propertyId = channel.propertyId,
+                code = channel.code,
+                name = channel.name,
+                commissionRate = channel.commissionRate,
+                apiEndpoint = otaEndpoint
+            )
+
+            then("다른 채널로 판단한다") {
+                other shouldNotBe channel
             }
         }
     }

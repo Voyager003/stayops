@@ -2,17 +2,17 @@ package com.stayops.payment.infrastructure.persistence
 
 import com.stayops.payment.domain.model.Payment
 import com.stayops.payment.domain.repository.PaymentRepository
+import com.stayops.payment.infrastructure.persistence.dao.PaymentMongoDao
 import jakarta.annotation.PostConstruct
 import org.bson.Document
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
-import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
 @Repository
 class MongoPaymentRepository(
-    private val mongo: PaymentMongoDataRepository,
+    private val mongo: PaymentMongoDao,
     private val mongoTemplate: MongoTemplate
 ) : PaymentRepository {
 
@@ -47,11 +47,4 @@ class MongoPaymentRepository(
 
     override fun findByOrderId(orderId: String): Payment? =
         mongo.findByOrderId(orderId)?.toDomain()
-}
-
-interface PaymentMongoDataRepository : MongoRepository<PaymentDocument, String> {
-    fun findByReservationId(reservationId: String): PaymentDocument?
-    fun findByReservationIdIn(reservationIds: List<String>): List<PaymentDocument>
-    fun findByMemberId(memberId: String): List<PaymentDocument>
-    fun findByOrderId(orderId: String): PaymentDocument?
 }

@@ -3,6 +3,7 @@ package com.stayops.settlement.application.service
 import com.stayops.settlement.application.dto.ChannelSettlement
 import com.stayops.settlement.application.dto.DailySettlement
 import com.stayops.settlement.application.dto.MonthlySettlement
+import com.stayops.settlement.application.required.SettlementQueryReader
 import com.stayops.shared.domain.Money
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
@@ -12,7 +13,7 @@ import java.time.LocalDate
 
 class SettlementQueryApplicationTest : BehaviorSpec({
 
-    val repository = mockk<SettlementQueryRepository>()
+    val repository = mockk<SettlementQueryReader>()
     val sut = SettlementQueryApplication(repository)
 
     val startDate = LocalDate.of(2026, 4, 1)

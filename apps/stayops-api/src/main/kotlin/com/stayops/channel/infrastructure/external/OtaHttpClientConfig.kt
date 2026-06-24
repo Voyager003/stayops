@@ -14,7 +14,7 @@ import java.time.Duration
 /**
  * OTA 연동용 공통 HTTP 설정.
  *
- * 과거에는 HttpChannelSyncAdapter 와 HttpChannelInventoryQueryAdapter 가 각자
+ * 과거에는 HttpChannelAvailabilityPublisher 와 HttpChannelInventorySnapshotReader 가 각자
  * RestClient.create() 로 독립 인스턴스를 생성하여 (1) TCP 연결 재사용 불가,
  * (2) 타임아웃 미설정으로 OTA 장애 시 스레드 풀 고갈, (3) 설정 중복 문제가 있었다.
  *

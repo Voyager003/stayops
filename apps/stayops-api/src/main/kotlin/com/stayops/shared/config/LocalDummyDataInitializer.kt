@@ -17,6 +17,7 @@ import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.Money
+import com.stayops.shared.time.TimeZonePolicy
 import org.springframework.boot.ApplicationArguments
 import org.springframework.boot.ApplicationRunner
 import org.springframework.context.annotation.Profile
@@ -95,7 +96,7 @@ class LocalDummyDataInitializer(
             address = Address.of("테헤란로 123", "서울", "강남구", "06234", "KR"),
             contactInfo = ContactInfo.of("02-1234-5678", "info@stayops-hotel.com", "https://stayops-hotel.com"),
             description = "강남 중심의 비즈니스 호텔",
-            timezone = "Asia/Seoul",
+            timezone = TimeZonePolicy.DEFAULT_ZONE_ID,
             currency = "KRW"
         ).activate()
         propertyRepository.save(property)

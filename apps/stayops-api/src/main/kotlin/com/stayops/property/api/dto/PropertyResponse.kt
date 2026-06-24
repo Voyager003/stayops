@@ -1,19 +1,17 @@
 package com.stayops.property.api.dto
 
-import com.stayops.property.domain.model.Property
-import com.stayops.property.domain.model.PropertyStatus
-import com.stayops.property.domain.model.PropertyType
+import com.stayops.property.application.dto.PropertyView
 import java.time.Instant
 
 data class PropertyResponse(
     val id: String,
     val ownerId: String,
     val name: String,
-    val type: PropertyType,
+    val type: String,
     val address: AddressResponse,
     val contactInfo: ContactInfoResponse,
     val description: String,
-    val status: PropertyStatus,
+    val status: String,
     val timezone: String,
     val currency: String,
     val createdAt: Instant,
@@ -36,7 +34,7 @@ data class PropertyResponse(
     )
 
     companion object {
-        fun from(property: Property): PropertyResponse = PropertyResponse(
+        fun from(property: PropertyView): PropertyResponse = PropertyResponse(
             id = property.id,
             ownerId = property.ownerId,
             name = property.name,

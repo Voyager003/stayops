@@ -8,14 +8,14 @@ import com.stayops.reservation.application.service.CustomerReservationApplicatio
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.inventory.application.service.RoomInventoryApplication
-import com.stayops.reservation.application.port.ReservationPaymentStatus
+import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.application.service.ReservationApplication
 import com.stayops.reservation.application.service.ReservationPaymentOutboxApplication
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentRepository
-import com.stayops.payment.domain.service.PaymentCancelResult
-import com.stayops.payment.domain.service.PaymentConfirmResult
-import com.stayops.payment.domain.service.PaymentGateway
+import com.stayops.payment.application.required.PaymentCancelResult
+import com.stayops.payment.application.required.PaymentConfirmResult
+import com.stayops.payment.application.required.PaymentGateway
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.reservation.domain.model.ReservationStatus
@@ -153,8 +153,7 @@ class CustomerReservationE2ETest @Autowired constructor(
                 orderId = reservationResult.payment.orderId,
                 method = "카드",
                 approvedAt = Instant.now(clock),
-                totalAmount = BigDecimal(200_000),
-                receiptUrl = null, cardNumber = null, cardCompany = null
+                totalAmount = BigDecimal(200_000)
             )
 
             val requested = customerReservationApplication.confirmPayment(
@@ -268,8 +267,7 @@ class CustomerReservationE2ETest @Autowired constructor(
                 orderId = reservationResult.payment.orderId,
                 method = "카드",
                 approvedAt = Instant.now(clock),
-                totalAmount = BigDecimal(200_000),
-                receiptUrl = null, cardNumber = null, cardCompany = null
+                totalAmount = BigDecimal(200_000)
             )
 
             val firstResult = customerReservationApplication.confirmPayment(
@@ -332,8 +330,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
                 paymentKey = "toss_pk_inv", orderId = reservationResult.payment.orderId,
                 method = "카드", approvedAt = Instant.now(clock),
-                totalAmount = BigDecimal(200_000),
-                receiptUrl = null, cardNumber = null, cardCompany = null
+                totalAmount = BigDecimal(200_000)
             )
             customerReservationApplication.confirmPayment(
                 memberId = "customer-e2e",

@@ -8,6 +8,34 @@ import kotlin.test.assertTrue
 class ServiceNamingConventionTest {
 
     @Test
+    fun should_not_hardcode_korea_timezone_in_main_sources() {
+        val mainRoots = listOf(
+            Path.of("src/main/kotlin"),
+            Path.of("src/main/resources")
+        )
+
+        val hardcodedTimezoneReferences = mainRoots.flatMap { root ->
+            Files.walk(root).use { paths ->
+                paths
+                    .filter { Files.isRegularFile(it) }
+                    .filter { path ->
+                        path.fileName.toString().endsWith(".kt") ||
+                            path.fileName.toString().endsWith(".yml") ||
+                            path.fileName.toString().endsWith(".yaml")
+                    }
+                    .filter { path -> Files.readString(path).contains("Asia/Seoul") }
+                    .map { root.relativize(it).toString() }
+                    .toList()
+            }
+        }
+
+        assertTrue(
+            actual = hardcodedTimezoneReferences.isEmpty(),
+            message = "Production code must use the central timezone policy or property timezone, not Asia/Seoul literals: $hardcodedTimezoneReferences"
+        )
+    }
+
+    @Test
     fun should_name_application_facades_as_application_and_domain_services_as_service() {
         val sourceRoot = Path.of("src/main/kotlin/com/stayops")
 
@@ -16,13 +44,14 @@ class ServiceNamingConventionTest {
                 .filter { Files.isRegularFile(it) }
                 .filter { it.toString().contains("/application/service/") }
                 .filter { it.fileName.toString().endsWith("Service.kt") }
+                .filter { path -> !Files.readString(path).contains("interface ${path.fileName.toString().removeSuffix(".kt")}") }
                 .map { sourceRoot.relativize(it).toString() }
                 .toList()
         }
 
         assertTrue(
             actual = applicationServiceFiles.isEmpty(),
-            message = "Application facade files must use *Application naming, not *Service: $applicationServiceFiles"
+            message = "Concrete application facade files must use *Application naming, not *Service: $applicationServiceFiles"
         )
 
         val rateResolverService = sourceRoot.resolve("rate/domain/service/RateResolverService.kt")
@@ -65,37 +94,43 @@ class ServiceNamingConventionTest {
     }
 
     @Test
-    fun should_keep_member_security_checkers_inside_member_infrastructure() {
+    fun should_keep_member_access_policy_inside_member_application() {
         val mainRoot = Path.of("src/main/kotlin")
 
-        val memberSecurityRoot = mainRoot.resolve("com/stayops/member/infrastructure/security")
+        val memberApplicationRoot = mainRoot.resolve("com/stayops/member/application/service")
         assertTrue(
-            actual = Files.exists(memberSecurityRoot.resolve("CustomerAuthChecker.kt")),
-            message = "CustomerAuthChecker depends on Member and must live under member infrastructure"
-        )
-        assertTrue(
-            actual = Files.exists(memberSecurityRoot.resolve("PropertyAccessChecker.kt")),
-            message = "PropertyAccessChecker depends on Member and must live under member infrastructure"
+            actual = Files.exists(memberApplicationRoot.resolve("MemberAccessApplication.kt")),
+            message = "Member access policy must live under member application"
         )
 
         val sharedSecurityRoot = mainRoot.resolve("com/stayops/shared/security")
         assertTrue(
             actual = !Files.exists(sharedSecurityRoot.resolve("CustomerAuthChecker.kt")),
-            message = "CustomerAuthChecker is not shared because it depends on Member"
+            message = "Customer access policy is not shared because it depends on Member"
         )
         assertTrue(
             actual = !Files.exists(sharedSecurityRoot.resolve("PropertyAccessChecker.kt")),
-            message = "PropertyAccessChecker is not shared because it depends on Member"
+            message = "Property access policy is not shared because it depends on Member"
+        )
+
+        val memberSecurityRoot = mainRoot.resolve("com/stayops/member/infrastructure/security")
+        assertTrue(
+            actual = !Files.exists(memberSecurityRoot.resolve("CustomerAuthChecker.kt")),
+            message = "CustomerAuthChecker must be replaced by MemberAccessApplication"
+        )
+        assertTrue(
+            actual = !Files.exists(memberSecurityRoot.resolve("PropertyAccessChecker.kt")),
+            message = "PropertyAccessChecker must be replaced by MemberAccessApplication"
         )
     }
 
     @Test
-    fun should_use_inventory_reservation_port_for_reserve_release_consumers() {
+    fun should_use_inventory_reservation_service_for_reserve_release_consumers() {
         val mainRoot = Path.of("src/main/kotlin")
 
         assertTrue(
-            actual = Files.exists(mainRoot.resolve("com/stayops/inventory/application/port/InventoryReservationPort.kt")),
-            message = "Inventory reserve/release contract must be exposed as InventoryReservationPort"
+            actual = Files.exists(mainRoot.resolve("com/stayops/inventory/application/provided/InventoryReservationService.kt")),
+            message = "Inventory reserve/release contract must be exposed as provided InventoryReservationService"
         )
 
         val directInventoryApplicationReferences = listOf(
@@ -119,22 +154,22 @@ class ServiceNamingConventionTest {
 
         assertTrue(
             actual = directInventoryApplicationReferences.isEmpty(),
-            message = "External reserve/release consumers must depend on InventoryReservationPort, not RoomInventoryApplication: $directInventoryApplicationReferences"
+            message = "External reserve/release consumers must depend on InventoryReservationService, not RoomInventoryApplication: $directInventoryApplicationReferences"
         )
     }
 
     @Test
-    fun should_use_availability_sync_port_for_inventory_to_channel_sync() {
+    fun should_use_availability_sync_requester_for_inventory_to_channel_sync() {
         val mainRoot = Path.of("src/main/kotlin")
 
         assertTrue(
-            actual = Files.exists(mainRoot.resolve("com/stayops/inventory/application/port/AvailabilitySyncPort.kt")),
-            message = "Inventory availability sync must be exposed as AvailabilitySyncPort"
+            actual = Files.exists(mainRoot.resolve("com/stayops/inventory/application/required/AvailabilitySyncRequester.kt")),
+            message = "Inventory availability sync must be exposed as AvailabilitySyncRequester"
         )
 
         assertTrue(
-            actual = Files.exists(mainRoot.resolve("com/stayops/channel/infrastructure/sync/ChannelAvailabilitySyncAdapter.kt")),
-            message = "Channel must adapt Inventory AvailabilitySyncPort without Inventory depending on ChannelSyncApplication"
+            actual = Files.exists(mainRoot.resolve("com/stayops/channel/application/service/ChannelSyncApplication.kt")),
+            message = "ChannelSyncApplication must implement Inventory AvailabilitySyncRequester directly"
         )
 
         val directChannelApplicationReferences = Files.walk(mainRoot.resolve("com/stayops/inventory")).use { paths ->
@@ -151,17 +186,17 @@ class ServiceNamingConventionTest {
 
         assertTrue(
             actual = directChannelApplicationReferences.isEmpty(),
-            message = "Inventory must depend on AvailabilitySyncPort, not ChannelSyncApplication: $directChannelApplicationReferences"
+            message = "Inventory must depend on AvailabilitySyncRequester, not ChannelSyncApplication: $directChannelApplicationReferences"
         )
     }
 
     @Test
-    fun should_use_room_inventory_sync_port_for_room_to_inventory_sync() {
+    fun should_use_room_inventory_synchronizer_for_room_to_inventory_sync() {
         val mainRoot = Path.of("src/main/kotlin")
 
         assertTrue(
-            actual = Files.exists(mainRoot.resolve("com/stayops/inventory/application/port/RoomInventorySyncPort.kt")),
-            message = "Room-triggered inventory sync must be exposed as RoomInventorySyncPort"
+            actual = Files.exists(mainRoot.resolve("com/stayops/inventory/application/provided/RoomInventorySynchronizer.kt")),
+            message = "Room-triggered inventory sync must be exposed as RoomInventorySynchronizer"
         )
 
         val directInventoryApplicationReferences = Files.walk(mainRoot.resolve("com/stayops/room")).use { paths ->
@@ -178,21 +213,21 @@ class ServiceNamingConventionTest {
 
         assertTrue(
             actual = directInventoryApplicationReferences.isEmpty(),
-            message = "Room must depend on RoomInventorySyncPort, not RoomInventoryApplication: $directInventoryApplicationReferences"
+            message = "Room must depend on RoomInventorySynchronizer, not RoomInventoryApplication: $directInventoryApplicationReferences"
         )
     }
 
     @Test
-    fun should_use_reservation_payment_port_for_customer_reservation_payment_collaboration() {
+    fun should_use_reservation_payment_service_for_customer_reservation_payment_collaboration() {
         val mainRoot = Path.of("src/main/kotlin")
 
         assertTrue(
-            actual = Files.exists(mainRoot.resolve("com/stayops/reservation/application/port/ReservationPaymentPort.kt")),
-            message = "Customer reservation payment collaboration must be exposed as ReservationPaymentPort"
+            actual = Files.exists(mainRoot.resolve("com/stayops/reservation/application/required/ReservationPaymentService.kt")),
+            message = "Customer reservation payment collaboration must be exposed as ReservationPaymentService"
         )
         assertTrue(
-            actual = Files.exists(mainRoot.resolve("com/stayops/payment/infrastructure/reservation/PaymentReservationAdapter.kt")),
-            message = "Payment must adapt ReservationPaymentPort without CustomerReservationApplication depending on Payment internals"
+            actual = Files.exists(mainRoot.resolve("com/stayops/payment/application/service/ReservationPaymentApplication.kt")),
+            message = "Payment application must implement ReservationPaymentService without CustomerReservationApplication depending on Payment internals"
         )
 
         val checkedRoots = listOf(
@@ -227,7 +262,70 @@ class ServiceNamingConventionTest {
 
         assertTrue(
             actual = directPaymentReferences.isEmpty(),
-            message = "Customer reservation use cases and API DTOs must depend on ReservationPaymentPort, not Payment internals: $directPaymentReferences"
+            message = "Customer reservation use cases and API DTOs must depend on ReservationPaymentService, not Payment internals: $directPaymentReferences"
+        )
+    }
+
+    @Test
+    fun should_keep_api_layer_from_depending_on_infrastructure_security_or_domain_repositories() {
+        val mainRoot = Path.of("src/main/kotlin")
+        val apiLayerViolations = Files.walk(mainRoot.resolve("com/stayops")).use { paths ->
+            paths
+                .filter { Files.isRegularFile(it) }
+                .filter { it.fileName.toString().endsWith(".kt") }
+                .filter { path -> path.toString().contains("/api/") }
+                .filter { path ->
+                    val content = Files.readString(path)
+                    content.contains(Regex("^import com\\.stayops\\..*\\.infrastructure\\.", RegexOption.MULTILINE)) ||
+                        content.contains(Regex("^import com\\.stayops\\..*\\.domain\\.repository\\.", RegexOption.MULTILINE))
+                }
+                .map { mainRoot.relativize(it).toString() }
+                .toList()
+        }
+
+        assertTrue(
+            actual = apiLayerViolations.isEmpty(),
+            message = "API layer must depend on application use cases, not infrastructure security or domain repositories: $apiLayerViolations"
+        )
+    }
+
+    @Test
+    fun should_keep_property_api_from_creating_domain_objects_or_mutating_security_context() {
+        val propertyApi = Path.of("src/main/kotlin/com/stayops/property/api/PropertyApi.kt")
+        val propertyApiContent = Files.readString(propertyApi)
+
+        val forbiddenPropertyApiReferences = listOf(
+            "import com.stayops.property.domain.model.Address",
+            "import com.stayops.property.domain.model.ContactInfo",
+            "import org.springframework.security.authentication.UsernamePasswordAuthenticationToken",
+            "import org.springframework.security.core.context.SecurityContextHolder",
+            "import org.springframework.security.web.context.HttpSessionSecurityContextRepository",
+            "Address.of(",
+            "ContactInfo.of(",
+            "SecurityContextHolder."
+        ).filter { propertyApiContent.contains(it) }
+
+        assertTrue(
+            actual = forbiddenPropertyApiReferences.isEmpty(),
+            message = "PropertyApi must delegate domain object creation and security context mutation: $forbiddenPropertyApiReferences"
+        )
+
+        val propertyApiDtoRoot = Path.of("src/main/kotlin/com/stayops/property/api/dto")
+        val domainModelImports = Files.walk(propertyApiDtoRoot).use { paths ->
+            paths
+                .filter { Files.isRegularFile(it) }
+                .filter { it.fileName.toString().endsWith(".kt") }
+                .filter { path ->
+                    Files.readString(path)
+                        .contains(Regex("^import com\\.stayops\\.property\\.domain\\.model\\.", RegexOption.MULTILINE))
+                }
+                .map { propertyApiDtoRoot.relativize(it).toString() }
+                .toList()
+        }
+
+        assertTrue(
+            actual = domainModelImports.isEmpty(),
+            message = "Property API DTOs must not import property domain models: $domainModelImports"
         )
     }
 

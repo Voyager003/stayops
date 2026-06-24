@@ -1,24 +1,24 @@
 package com.stayops.settlement.api
 
 import com.stayops.member.domain.model.Member
-import com.stayops.member.domain.model.MemberRole
-import com.stayops.property.domain.repository.PropertyRepository
+import com.stayops.member.application.service.MemberAccessApplication
 import com.stayops.settlement.api.dto.DailySettlementResponse
 import com.stayops.settlement.api.dto.MonthlySettlementResponse
 import com.stayops.settlement.api.dto.SettlementResponse
 import com.stayops.settlement.application.service.SettlementQueryApplication
-import com.stayops.member.infrastructure.security.PropertyAccessChecker
 import org.springframework.http.ResponseEntity
-import org.springframework.security.core.context.SecurityContextHolder
-import org.springframework.web.bind.annotation.*
+import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDate
 import java.time.YearMonth
 
 @RestController
 class SettlementApi(
     private val settlementQueryApplication: SettlementQueryApplication,
-    private val propertyAccessChecker: PropertyAccessChecker,
-    private val propertyRepository: PropertyRepository
+    private val memberAccessApplication: MemberAccessApplication
 ) {
 
     @GetMapping("/api/v1/properties/{propertyId}/settlements")
@@ -27,9 +27,10 @@ class SettlementApi(
         @RequestParam(required = false) year: Int?,
         @RequestParam(required = false) month: Int?,
         @RequestParam(required = false) startDate: LocalDate?,
-        @RequestParam(required = false) endDate: LocalDate?
+        @RequestParam(required = false) endDate: LocalDate?,
+        @AuthenticationPrincipal member: Member?
     ): ResponseEntity<SettlementResponse> {
-        propertyAccessChecker.requireAccess(propertyId)
+        memberAccessApplication.requirePropertyAccess(member, propertyId)
         val (resolvedStart, resolvedEnd) = resolveDateRange(year, month, startDate, endDate)
         val summary = settlementQueryApplication.getSettlementSummary(propertyId, resolvedStart, resolvedEnd)
         return ResponseEntity.ok(SettlementResponse.from(summary))
@@ -39,9 +40,10 @@ class SettlementApi(
     fun getDailyTrend(
         @PathVariable propertyId: String,
         @RequestParam startDate: LocalDate,
-        @RequestParam endDate: LocalDate
+        @RequestParam endDate: LocalDate,
+        @AuthenticationPrincipal member: Member?
     ): ResponseEntity<List<DailySettlementResponse>> {
-        propertyAccessChecker.requireAccess(propertyId)
+        memberAccessApplication.requirePropertyAccess(member, propertyId)
         val trend = settlementQueryApplication.getDailyTrend(propertyId, startDate, endDate)
         return ResponseEntity.ok(trend.map { DailySettlementResponse.from(it) })
     }
@@ -49,9 +51,10 @@ class SettlementApi(
     @GetMapping("/api/v1/properties/{propertyId}/settlements/monthly-trend")
     fun getMonthlyTrend(
         @PathVariable propertyId: String,
-        @RequestParam year: Int
+        @RequestParam year: Int,
+        @AuthenticationPrincipal member: Member?
     ): ResponseEntity<List<MonthlySettlementResponse>> {
-        propertyAccessChecker.requireAccess(propertyId)
+        memberAccessApplication.requirePropertyAccess(member, propertyId)
         val trend = settlementQueryApplication.getMonthlyTrend(propertyId, year)
         return ResponseEntity.ok(trend.map { MonthlySettlementResponse.from(it) })
     }
@@ -61,14 +64,10 @@ class SettlementApi(
         @RequestParam(required = false) year: Int?,
         @RequestParam(required = false) month: Int?,
         @RequestParam(required = false) startDate: LocalDate?,
-        @RequestParam(required = false) endDate: LocalDate?
+        @RequestParam(required = false) endDate: LocalDate?,
+        @AuthenticationPrincipal member: Member?
     ): ResponseEntity<SettlementResponse> {
-        val member = SecurityContextHolder.getContext().authentication?.principal as Member
-        val propertyIds = if (member.role == MemberRole.ADMIN) {
-            propertyRepository.findAll().map { it.id }
-        } else {
-            member.propertyAccess.map { it.propertyId }
-        }
+        val propertyIds = memberAccessApplication.resolveAccessiblePropertyIds(member)
 
         val (resolvedStart, resolvedEnd) = resolveDateRange(year, month, startDate, endDate)
         val summary = settlementQueryApplication.getSettlementSummaryByPropertyIds(propertyIds, resolvedStart, resolvedEnd)

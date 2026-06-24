@@ -4,7 +4,7 @@ import com.stayops.TestcontainersConfiguration
 import com.stayops.rate.api.dto.CreateRatePlanRequest
 import com.stayops.rate.api.dto.DayOfWeekRuleRequest
 import com.stayops.rate.domain.model.RatePlanType
-import com.stayops.rate.infrastructure.persistence.RatePlanMongoDataRepository
+import com.stayops.rate.infrastructure.persistence.dao.RatePlanMongoDao
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
 import org.junit.jupiter.api.AfterEach
@@ -31,7 +31,7 @@ import java.time.LocalDate
 class RatePlanApiTest @Autowired constructor(
     private val context: WebApplicationContext,
     private val objectMapper: ObjectMapper,
-    private val mongoDataRepository: RatePlanMongoDataRepository
+    private val mongoDao: RatePlanMongoDao
 ) {
     private lateinit var mockMvc: MockMvc
 
@@ -47,7 +47,7 @@ class RatePlanApiTest @Autowired constructor(
         SecurityContextHolder.getContext().authentication =
             UsernamePasswordAuthenticationToken(admin, null, emptyList())
         mockMvc = MockMvcBuilders.webAppContextSetup(context).build()
-        mongoDataRepository.deleteAll()
+        mongoDao.deleteAll()
     }
 
     @AfterEach

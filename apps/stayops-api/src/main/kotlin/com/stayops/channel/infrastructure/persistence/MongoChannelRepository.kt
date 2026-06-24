@@ -3,17 +3,17 @@ package com.stayops.channel.infrastructure.persistence
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.model.ChannelStatus
 import com.stayops.channel.domain.repository.ChannelRepository
+import com.stayops.channel.infrastructure.persistence.dao.ChannelMongoDao
 import jakarta.annotation.PostConstruct
 import org.bson.Document
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
-import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
 @Repository
 class MongoChannelRepository(
-    private val mongo: ChannelMongoDataRepository,
+    private val mongo: ChannelMongoDao,
     private val mongoTemplate: MongoTemplate
 ) : ChannelRepository {
 
@@ -46,10 +46,4 @@ class MongoChannelRepository(
 
     override fun deleteById(id: String) =
         mongo.deleteById(id)
-}
-
-interface ChannelMongoDataRepository : MongoRepository<ChannelDocument, String> {
-    fun findByPropertyId(propertyId: String): List<ChannelDocument>
-    fun findByPropertyIdAndCode(propertyId: String, code: String): ChannelDocument?
-    fun findByPropertyIdAndStatus(propertyId: String, status: ChannelStatus): List<ChannelDocument>
 }

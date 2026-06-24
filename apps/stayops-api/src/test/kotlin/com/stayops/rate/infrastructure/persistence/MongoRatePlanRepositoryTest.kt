@@ -1,5 +1,6 @@
 package com.stayops.rate.infrastructure.persistence
 
+import com.stayops.rate.infrastructure.persistence.dao.RatePlanMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.rate.domain.model.DayOfWeekRate
 import com.stayops.rate.domain.model.RatePlan
@@ -22,12 +23,12 @@ import java.time.LocalDate
 @Import(TestcontainersConfiguration::class)
 class MongoRatePlanRepositoryTest @Autowired constructor(
     private val ratePlanRepository: RatePlanRepository,
-    private val mongoDataRepository: RatePlanMongoDataRepository
+    private val mongoDao: RatePlanMongoDao
 ) {
 
     @BeforeEach
     fun setUp() {
-        mongoDataRepository.deleteAll()
+        mongoDao.deleteAll()
     }
 
     private fun newRatePlan(

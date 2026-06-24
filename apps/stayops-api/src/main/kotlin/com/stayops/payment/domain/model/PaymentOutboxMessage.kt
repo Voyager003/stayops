@@ -4,8 +4,7 @@ import com.stayops.shared.domain.Money
 import java.time.Duration
 import java.time.Instant
 
-@ConsistentCopyVisibility
-data class PaymentOutboxMessage private constructor(
+class PaymentOutboxMessage private constructor(
     val id: String,
     val paymentId: String,
     val reservationId: String,
@@ -42,7 +41,7 @@ data class PaymentOutboxMessage private constructor(
             "처리 가능한 Outbox 상태가 아닙니다: status=$status, nextRetryAt=$nextRetryAt, lockedUntil=${this.lockedUntil}"
         }
 
-        return copy(
+        return copyState(
             status = PaymentOutboxStatus.IN_PROGRESS,
             lockedBy = workerId,
             lockedUntil = lockedUntil,
@@ -54,7 +53,7 @@ data class PaymentOutboxMessage private constructor(
         check(status == PaymentOutboxStatus.IN_PROGRESS) {
             "IN_PROGRESS 상태에서만 완료할 수 있습니다: $status"
         }
-        return copy(
+        return copyState(
             status = PaymentOutboxStatus.COMPLETED,
             nextRetryAt = null,
             lockedBy = null,
@@ -68,7 +67,7 @@ data class PaymentOutboxMessage private constructor(
         check(status == PaymentOutboxStatus.IN_PROGRESS) {
             "IN_PROGRESS 상태에서만 건너뛸 수 있습니다: $status"
         }
-        return copy(
+        return copyState(
             status = PaymentOutboxStatus.SKIPPED,
             nextRetryAt = null,
             lockedBy = null,
@@ -86,7 +85,7 @@ data class PaymentOutboxMessage private constructor(
         val newRetryCount = retryCount + 1
         val reachedMax = newRetryCount >= maxRetries
 
-        return copy(
+        return copyState(
             status = if (reachedMax) PaymentOutboxStatus.FAILED else PaymentOutboxStatus.PENDING,
             retryCount = newRetryCount,
             nextRetryAt = if (reachedMax) null else now + backoffDelay(newRetryCount),
@@ -96,6 +95,51 @@ data class PaymentOutboxMessage private constructor(
             updatedAt = now
         )
     }
+
+    private fun copyState(
+        status: PaymentOutboxStatus = this.status,
+        retryCount: Int = this.retryCount,
+        nextRetryAt: Instant? = this.nextRetryAt,
+        lockedBy: String? = this.lockedBy,
+        lockedUntil: Instant? = this.lockedUntil,
+        lastError: String? = this.lastError,
+        updatedAt: Instant = Instant.now()
+    ): PaymentOutboxMessage = PaymentOutboxMessage(
+        id = id,
+        paymentId = paymentId,
+        reservationId = reservationId,
+        memberId = memberId,
+        type = type,
+        paymentKey = paymentKey,
+        orderId = orderId,
+        amount = amount,
+        cancelReason = cancelReason,
+        idempotencyKey = idempotencyKey,
+        status = status,
+        retryCount = retryCount,
+        maxRetries = maxRetries,
+        nextRetryAt = nextRetryAt,
+        lockedBy = lockedBy,
+        lockedUntil = lockedUntil,
+        lastError = lastError,
+        version = version,
+        createdAt = createdAt,
+        updatedAt = updatedAt
+    )
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as PaymentOutboxMessage
+
+        return id == other.id
+    }
+
+    override fun hashCode(): Int = 31 * javaClass.hashCode() + id.hashCode()
+
+    override fun toString(): String =
+        "PaymentOutboxMessage(id=$id, type=$type, status=$status, paymentId=$paymentId)"
 
     companion object {
         private const val BASE_DELAY_SECONDS = 30L

@@ -3,8 +3,7 @@ package com.stayops.reservation.domain.model
 import com.stayops.shared.domain.DateRange
 import java.time.Instant
 
-@ConsistentCopyVisibility
-data class Reservation private constructor(
+class Reservation private constructor(
     val id: String,
     val propertyId: String,
     val roomTypeId: String,
@@ -28,47 +27,80 @@ data class Reservation private constructor(
         check(status == ReservationStatus.PENDING) {
             "PENDING 상태에서만 확정할 수 있습니다: $status"
         }
-        return copy(status = ReservationStatus.CONFIRMED, updatedAt = Instant.now())
+        return copyState(status = ReservationStatus.CONFIRMED)
     }
 
     fun checkIn(roomId: String): Reservation {
         check(status == ReservationStatus.CONFIRMED) {
             "CONFIRMED 상태에서만 체크인할 수 있습니다: $status"
         }
-        return copy(
-            status = ReservationStatus.CHECKED_IN,
-            roomId = roomId,
-            updatedAt = Instant.now()
-        )
+        return copyState(status = ReservationStatus.CHECKED_IN, roomId = roomId)
     }
 
     fun checkOut(): Reservation {
         check(status == ReservationStatus.CHECKED_IN) {
             "CHECKED_IN 상태에서만 체크아웃할 수 있습니다: $status"
         }
-        return copy(status = ReservationStatus.CHECKED_OUT, updatedAt = Instant.now())
+        return copyState(status = ReservationStatus.CHECKED_OUT)
     }
 
     fun cancel(): Reservation {
         check(status == ReservationStatus.CONFIRMED) {
             "CONFIRMED 상태에서만 취소할 수 있습니다: $status"
         }
-        return copy(status = ReservationStatus.CANCELLED, updatedAt = Instant.now())
+        return copyState(status = ReservationStatus.CANCELLED)
     }
 
     fun cancelPending(): Reservation {
         check(status == ReservationStatus.PENDING) {
             "PENDING 상태에서만 취소할 수 있습니다: $status"
         }
-        return copy(status = ReservationStatus.CANCELLED, updatedAt = Instant.now())
+        return copyState(status = ReservationStatus.CANCELLED)
     }
 
     fun noShow(): Reservation {
         check(status == ReservationStatus.CONFIRMED) {
             "CONFIRMED 상태에서만 노쇼 처리할 수 있습니다: $status"
         }
-        return copy(status = ReservationStatus.NO_SHOW, updatedAt = Instant.now())
+        return copyState(status = ReservationStatus.NO_SHOW)
     }
+
+    private fun copyState(
+        roomId: String? = this.roomId,
+        status: ReservationStatus = this.status,
+        updatedAt: Instant = Instant.now()
+    ): Reservation = Reservation(
+        id = id,
+        propertyId = propertyId,
+        roomTypeId = roomTypeId,
+        roomId = roomId,
+        guestId = guestId,
+        guestInfo = guestInfo,
+        dateRange = dateRange,
+        nightCount = nightCount,
+        numberOfGuests = numberOfGuests,
+        status = status,
+        channel = channel,
+        pricing = pricing,
+        memberId = memberId,
+        expiresAt = expiresAt,
+        version = version,
+        createdAt = createdAt,
+        updatedAt = updatedAt
+    )
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as Reservation
+
+        return id == other.id
+    }
+
+    override fun hashCode(): Int = 31 * javaClass.hashCode() + id.hashCode()
+
+    override fun toString(): String = "Reservation(id=$id, status=$status)"
 
     companion object {
         fun create(

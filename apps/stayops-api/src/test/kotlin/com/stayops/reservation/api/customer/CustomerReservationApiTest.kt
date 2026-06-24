@@ -2,21 +2,27 @@ package com.stayops.reservation.api.customer
 
 import com.stayops.reservation.application.service.CustomerReservationApplication
 import com.stayops.reservation.application.service.CustomerReservationResult
-import com.stayops.reservation.application.port.ReservationPaymentSnapshot
-import com.stayops.reservation.application.port.ReservationPaymentStatus
+import com.stayops.reservation.application.required.ReservationPaymentSnapshot
+import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.*
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.GlobalExceptionHandler
 import com.stayops.shared.exception.NotFoundException
-import com.stayops.member.infrastructure.security.CustomerAuthChecker
+import com.stayops.member.application.service.MemberAccessApplication
+import com.stayops.member.domain.model.Member
+import com.stayops.member.domain.model.MemberRole
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.http.MediaType
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
@@ -26,15 +32,22 @@ import java.time.LocalDate
 class CustomerReservationApiTest {
 
     private val customerReservationApplication = mockk<CustomerReservationApplication>()
-    private val customerAuthChecker = mockk<CustomerAuthChecker>()
+    private val memberAccessApplication = mockk<MemberAccessApplication>()
     private val mockMvc: MockMvc = MockMvcBuilders
-        .standaloneSetup(CustomerReservationApi(customerReservationApplication, customerAuthChecker))
+        .standaloneSetup(CustomerReservationApi(customerReservationApplication, memberAccessApplication))
+        .setCustomArgumentResolvers(AuthenticationPrincipalArgumentResolver())
         .setControllerAdvice(GlobalExceptionHandler())
         .build()
 
     @BeforeEach
     fun setUp() {
         clearAllMocks()
+        SecurityContextHolder.clearContext()
+    }
+
+    @AfterEach
+    fun tearDown() {
+        SecurityContextHolder.clearContext()
     }
 
     private fun sampleCustomerReservationResult(): CustomerReservationResult {
@@ -62,11 +75,14 @@ class CustomerReservationApiTest {
     }
 
     private fun mockCustomer() {
-        every { customerAuthChecker.requireCustomer() } returns com.stayops.member.domain.model.Member.create(
+        val customer = Member.create(
             id = "member-1", email = "customer@test.com",
             passwordHash = "hashed", name = "김고객",
-            role = com.stayops.member.domain.model.MemberRole.CUSTOMER
+            role = MemberRole.CUSTOMER
         )
+        SecurityContextHolder.getContext().authentication =
+            UsernamePasswordAuthenticationToken(customer, null, emptyList())
+        every { memberAccessApplication.requireCustomer(customer) } returns customer
     }
 
     @Nested

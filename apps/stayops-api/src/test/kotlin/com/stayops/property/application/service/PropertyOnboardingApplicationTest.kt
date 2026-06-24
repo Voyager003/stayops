@@ -7,6 +7,7 @@ import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
 import com.stayops.member.domain.model.PropertyRole
 import com.stayops.member.domain.repository.MemberRepository
+import com.stayops.property.application.dto.CreatePropertyCommand
 import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo
 import com.stayops.property.domain.model.Property
@@ -41,9 +42,57 @@ class PropertyOnboardingApplicationTest : BehaviorSpec({
 
     fun sampleAddress() = Address.of("해운대로 123", "부산", "부산광역시", "48099", "KR")
     fun sampleContactInfo() = ContactInfo.of("051-123-4567", "test@pension.com")
+    fun createCommand(
+        ownerId: String = "owner-1",
+        type: String = "PENSION",
+        website: String? = null
+    ) = CreatePropertyCommand(
+        ownerId = ownerId,
+        name = "해운대 펜션",
+        type = type,
+        street = "해운대로 123",
+        city = "부산",
+        state = "부산광역시",
+        zipCode = "48099",
+        country = "KR",
+        latitude = null,
+        longitude = null,
+        phone = "051-123-4567",
+        email = "test@pension.com",
+        website = website,
+        description = "아름다운 펜션",
+        timezone = "Asia/Seoul",
+        currency = "KRW"
+    )
 
     given("숙소 온보딩 시") {
         `when`("유효한 owner와 숙소 정보이면") {
+            then("command의 primitive 입력으로 도메인 값을 조립해 저장한다") {
+                val owner = Member.create(
+                    id = "owner-1",
+                    email = "owner@test.com",
+                    passwordHash = "hashed",
+                    name = "홍길동",
+                    role = MemberRole.OWNER
+                )
+                every { memberRepository.findById("owner-1") } returns owner
+                every { propertyRepository.save(any()) } answers { firstArg() }
+                every { channelRepository.save(any()) } answers { firstArg() }
+                every { memberRepository.save(any()) } answers { firstArg() }
+
+                val result = propertyOnboardingApplication.onboardProperty(createCommand(website = "https://stayops.test"))
+
+                result.property.name shouldBe "해운대 펜션"
+                result.property.type shouldBe "PENSION"
+                verify {
+                    propertyRepository.save(match<Property> {
+                        it.type == PropertyType.PENSION &&
+                            it.address.street == "해운대로 123" &&
+                            it.contactInfo.website == "https://stayops.test"
+                    })
+                }
+            }
+
             then("저장된 숙소와 접근 권한이 갱신된 owner를 반환한다") {
                 val owner = Member.create(
                     id = "owner-1",
@@ -106,14 +155,25 @@ class PropertyOnboardingApplicationTest : BehaviorSpec({
                 every { memberRepository.findById("missing-owner") } returns null
 
                 shouldThrow<NotFoundException> {
-                    propertyOnboardingApplication.onboardProperty(
-                        ownerId = "missing-owner",
-                        name = "해운대 펜션",
-                        type = PropertyType.PENSION,
-                        address = sampleAddress(),
-                        contactInfo = sampleContactInfo(),
-                        description = "아름다운 펜션"
-                    )
+                    propertyOnboardingApplication.onboardProperty(createCommand(ownerId = "missing-owner"))
+                }
+                verify(exactly = 0) { propertyRepository.save(any<Property>()) }
+            }
+        }
+
+        `when`("지원하지 않는 숙소 타입이면") {
+            then("숙소를 저장하지 않고 예외가 발생한다") {
+                shouldThrow<IllegalArgumentException> {
+                    propertyOnboardingApplication.onboardProperty(createCommand(type = "UNKNOWN"))
+                }
+                verify(exactly = 0) { propertyRepository.save(any<Property>()) }
+            }
+        }
+
+        `when`("웹사이트 URL이 http 또는 https가 아니면") {
+            then("숙소를 저장하지 않고 예외가 발생한다") {
+                shouldThrow<IllegalArgumentException> {
+                    propertyOnboardingApplication.onboardProperty(createCommand(website = "javascript:alert(1)"))
                 }
                 verify(exactly = 0) { propertyRepository.save(any<Property>()) }
             }

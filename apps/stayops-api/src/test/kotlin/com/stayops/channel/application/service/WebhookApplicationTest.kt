@@ -4,11 +4,11 @@ import com.stayops.channel.domain.model.*
 import com.stayops.channel.domain.repository.ChannelMappingRepository
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.repository.ProcessedWebhookEventRepository
-import com.stayops.channel.domain.service.SignatureVerifier
+import com.stayops.channel.application.required.WebhookSignatureVerifier
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
-import com.stayops.inventory.application.port.InventoryReservationPort
-import com.stayops.reservation.application.port.ReservationPaymentPort
+import com.stayops.inventory.application.provided.InventoryReservationService
+import com.stayops.reservation.application.required.ReservationPaymentService
 import com.stayops.reservation.domain.event.ReservationCancelled
 import com.stayops.reservation.domain.event.ReservationCreated
 import com.stayops.reservation.domain.model.GuestInfo
@@ -34,11 +34,11 @@ class WebhookApplicationTest : BehaviorSpec({
     val channelRepository = mockk<ChannelRepository>()
     val mappingRepository = mockk<ChannelMappingRepository>()
     val processedEventRepository = mockk<ProcessedWebhookEventRepository>()
-    val signatureVerifier = mockk<SignatureVerifier>()
+    val signatureVerifier = mockk<WebhookSignatureVerifier>()
     val channelSyncApplication = mockk<ChannelSyncApplication>()
     val reservationRepository = mockk<ReservationRepository>()
-    val reservationPaymentPort = mockk<ReservationPaymentPort>()
-    val inventoryReservationPort = mockk<InventoryReservationPort>()
+    val reservationPaymentPort = mockk<ReservationPaymentService>()
+    val inventoryReservationService = mockk<InventoryReservationService>()
     val guestRepository = mockk<GuestRepository>()
     val eventPublisher = mockk<ApplicationEventPublisher>()
     val roomTypeRepository = mockk<com.stayops.room.domain.repository.RoomTypeRepository>(relaxed = true)
@@ -54,7 +54,7 @@ class WebhookApplicationTest : BehaviorSpec({
         channelSyncApplication = channelSyncApplication,
         reservationRepository = reservationRepository,
         reservationPaymentPort = reservationPaymentPort,
-        inventoryReservationPort = inventoryReservationPort,
+        inventoryReservationService = inventoryReservationService,
         guestRepository = guestRepository,
         eventPublisher = eventPublisher,
         roomTypeRepository = roomTypeRepository,
@@ -79,7 +79,7 @@ class WebhookApplicationTest : BehaviorSpec({
                 every { processedEventRepository.saveIfAbsent(any()) } returns true
                 every { mappingRepository.findByPropertyIdAndChannelCode("prop-1", "AGODA") } returns null
                 every { roomTypeRepository.findById("rt-deluxe") } returns null
-                justRun { inventoryReservationPort.reserve("prop-1", "rt-deluxe", any()) }
+                justRun { inventoryReservationService.reserve("prop-1", "rt-deluxe", any()) }
                 every { guestRepository.findByPropertyIdAndPhone("prop-1", "OTA-book-1") } returns null
                 every { guestRepository.save(any()) } answers {
                     val g = firstArg<Guest>()
@@ -116,10 +116,10 @@ class WebhookApplicationTest : BehaviorSpec({
 
                 // Verify inventory reserved for each night (2 nights: May 1, May 2)
                 verify(exactly = 1) {
-                    inventoryReservationPort.reserve("prop-1", "rt-deluxe", LocalDate.of(2026, 5, 1))
+                    inventoryReservationService.reserve("prop-1", "rt-deluxe", LocalDate.of(2026, 5, 1))
                 }
                 verify(exactly = 1) {
-                    inventoryReservationPort.reserve("prop-1", "rt-deluxe", LocalDate.of(2026, 5, 2))
+                    inventoryReservationService.reserve("prop-1", "rt-deluxe", LocalDate.of(2026, 5, 2))
                 }
 
                 // Verify reservation saved as CONFIRMED
@@ -166,7 +166,7 @@ class WebhookApplicationTest : BehaviorSpec({
                 every { processedEventRepository.saveIfAbsent(any()) } returns true
                 every { mappingRepository.findByPropertyIdAndChannelCode("prop-1", "AGODA") } returns mapping
                 every { roomTypeRepository.findById("internal-rt-1") } returns null
-                justRun { inventoryReservationPort.reserve("prop-1", "internal-rt-1", any()) }
+                justRun { inventoryReservationService.reserve("prop-1", "internal-rt-1", any()) }
                 every { guestRepository.findByPropertyIdAndPhone("prop-1", "OTA-book-2") } returns null
                 every { guestRepository.save(any()) } answers { firstArg() }
                 val savedSlot = slot<Reservation>()
@@ -256,7 +256,7 @@ class WebhookApplicationTest : BehaviorSpec({
                         "book-1"
                     )
                 } returns reservation
-                justRun { inventoryReservationPort.release("prop-1", "rt-deluxe", any()) }
+                justRun { inventoryReservationService.release("prop-1", "rt-deluxe", any()) }
                 every { reservationRepository.save(capture(savedSlot)) } answers { firstArg() }
                 every { eventPublisher.publishEvent(any<ReservationCancelled>()) } just Runs
 
@@ -272,10 +272,10 @@ class WebhookApplicationTest : BehaviorSpec({
 
                 savedSlot.captured.status shouldBe ReservationStatus.CANCELLED
                 verify(exactly = 1) {
-                    inventoryReservationPort.release("prop-1", "rt-deluxe", LocalDate.of(2026, 5, 1))
+                    inventoryReservationService.release("prop-1", "rt-deluxe", LocalDate.of(2026, 5, 1))
                 }
                 verify(exactly = 1) {
-                    inventoryReservationPort.release("prop-1", "rt-deluxe", LocalDate.of(2026, 5, 2))
+                    inventoryReservationService.release("prop-1", "rt-deluxe", LocalDate.of(2026, 5, 2))
                 }
                 verify(exactly = 1) {
                     eventPublisher.publishEvent(match<ReservationCancelled> {

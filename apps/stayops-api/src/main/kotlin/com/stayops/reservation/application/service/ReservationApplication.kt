@@ -2,20 +2,20 @@ package com.stayops.reservation.application.service
 
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.guest.domain.repository.GuestRepository
-import com.stayops.inventory.application.port.InventoryReservationPort
+import com.stayops.inventory.application.provided.InventoryReservationService
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolverService
-import com.stayops.reservation.application.port.ReservationPaymentPort
-import com.stayops.reservation.application.port.ReservationPaymentStatus
+import com.stayops.reservation.application.required.ReservationPaymentService
+import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.domain.event.ReservationCancelled
-import com.stayops.reservation.domain.event.ReservationCheckedOut
 import com.stayops.reservation.domain.event.ReservationCreated
-import com.stayops.reservation.domain.model.*
-import com.stayops.shared.domain.PagedResult
+import com.stayops.reservation.domain.model.GuestInfo
+import com.stayops.reservation.domain.model.Reservation
+import com.stayops.reservation.domain.model.ReservationChannel
+import com.stayops.reservation.domain.model.ReservationPricing
+import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
-import com.stayops.room.domain.model.RoomStatus
-import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.IdGenerator
@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.Clock
 import java.time.LocalDate
 
 @Service
@@ -36,13 +35,12 @@ class ReservationApplication(
     private val channelRepository: ChannelRepository,
     private val ratePlanRepository: RatePlanRepository,
     private val guestRepository: GuestRepository,
-    private val inventoryReservationPort: InventoryReservationPort,
-    private val roomRepository: RoomRepository,
+    private val inventoryReservationService: InventoryReservationService,
     private val eventPublisher: ApplicationEventPublisher,
     private val rateResolverService: RateResolverService,
-    private val reservationPaymentPort: ReservationPaymentPort,
-    private val idGenerator: IdGenerator,
-    private val clock: Clock
+    private val reservationPaymentPort: ReservationPaymentService,
+    private val reservationCancellationPolicy: ReservationCancellationPolicy,
+    private val idGenerator: IdGenerator
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -78,7 +76,7 @@ class ReservationApplication(
 
         // 4. 날짜별 재고 차감
         dateRange.allDates().forEach { date ->
-            inventoryReservationPort.reserve(propertyId, roomTypeId, date)
+            inventoryReservationService.reserve(propertyId, roomTypeId, date)
         }
 
         // 5. Guest 조회
@@ -125,33 +123,6 @@ class ReservationApplication(
         return saved
     }
 
-    fun getReservation(propertyId: String, reservationId: String): Reservation {
-        val reservation = reservationRepository.findById(reservationId)
-            ?: throw NotFoundException("RESERVATION_NOT_FOUND", "예약을 찾을 수 없습니다: $reservationId")
-        require(reservation.propertyId == propertyId) { "예약이 해당 숙소에 속하지 않습니다." }
-        return reservation
-    }
-
-    fun getReservations(propertyId: String): List<Reservation> =
-        reservationRepository.findByPropertyId(propertyId)
-
-    fun getReservationsByStatus(propertyId: String, status: ReservationStatus): List<Reservation> =
-        reservationRepository.findByPropertyIdAndStatus(propertyId, status)
-
-    fun searchReservations(
-        propertyId: String,
-        criteria: ReservationSearchCriteria,
-        page: Int,
-        size: Int
-    ): PagedResult<Reservation> = reservationRepository.search(propertyId, criteria, page, size)
-
-    fun searchReservationsByPropertyIds(
-        propertyIds: List<String>,
-        criteria: ReservationSearchCriteria,
-        page: Int,
-        size: Int
-    ): PagedResult<Reservation> = reservationRepository.searchByPropertyIds(propertyIds, criteria, page, size)
-
     fun confirmReservation(propertyId: String, reservationId: String): Reservation {
         val reservation = getReservation(propertyId, reservationId)
         requireApprovedPaymentForCustomerReservation(reservation)
@@ -161,7 +132,7 @@ class ReservationApplication(
     @Transactional
     fun cancelReservation(propertyId: String, reservationId: String): Reservation {
         val reservation = getReservation(propertyId, reservationId)
-        val shouldReleaseInventory = shouldReleaseInventoryOnCancel(reservation)
+        val shouldReleaseInventory = reservationCancellationPolicy.shouldReleaseInventoryOnCancel(reservation)
         val cancelled = if (reservation.status == ReservationStatus.PENDING) {
             reservation.cancelPending()
         } else {
@@ -171,7 +142,7 @@ class ReservationApplication(
 
         if (shouldReleaseInventory) {
             reservation.dateRange.allDates().forEach { date ->
-                inventoryReservationPort.release(reservation.propertyId, reservation.roomTypeId, date)
+                inventoryReservationService.release(reservation.propertyId, reservation.roomTypeId, date)
             }
 
             eventPublisher.publishEvent(
@@ -203,80 +174,10 @@ class ReservationApplication(
         }
     }
 
-    private fun shouldReleaseInventoryOnCancel(reservation: Reservation): Boolean {
-        if (reservation.status == ReservationStatus.CONFIRMED) {
-            return true
-        }
-        if (reservation.memberId == null) {
-            return reservation.status == ReservationStatus.PENDING
-        }
-
-        val payment = reservationPaymentPort.findByReservationId(reservation.id)
-            ?: return false
-        return payment.status == ReservationPaymentStatus.APPROVED ||
-            payment.status == ReservationPaymentStatus.CANCEL_REQUESTED ||
-            payment.status == ReservationPaymentStatus.CANCEL_FAILED
-    }
-
-    @Transactional
-    fun checkInReservation(propertyId: String, reservationId: String, roomId: String): Reservation {
-        val reservation = getReservation(propertyId, reservationId)
-        requireArrivalDateToday(reservation, "CHECK_IN_NOT_ALLOWED_DATE", "체크인 당일에만 체크인할 수 있습니다.")
-
-        val room = roomRepository.findById(roomId)
-            ?: throw NotFoundException("ROOM_NOT_FOUND", "객실을 찾을 수 없습니다: $roomId")
-        check(room.status == RoomStatus.AVAILABLE) {
-            "AVAILABLE 상태의 객실만 배정할 수 있습니다: ${room.status}"
-        }
-
-        roomRepository.save(room.checkIn())
-        val checkedIn = reservation.checkIn(roomId)
-        val saved = reservationRepository.save(checkedIn)
-
-        log.info("체크인: reservationId={}, roomId={}", saved.id, roomId)
-        return saved
-    }
-
-    @Transactional
-    fun checkOutReservation(propertyId: String, reservationId: String): Reservation {
-        val reservation = getReservation(propertyId, reservationId)
-        val checkedOut = reservation.checkOut()
-        val saved = reservationRepository.save(checkedOut)
-
-        if (reservation.roomId != null) {
-            val room = roomRepository.findById(reservation.roomId!!)
-            if (room != null) {
-                roomRepository.save(room.checkOut())
-            }
-        }
-
-        eventPublisher.publishEvent(
-            ReservationCheckedOut(
-                reservationId = saved.id,
-                propertyId = reservation.propertyId,
-                guestId = reservation.guestId,
-                totalAmount = reservation.pricing.totalAmount,
-                stayNights = reservation.nightCount.toLong()
-            )
-        )
-
-        log.info("체크아웃: reservationId={}", saved.id)
-        return saved
-    }
-
-    fun noShowReservation(propertyId: String, reservationId: String): Reservation {
-        val reservation = getReservation(propertyId, reservationId)
-        requireArrivalDateToday(reservation, "NO_SHOW_NOT_ALLOWED_DATE", "체크인 당일에만 노쇼 처리할 수 있습니다.")
-        return reservationRepository.save(reservation.noShow())
-    }
-
-    private fun requireArrivalDateToday(reservation: Reservation, code: String, message: String) {
-        val today = LocalDate.now(clock)
-        if (reservation.dateRange.checkIn != today) {
-            throw BusinessException(
-                code = code,
-                message = "$message checkIn=${reservation.dateRange.checkIn}, today=$today"
-            )
-        }
+    private fun getReservation(propertyId: String, reservationId: String): Reservation {
+        val reservation = reservationRepository.findById(reservationId)
+            ?: throw NotFoundException("RESERVATION_NOT_FOUND", "예약을 찾을 수 없습니다: $reservationId")
+        require(reservation.propertyId == propertyId) { "예약이 해당 숙소에 속하지 않습니다." }
+        return reservation
     }
 }

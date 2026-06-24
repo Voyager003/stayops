@@ -1,15 +1,16 @@
 package com.stayops.channel.application.service
 
+import com.stayops.channel.domain.model.ChannelMapping
 import com.stayops.channel.domain.model.MappingType
 import com.stayops.channel.domain.model.ProcessedWebhookEvent
 import com.stayops.channel.domain.repository.ChannelMappingRepository
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.repository.ProcessedWebhookEventRepository
-import com.stayops.channel.domain.service.SignatureVerifier
+import com.stayops.channel.application.required.WebhookSignatureVerifier
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
-import com.stayops.inventory.application.port.InventoryReservationPort
-import com.stayops.reservation.application.port.ReservationPaymentPort
+import com.stayops.inventory.application.provided.InventoryReservationService
+import com.stayops.reservation.application.required.ReservationPaymentService
 import com.stayops.reservation.domain.event.ReservationCancelled
 import com.stayops.reservation.domain.event.ReservationCreated
 import com.stayops.reservation.domain.model.ReservationChannel
@@ -17,6 +18,7 @@ import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationPricing
 import com.stayops.reservation.domain.repository.ReservationRepository
+import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
@@ -24,6 +26,7 @@ import com.stayops.shared.exception.BusinessException
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
+import java.math.BigDecimal
 import java.time.LocalDate
 
 @Service
@@ -31,14 +34,14 @@ class WebhookApplication(
     private val channelRepository: ChannelRepository,
     private val channelMappingRepository: ChannelMappingRepository,
     private val processedEventRepository: ProcessedWebhookEventRepository,
-    private val signatureVerifier: SignatureVerifier,
+    private val signatureVerifier: WebhookSignatureVerifier,
     private val channelSyncApplication: ChannelSyncApplication,
     private val reservationRepository: ReservationRepository,
-    private val reservationPaymentPort: ReservationPaymentPort,
-    private val inventoryReservationPort: InventoryReservationPort,
+    private val reservationPaymentPort: ReservationPaymentService,
+    private val inventoryReservationService: InventoryReservationService,
     private val guestRepository: GuestRepository,
     private val eventPublisher: ApplicationEventPublisher,
-    private val roomTypeRepository: com.stayops.room.domain.repository.RoomTypeRepository,
+    private val roomTypeRepository: RoomTypeRepository,
     private val idGenerator: IdGenerator
 ) {
 
@@ -89,8 +92,8 @@ class WebhookApplication(
     private fun handleBookingEvent(
         propertyId: String,
         channelCode: String,
-        commissionRate: java.math.BigDecimal,
-        mapping: com.stayops.channel.domain.model.ChannelMapping?,
+        commissionRate: BigDecimal,
+        mapping: ChannelMapping?,
         payload: Map<String, Any>
     ) {
         val roomTypeCode = payload["roomTypeCode"]?.toString()
@@ -117,7 +120,7 @@ class WebhookApplication(
         // 1. Reserve inventory for each date
         val dateRange = DateRange.of(checkInDate, checkOutDate)
         dateRange.allDates().forEach { date ->
-            inventoryReservationPort.reserve(propertyId, roomTypeId, date)
+            inventoryReservationService.reserve(propertyId, roomTypeId, date)
         }
 
         // 2. Create or find guest (OTA guests have no phone — use placeholder)
@@ -205,7 +208,7 @@ class WebhookApplication(
         val saved = reservationRepository.save(cancelled)
 
         reservation.dateRange.allDates().forEach { date ->
-            inventoryReservationPort.release(reservation.propertyId, reservation.roomTypeId, date)
+            inventoryReservationService.release(reservation.propertyId, reservation.roomTypeId, date)
         }
 
         eventPublisher.publishEvent(

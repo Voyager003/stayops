@@ -5,8 +5,7 @@ import com.stayops.shared.domain.Money
 import java.time.Instant
 import java.time.LocalDate
 
-@ConsistentCopyVisibility
-data class RatePlan private constructor(
+class RatePlan private constructor(
     val id: String,
     val propertyId: String,
     val roomTypeId: String,
@@ -22,9 +21,9 @@ data class RatePlan private constructor(
     val createdAt: Instant,
     val updatedAt: Instant
 ) {
-    fun activate(): RatePlan = copy(status = RatePlanStatus.ACTIVE, updatedAt = Instant.now())
+    fun activate(): RatePlan = copyState(status = RatePlanStatus.ACTIVE, updatedAt = Instant.now())
 
-    fun deactivate(): RatePlan = copy(status = RatePlanStatus.INACTIVE, updatedAt = Instant.now())
+    fun deactivate(): RatePlan = copyState(status = RatePlanStatus.INACTIVE, updatedAt = Instant.now())
 
     fun updateInfo(
         name: String,
@@ -36,7 +35,7 @@ data class RatePlan private constructor(
     ): RatePlan {
         require(name.isNotBlank()) { "요금제 이름은 공백일 수 없습니다." }
         require(priority > 0) { "우선순위는 0보다 커야 합니다: $priority" }
-        return copy(
+        return copyState(
             name = name,
             dateRange = dateRange,
             dayOfWeekRules = dayOfWeekRules,
@@ -63,6 +62,40 @@ data class RatePlan private constructor(
         if (type == RatePlanType.CHANNEL_SPECIFIC && this.channelCode != channelCode) return false
         return true
     }
+
+    private fun copyState(
+        name: String = this.name,
+        dateRange: DateRange? = this.dateRange,
+        dayOfWeekRules: List<DayOfWeekRate>? = this.dayOfWeekRules,
+        channelCode: String? = this.channelCode,
+        price: Money = this.price,
+        priority: Int = this.priority,
+        status: RatePlanStatus = this.status,
+        updatedAt: Instant = this.updatedAt
+    ): RatePlan = RatePlan(
+        id = id,
+        propertyId = propertyId,
+        roomTypeId = roomTypeId,
+        name = name,
+        type = type,
+        dateRange = dateRange,
+        dayOfWeekRules = dayOfWeekRules,
+        channelCode = channelCode,
+        price = price,
+        priority = priority,
+        status = status,
+        version = version,
+        createdAt = createdAt,
+        updatedAt = updatedAt
+    )
+
+    override fun equals(other: Any?): Boolean =
+        this === other || (other is RatePlan && id == other.id)
+
+    override fun hashCode(): Int = id.hashCode()
+
+    override fun toString(): String =
+        "RatePlan(id=$id, propertyId=$propertyId, roomTypeId=$roomTypeId, name=$name, type=$type, status=$status)"
 
     companion object {
         fun create(

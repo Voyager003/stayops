@@ -1,6 +1,6 @@
 package com.stayops.payment.infrastructure.external
 
-import com.stayops.payment.domain.service.PaymentGatewayException
+import com.stayops.payment.application.required.PaymentGatewayException
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.types.shouldBeInstanceOf
 

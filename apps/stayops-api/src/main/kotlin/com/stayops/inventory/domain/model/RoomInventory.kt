@@ -3,8 +3,7 @@ package com.stayops.inventory.domain.model
 import java.time.Instant
 import java.time.LocalDate
 
-@ConsistentCopyVisibility
-data class RoomInventory private constructor(
+class RoomInventory private constructor(
     val id: String,
     val propertyId: String,
     val roomTypeId: String,
@@ -32,21 +31,21 @@ data class RoomInventory private constructor(
         require(availableCount >= 1) {
             "가용 객실이 없습니다: available=$availableCount"
         }
-        return copy(reservedCount = reservedCount + 1, updatedAt = Instant.now())
+        return copyState(reservedCount = reservedCount + 1)
     }
 
     fun release(): RoomInventory {
         require(reservedCount > 0) {
             "취소할 예약이 없습니다: reservedCount=$reservedCount"
         }
-        return copy(reservedCount = reservedCount - 1, updatedAt = Instant.now())
+        return copyState(reservedCount = reservedCount - 1)
     }
 
     fun block(count: Int): RoomInventory {
         require(count >= 1) { "차단 수는 1 이상이어야 합니다: $count" }
         val actual = minOf(count, availableCount)
         if (actual == 0) return this
-        return copy(blockedCount = blockedCount + actual, updatedAt = Instant.now())
+        return copyState(blockedCount = blockedCount + actual)
     }
 
     fun updateTotalCount(newTotalCount: Int): RoomInventory {
@@ -54,15 +53,47 @@ data class RoomInventory private constructor(
         require(reservedCount + blockedCount <= newTotalCount) {
             "총 객실 수가 현재 예약+차단 수보다 작을 수 없습니다: reserved=$reservedCount, blocked=$blockedCount, newTotal=$newTotalCount"
         }
-        return copy(totalCount = newTotalCount, updatedAt = Instant.now())
+        return copyState(totalCount = newTotalCount)
     }
 
     fun unblock(count: Int): RoomInventory {
         require(count >= 1) { "해제 수는 1 이상이어야 합니다: $count" }
         val actual = minOf(count, blockedCount)
         if (actual == 0) return this
-        return copy(blockedCount = blockedCount - actual, updatedAt = Instant.now())
+        return copyState(blockedCount = blockedCount - actual)
     }
+
+    private fun copyState(
+        totalCount: Int = this.totalCount,
+        reservedCount: Int = this.reservedCount,
+        blockedCount: Int = this.blockedCount,
+        updatedAt: Instant = Instant.now()
+    ): RoomInventory = RoomInventory(
+        id = id,
+        propertyId = propertyId,
+        roomTypeId = roomTypeId,
+        date = date,
+        totalCount = totalCount,
+        reservedCount = reservedCount,
+        blockedCount = blockedCount,
+        version = version,
+        createdAt = createdAt,
+        updatedAt = updatedAt
+    )
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as RoomInventory
+
+        return id == other.id
+    }
+
+    override fun hashCode(): Int = 31 * javaClass.hashCode() + id.hashCode()
+
+    override fun toString(): String =
+        "RoomInventory(id=$id, propertyId=$propertyId, roomTypeId=$roomTypeId, date=$date)"
 
     companion object {
         fun create(

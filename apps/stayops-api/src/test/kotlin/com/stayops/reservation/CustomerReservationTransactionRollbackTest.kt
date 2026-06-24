@@ -15,11 +15,11 @@ import com.stayops.payment.domain.model.PaymentOutboxType
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentOutboxRepository
 import com.stayops.payment.domain.repository.PaymentRepository
-import com.stayops.payment.domain.service.PaymentConfirmResult
-import com.stayops.payment.domain.service.PaymentGateway
+import com.stayops.payment.application.required.PaymentConfirmResult
+import com.stayops.payment.application.required.PaymentGateway
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
-import com.stayops.reservation.application.port.ReservationPaymentStatus
+import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.model.Room
@@ -196,10 +196,7 @@ class CustomerReservationTransactionRollbackTest @Autowired constructor(
                 orderId = result.payment.orderId,
                 method = "카드",
                 approvedAt = Instant.parse("2026-04-13T10:00:00Z"),
-                totalAmount = BigDecimal(200_000),
-                receiptUrl = null,
-                cardNumber = null,
-                cardCompany = null
+                totalAmount = BigDecimal(200_000)
             )
 
             // When: 승인 요청 접수 후 worker가 PG 승인 성공, night1 reserve 성공, night2 reserve 실패를 처리

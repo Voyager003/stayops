@@ -1,5 +1,6 @@
 package com.stayops.property.infrastructure.persistence
 
+import com.stayops.property.infrastructure.persistence.dao.PropertyMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo
@@ -19,11 +20,11 @@ import org.springframework.context.annotation.Import
 @Import(TestcontainersConfiguration::class)
 class MongoPropertyRepositoryTest @Autowired constructor(
     private val propertyRepository: PropertyRepository,
-    private val mongoDataRepository: PropertyMongoDataRepository
+    private val mongoDao: PropertyMongoDao
 ) {
     @BeforeEach
     fun setUp() {
-        mongoDataRepository.deleteAll()
+        mongoDao.deleteAll()
     }
 
     private fun newProperty(

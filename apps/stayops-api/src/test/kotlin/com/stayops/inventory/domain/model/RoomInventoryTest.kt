@@ -3,6 +3,7 @@ package com.stayops.inventory.domain.model
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 import java.time.Instant
 import java.time.LocalDate
@@ -61,6 +62,47 @@ class RoomInventoryTest : BehaviorSpec({
             val inventory = newInventory(totalCount = 5, reservedCount = 2, blockedCount = 1)
             then("availableCount는 2이다") {
                 inventory.availableCount shouldBe 2
+            }
+        }
+    }
+
+    given("RoomInventory 동일성 비교 시") {
+        `when`("같은 id의 재고가 서로 다른 수량 상태를 가지면") {
+            val open = newInventory(totalCount = 5, reservedCount = 0, blockedCount = 0)
+            val reserved = open.reserve()
+
+            then("같은 재고로 판단한다") {
+                reserved shouldBe open
+                reserved.hashCode() shouldBe open.hashCode()
+            }
+        }
+
+        `when`("id가 다르면 같은 날짜 재고라도") {
+            val first = newInventory()
+            val second = RoomInventory.reconstitute(
+                id = "inv-2",
+                propertyId = first.propertyId,
+                roomTypeId = first.roomTypeId,
+                date = first.date,
+                totalCount = first.totalCount,
+                reservedCount = first.reservedCount,
+                blockedCount = first.blockedCount,
+                version = first.version,
+                createdAt = first.createdAt,
+                updatedAt = first.updatedAt
+            )
+
+            then("다른 재고로 판단한다") {
+                second shouldNotBe first
+            }
+        }
+
+        `when`("HashSet에 같은 id의 다른 상태 재고를 넣으면") {
+            val inventories = hashSetOf(newInventory(totalCount = 5, reservedCount = 0, blockedCount = 0))
+            inventories += newInventory(totalCount = 5, reservedCount = 0, blockedCount = 0).reserve()
+
+            then("중복 추가되지 않는다") {
+                inventories.size shouldBe 1
             }
         }
     }

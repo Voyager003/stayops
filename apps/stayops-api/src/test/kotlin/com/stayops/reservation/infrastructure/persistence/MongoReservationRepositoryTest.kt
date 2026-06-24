@@ -1,11 +1,13 @@
 package com.stayops.reservation.infrastructure.persistence
 
+import com.stayops.reservation.infrastructure.persistence.dao.ReservationMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.reservation.domain.model.*
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
+import com.stayops.shared.time.StayopsTimeProperties
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -23,14 +25,15 @@ import java.time.LocalDate
 @Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class MongoReservationRepositoryTest @Autowired constructor(
     private val reservationRepository: ReservationRepository,
-    private val mongoDataRepository: ReservationMongoDataRepository,
+    private val mongoDao: ReservationMongoDao,
     private val mongoTemplate: MongoTemplate,
-    private val clock: Clock
+    private val clock: Clock,
+    private val timeProperties: StayopsTimeProperties
 ) {
 
     @BeforeEach
     fun setUp() {
-        mongoDataRepository.deleteAll()
+        mongoDao.deleteAll()
     }
 
     private fun newReservation(
@@ -380,7 +383,7 @@ class MongoReservationRepositoryTest @Autowired constructor(
         @Test
         fun `해당 날짜에 생성된 예약 수를 반환한다`() {
             val today = LocalDate.now(clock)
-            val createdAt = today.atStartOfDay(clock.zone).toInstant()
+            val createdAt = today.atStartOfDay(timeProperties.defaultZone()).toInstant()
             reservationRepository.save(newReservation(id = "rsv-1", createdAt = createdAt))
             reservationRepository.save(newReservation(id = "rsv-2", createdAt = createdAt))
             reservationRepository.save(newReservation(id = "rsv-3", propertyId = "prop-2", createdAt = createdAt))
@@ -393,7 +396,7 @@ class MongoReservationRepositoryTest @Autowired constructor(
         @Test
         fun `다른 날짜에 생성된 예약은 포함하지 않는다`() {
             val today = LocalDate.now(clock)
-            val createdAt = today.atStartOfDay(clock.zone).toInstant()
+            val createdAt = today.atStartOfDay(timeProperties.defaultZone()).toInstant()
             reservationRepository.save(newReservation(id = "rsv-1", createdAt = createdAt))
 
             val tomorrow = today.plusDays(1)

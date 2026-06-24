@@ -2,7 +2,7 @@ package com.stayops.mockota.api
 
 import com.stayops.mockota.TestcontainersConfiguration
 import com.stayops.mockota.model.OtaInventory
-import com.stayops.mockota.repository.OtaInventoryRepository
+import com.stayops.mockota.dao.OtaInventoryDao
 import com.stayops.mockota.service.FailureSimulatorService
 import com.stayops.mockota.service.WebhookSenderService
 import org.junit.jupiter.api.BeforeEach
@@ -39,12 +39,12 @@ class SimulationApiTest {
     private lateinit var failureSimulator: FailureSimulatorService
 
     @Autowired
-    private lateinit var otaInventoryRepository: OtaInventoryRepository
+    private lateinit var otaInventoryDao: OtaInventoryDao
 
     @BeforeEach
     fun setUp() {
         failureSimulator.clearAll()
-        otaInventoryRepository.deleteAll()
+        otaInventoryDao.deleteAll()
     }
 
     @Nested
@@ -98,7 +98,7 @@ class SimulationApiTest {
 
         @Test
         fun `예약 가능한 재고가 있으면 랜덤 예약을 발생시키고 OTA 재고를 차감한다`() {
-            otaInventoryRepository.save(OtaInventory(roomTypeId = "rt-1", date = "2026-04-05", availableCount = 3))
+            otaInventoryDao.save(OtaInventory(roomTypeId = "rt-1", date = "2026-04-05", availableCount = 3))
 
             mockMvc.post("/api/v1/simulate/random-booking") {
                 contentType = MediaType.APPLICATION_JSON
@@ -110,13 +110,13 @@ class SimulationApiTest {
                 jsonPath("$.date") { value("2026-04-05") }
             }
 
-            val updated = otaInventoryRepository.findByRoomTypeIdAndDate("rt-1", "2026-04-05")!!
+            val updated = otaInventoryDao.findByRoomTypeIdAndDate("rt-1", "2026-04-05")!!
             assertEquals(2, updated.availableCount)
         }
 
         @Test
         fun `예약 가능한 재고가 없으면 400을 반환한다`() {
-            otaInventoryRepository.save(OtaInventory(roomTypeId = "rt-1", date = "2026-04-05", availableCount = 0))
+            otaInventoryDao.save(OtaInventory(roomTypeId = "rt-1", date = "2026-04-05", availableCount = 0))
 
             mockMvc.post("/api/v1/simulate/random-booking") {
                 contentType = MediaType.APPLICATION_JSON
@@ -129,7 +129,7 @@ class SimulationApiTest {
 
         @Test
         fun `재고가 1인 상태에서 예약하면 0이 되고 다음 예약은 400을 반환한다`() {
-            otaInventoryRepository.save(OtaInventory(roomTypeId = "rt-1", date = "2026-04-05", availableCount = 1))
+            otaInventoryDao.save(OtaInventory(roomTypeId = "rt-1", date = "2026-04-05", availableCount = 1))
 
             // 첫 예약 성공
             mockMvc.post("/api/v1/simulate/random-booking") {
@@ -139,7 +139,7 @@ class SimulationApiTest {
                 status { isOk() }
             }
 
-            val updated = otaInventoryRepository.findByRoomTypeIdAndDate("rt-1", "2026-04-05")!!
+            val updated = otaInventoryDao.findByRoomTypeIdAndDate("rt-1", "2026-04-05")!!
             assertEquals(0, updated.availableCount)
 
             // 두 번째 예약 실패
@@ -153,9 +153,9 @@ class SimulationApiTest {
 
         @Test
         fun `여러 객실타입이 있을 때 선택된 결과는 후보 중 하나이다`() {
-            otaInventoryRepository.save(OtaInventory(roomTypeId = "rt-1", date = "2026-04-05", availableCount = 2))
-            otaInventoryRepository.save(OtaInventory(roomTypeId = "rt-2", date = "2026-04-06", availableCount = 3))
-            otaInventoryRepository.save(OtaInventory(roomTypeId = "rt-3", date = "2026-04-07", availableCount = 0)) // 제외 대상
+            otaInventoryDao.save(OtaInventory(roomTypeId = "rt-1", date = "2026-04-05", availableCount = 2))
+            otaInventoryDao.save(OtaInventory(roomTypeId = "rt-2", date = "2026-04-06", availableCount = 3))
+            otaInventoryDao.save(OtaInventory(roomTypeId = "rt-3", date = "2026-04-07", availableCount = 0)) // 제외 대상
 
             val result = mockMvc.post("/api/v1/simulate/random-booking") {
                 contentType = MediaType.APPLICATION_JSON
@@ -171,7 +171,7 @@ class SimulationApiTest {
 
         @Test
         fun `예약 발생 시 웹훅이 전송된다`() {
-            otaInventoryRepository.save(OtaInventory(roomTypeId = "rt-1", date = "2026-04-05", availableCount = 1))
+            otaInventoryDao.save(OtaInventory(roomTypeId = "rt-1", date = "2026-04-05", availableCount = 1))
 
             mockMvc.post("/api/v1/simulate/random-booking") {
                 contentType = MediaType.APPLICATION_JSON

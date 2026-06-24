@@ -1,5 +1,6 @@
 package com.stayops.member.infrastructure.persistence
 
+import com.stayops.member.infrastructure.persistence.dao.MemberMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
@@ -17,12 +18,12 @@ import org.springframework.context.annotation.Import
 @Import(TestcontainersConfiguration::class)
 class MongoMemberRepositoryTest @Autowired constructor(
     private val memberRepository: MemberRepository,
-    private val mongoDataRepository: MemberMongoDataRepository
+    private val mongoDao: MemberMongoDao
 ) {
 
     @BeforeEach
     fun setUp() {
-        mongoDataRepository.deleteAll()
+        mongoDao.deleteAll()
     }
 
     private fun newMember(

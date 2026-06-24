@@ -1,24 +1,26 @@
 package com.stayops.reservation.api
 
 import com.stayops.member.domain.model.Member
-import com.stayops.member.domain.model.MemberRole
-import com.stayops.property.domain.repository.PropertyRepository
+import com.stayops.member.application.service.MemberAccessApplication
 import com.stayops.reservation.api.dto.PagedReservationResponse
 import com.stayops.reservation.api.dto.ReservationResponse
-import com.stayops.reservation.application.service.ReservationApplication
+import com.stayops.reservation.application.service.ReservationQueryApplication
 import com.stayops.reservation.domain.model.DateType
 import com.stayops.reservation.domain.model.ReservationSearchCriteria
 import com.stayops.reservation.domain.model.ReservationStatus
 import org.springframework.http.ResponseEntity
-import org.springframework.security.core.context.SecurityContextHolder
-import org.springframework.web.bind.annotation.*
+import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDate
 
 @RestController
 @RequestMapping("/api/v1/reservations")
 class AllPropertiesReservationApi(
-    private val reservationApplication: ReservationApplication,
-    private val propertyRepository: PropertyRepository
+    private val reservationQueryApplication: ReservationQueryApplication,
+    private val memberAccessApplication: MemberAccessApplication
 ) {
 
     @GetMapping
@@ -31,14 +33,10 @@ class AllPropertiesReservationApi(
         @RequestParam(required = false) endDate: LocalDate?,
         @RequestParam(required = false) guestName: String?,
         @RequestParam(defaultValue = "0") page: Int,
-        @RequestParam(defaultValue = "20") size: Int
+        @RequestParam(defaultValue = "20") size: Int,
+        @AuthenticationPrincipal member: Member?
     ): ResponseEntity<PagedReservationResponse> {
-        val member = SecurityContextHolder.getContext().authentication?.principal as Member
-        val propertyIds = if (member.role == MemberRole.ADMIN) {
-            propertyRepository.findAll().map { it.id }
-        } else {
-            member.propertyAccess.map { it.propertyId }
-        }
+        val propertyIds = memberAccessApplication.resolveAccessiblePropertyIds(member)
 
         val criteria = ReservationSearchCriteria(
             statuses = status,
@@ -49,7 +47,7 @@ class AllPropertiesReservationApi(
             endDate = endDate,
             guestName = guestName
         )
-        val result = reservationApplication.searchReservationsByPropertyIds(propertyIds, criteria, page, size)
+        val result = reservationQueryApplication.searchReservationsByPropertyIds(propertyIds, criteria, page, size)
         return ResponseEntity.ok(PagedReservationResponse(
             content = result.content.map { ReservationResponse.from(it) },
             totalElements = result.totalElements,

@@ -51,6 +51,22 @@ class PropertyTest : BehaviorSpec({
                 }
             }
         }
+        `when`("지원하지 않는 timezone이면") {
+            then("예외가 발생한다") {
+                shouldThrow<java.time.DateTimeException> {
+                    Property.create(
+                        id = "prop-1",
+                        ownerId = "owner-1",
+                        name = "해운대 펜션",
+                        type = PropertyType.PENSION,
+                        address = sampleAddress(),
+                        contactInfo = sampleContactInfo(),
+                        description = "설명",
+                        timezone = "Invalid/Zone"
+                    )
+                }
+            }
+        }
     }
 
     given("INACTIVE 상태의 숙소") {
@@ -60,6 +76,9 @@ class PropertyTest : BehaviorSpec({
             val activated = property.activate()
             then("상태가 ACTIVE로 변경된다") {
                 activated.status shouldBe PropertyStatus.ACTIVE
+            }
+            then("원본 숙소 상태는 변경되지 않는다") {
+                property.status shouldBe PropertyStatus.INACTIVE
             }
         }
         `when`("deactivate() 호출 시") {
@@ -182,6 +201,40 @@ class PropertyTest : BehaviorSpec({
                 shouldThrow<IllegalArgumentException> {
                     property.updateInfo(name = "")
                 }
+            }
+        }
+    }
+
+    given("숙소 동일성 비교 시") {
+        `when`("같은 id를 가진 숙소의 상태가 서로 다르면") {
+            val property = newProperty()
+            val activated = property.activate()
+
+            then("같은 숙소로 판단한다") {
+                activated shouldBe property
+            }
+        }
+
+        `when`("같은 id를 가진 숙소의 저장 상태가 서로 다르면") {
+            val property = newProperty()
+            val reconstituted = Property.reconstitute(
+                id = property.id,
+                ownerId = property.ownerId,
+                name = "다른 이름",
+                type = property.type,
+                address = property.address,
+                contactInfo = property.contactInfo,
+                description = "다른 설명",
+                status = PropertyStatus.ACTIVE,
+                timezone = property.timezone,
+                currency = property.currency,
+                version = property.version + 1,
+                createdAt = property.createdAt,
+                updatedAt = property.updatedAt.plusSeconds(60)
+            )
+
+            then("id 기준으로 같은 숙소로 판단한다") {
+                reconstituted shouldBe property
             }
         }
     }

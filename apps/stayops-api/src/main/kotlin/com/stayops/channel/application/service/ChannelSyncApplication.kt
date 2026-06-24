@@ -8,7 +8,8 @@ import com.stayops.channel.domain.model.SyncTaskStatus
 import com.stayops.channel.domain.model.SyncTaskType
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.channel.domain.repository.SyncTaskRepository
-import com.stayops.channel.domain.service.ChannelAdapterProvider
+import com.stayops.inventory.application.required.AvailabilitySyncRequester
+import com.stayops.channel.application.required.ChannelAvailabilityPublisherProvider
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
@@ -21,14 +22,14 @@ import java.time.LocalDate
 class ChannelSyncApplication(
     private val channelRepository: ChannelRepository,
     private val syncTaskRepository: SyncTaskRepository,
-    private val adapterProvider: ChannelAdapterProvider,
+    private val publisherProvider: ChannelAvailabilityPublisherProvider,
     private val clock: Clock,
     private val idGenerator: IdGenerator
-) {
+) : AvailabilitySyncRequester {
 
     private val log = LoggerFactory.getLogger(javaClass)
 
-    fun createAvailabilitySyncTasks(
+    override fun requestAvailabilitySync(
         propertyId: String,
         roomTypeId: String,
         date: LocalDate,
@@ -71,8 +72,8 @@ class ChannelSyncApplication(
 
                 val roomTypeCode = processing.payload["roomTypeId"]?.toString() ?: ""
 
-                val adapter = adapterProvider.getAdapter(processing.channelCode)
-                val result = adapter.pushAvailability(
+                val publisher = publisherProvider.getPublisher(processing.channelCode)
+                val result = publisher.pushAvailability(
                     endpoint = channel.connectionInfo!!.apiEndpoint,
                     apiKey = null,
                     externalRoomTypeCode = roomTypeCode,

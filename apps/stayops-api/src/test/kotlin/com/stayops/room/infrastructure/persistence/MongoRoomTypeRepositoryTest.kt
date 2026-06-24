@@ -1,5 +1,6 @@
 package com.stayops.room.infrastructure.persistence
 
+import com.stayops.room.infrastructure.persistence.dao.RoomTypeMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomTypeRepository
@@ -17,11 +18,11 @@ import org.springframework.dao.DuplicateKeyException
 @Import(TestcontainersConfiguration::class)
 class MongoRoomTypeRepositoryTest @Autowired constructor(
     private val roomTypeRepository: RoomTypeRepository,
-    private val mongoDataRepository: RoomTypeMongoDataRepository
+    private val mongoDao: RoomTypeMongoDao
 ) {
     @BeforeEach
     fun setUp() {
-        mongoDataRepository.deleteAll()
+        mongoDao.deleteAll()
     }
 
     private fun newRoomType(

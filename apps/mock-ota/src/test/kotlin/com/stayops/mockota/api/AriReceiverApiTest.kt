@@ -1,7 +1,7 @@
 package com.stayops.mockota.api
 
 import com.stayops.mockota.TestcontainersConfiguration
-import com.stayops.mockota.repository.OtaInventoryRepository
+import com.stayops.mockota.dao.OtaInventoryDao
 import com.stayops.mockota.service.FailureMode
 import com.stayops.mockota.service.FailureSimulatorService
 import org.junit.jupiter.api.BeforeEach
@@ -31,7 +31,7 @@ class AriReceiverApiTest {
     private lateinit var ariReceiverApi: AriReceiverApi
 
     @Autowired
-    private lateinit var otaInventoryRepository: OtaInventoryRepository
+    private lateinit var otaInventoryDao: OtaInventoryDao
 
     @BeforeEach
     fun setUp() {

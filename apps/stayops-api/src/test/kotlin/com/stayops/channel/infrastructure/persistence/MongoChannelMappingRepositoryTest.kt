@@ -1,5 +1,6 @@
 package com.stayops.channel.infrastructure.persistence
 
+import com.stayops.channel.infrastructure.persistence.dao.ChannelMappingMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.channel.domain.model.ChannelMapping
 import com.stayops.channel.domain.model.MappingEntry
@@ -19,12 +20,12 @@ import org.springframework.dao.DuplicateKeyException
 @Import(TestcontainersConfiguration::class)
 class MongoChannelMappingRepositoryTest @Autowired constructor(
     private val mappingRepository: ChannelMappingRepository,
-    private val mongoDataRepository: ChannelMappingMongoDataRepository
+    private val mongoDao: ChannelMappingMongoDao
 ) {
 
     @BeforeEach
     fun setUp() {
-        mongoDataRepository.deleteAll()
+        mongoDao.deleteAll()
     }
 
     private fun newMapping(

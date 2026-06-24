@@ -7,10 +7,11 @@ import io.kotest.matchers.shouldBe
 class MemberTest : BehaviorSpec({
 
     fun createMember(
+        id: String = "member-1",
         role: MemberRole = MemberRole.OWNER,
         propertyAccess: List<PropertyAccess> = emptyList()
     ) = Member.create(
-        id = "member-1",
+        id = id,
         email = "test@stayops.com",
         passwordHash = "hashed-password",
         name = "홍길동",
@@ -195,6 +196,44 @@ class MemberTest : BehaviorSpec({
                     member.deactivate()
                 }
             }
+        }
+    }
+
+    given("Member 동일성을 비교할 때") {
+        `when`("같은 ID의 Member 상태가 다르면") {
+            then("같은 도메인 객체로 판단한다") {
+                val member = createMember()
+                val deactivated = member.deactivate()
+
+                (member == deactivated) shouldBe true
+                member.hashCode() shouldBe deactivated.hashCode()
+            }
+        }
+
+        `when`("다른 ID의 Member가 동일한 속성을 가지면") {
+            then("다른 도메인 객체로 판단한다") {
+                val first = createMember(id = "member-1")
+                val second = createMember(id = "member-2")
+
+                (first == second) shouldBe false
+            }
+        }
+
+        `when`("상태 변경 전 Member를 Set에 보관하면") {
+            then("상태 변경 후 Member를 같은 항목으로 찾는다") {
+                val member = createMember()
+                val members = setOf(member)
+
+                members.contains(member.recordLogin()) shouldBe true
+            }
+        }
+    }
+
+    given("Member를 문자열로 표현할 때") {
+        then("비밀번호 해시를 노출하지 않는다") {
+            val member = createMember()
+
+            member.toString().contains("hashed-password") shouldBe false
         }
     }
 })
