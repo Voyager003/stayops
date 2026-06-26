@@ -19,19 +19,27 @@ repositories {
     mavenCentral()
 }
 
+val jooqGenerator by configurations.creating
+
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-mongodb")
+    implementation("org.springframework.boot:spring-boot-starter-jooq")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("org.springframework.boot:spring-boot-starter-session-data-redis")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.flywaydb:flyway-core")
+    implementation("org.flywaydb:flyway-database-postgresql")
     implementation("io.micrometer:micrometer-registry-prometheus")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.2")
     implementation("tools.jackson.module:jackson-module-kotlin")
     implementation("net.logstash.logback:logstash-logback-encoder:8.1")
+    runtimeOnly("org.postgresql:postgresql")
+    jooqGenerator("org.jooq:jooq-codegen")
+    jooqGenerator("org.jooq:jooq-meta-extensions")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-starter-data-mongodb-test")
     testImplementation("org.springframework.boot:spring-boot-starter-data-redis-test")
@@ -46,6 +54,7 @@ dependencies {
     testImplementation("com.ninja-squad:springmockk:4.0.2")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-mongodb")
+    testImplementation("org.testcontainers:testcontainers-postgresql:2.0.3")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
@@ -54,6 +63,34 @@ kotlin {
     compilerOptions {
         freeCompilerArgs.addAll("-Xjsr305=strict", "-Xannotation-default-target=param-property")
     }
+}
+
+val generatedJooqDir = layout.buildDirectory.dir("generated-src/jooq/main")
+
+sourceSets {
+    main {
+        java.srcDir(generatedJooqDir)
+    }
+}
+
+tasks.register<JavaExec>("generateJooq") {
+    group = "jooq"
+    description = "Generate jOOQ metadata from Flyway SQL migrations."
+    classpath = jooqGenerator
+    mainClass.set("org.jooq.codegen.GenerationTool")
+    workingDir = projectDir
+    args("src/main/resources/jooq/jooq-codegen.xml")
+    inputs.files(fileTree("src/main/resources/db/migration") { include("*.sql") })
+    inputs.file("src/main/resources/jooq/jooq-codegen.xml")
+    outputs.dir(generatedJooqDir)
+}
+
+tasks.named("compileJava") {
+    dependsOn("generateJooq")
+}
+
+tasks.named("compileKotlin") {
+    dependsOn("generateJooq")
 }
 
 tasks.withType<Test> {

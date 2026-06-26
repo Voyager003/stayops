@@ -1,5 +1,7 @@
 package com.stayops.payment.infrastructure.persistence
 
+import com.stayops.shared.config.MongoPersistence
+
 import com.stayops.payment.domain.model.ProcessedPaymentWebhookEvent
 import com.stayops.payment.domain.repository.ProcessedPaymentWebhookEventRepository
 import com.stayops.payment.infrastructure.persistence.dao.ProcessedPaymentWebhookEventMongoDao
@@ -11,6 +13,7 @@ import org.springframework.data.mongodb.core.index.Index
 import org.springframework.stereotype.Repository
 import java.time.Duration
 
+@MongoPersistence
 @Repository
 class MongoProcessedPaymentWebhookEventRepository(
     private val mongo: ProcessedPaymentWebhookEventMongoDao,

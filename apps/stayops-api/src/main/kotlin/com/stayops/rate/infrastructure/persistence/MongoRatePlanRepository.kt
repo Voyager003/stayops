@@ -1,5 +1,7 @@
 package com.stayops.rate.infrastructure.persistence
 
+import com.stayops.shared.config.MongoPersistence
+
 import com.stayops.rate.domain.model.RatePlan
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
@@ -10,6 +12,7 @@ import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
+@MongoPersistence
 @Repository
 class MongoRatePlanRepository(
     private val mongo: RatePlanMongoDao,

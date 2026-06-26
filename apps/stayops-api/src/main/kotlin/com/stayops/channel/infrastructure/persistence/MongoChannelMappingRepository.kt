@@ -1,5 +1,7 @@
 package com.stayops.channel.infrastructure.persistence
 
+import com.stayops.shared.config.MongoPersistence
+
 import com.stayops.channel.domain.model.ChannelMapping
 import com.stayops.channel.domain.repository.ChannelMappingRepository
 import com.stayops.channel.infrastructure.persistence.dao.ChannelMappingMongoDao
@@ -9,6 +11,7 @@ import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
 import org.springframework.stereotype.Repository
 
+@MongoPersistence
 @Repository
 class MongoChannelMappingRepository(
     private val mongo: ChannelMappingMongoDao,

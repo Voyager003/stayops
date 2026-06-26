@@ -10,6 +10,7 @@ import org.springframework.data.mongodb.MongoTransactionManager
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 
+@MongoPersistence
 @Configuration
 @EnableConfigurationProperties(MongoTimeoutProperties::class)
 class MongoConfig {

@@ -1,5 +1,7 @@
 package com.stayops.channel.infrastructure.persistence
 
+import com.stayops.shared.config.MongoPersistence
+
 import com.stayops.channel.domain.model.ProcessedWebhookEvent
 import com.stayops.channel.domain.repository.ProcessedWebhookEventRepository
 import com.stayops.channel.infrastructure.persistence.dao.ProcessedWebhookEventMongoDao
@@ -11,6 +13,7 @@ import org.springframework.data.mongodb.core.index.Index
 import org.springframework.stereotype.Repository
 import java.time.Duration
 
+@MongoPersistence
 @Repository
 class MongoProcessedWebhookEventRepository(
     private val mongo: ProcessedWebhookEventMongoDao,

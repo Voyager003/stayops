@@ -1,5 +1,7 @@
 package com.stayops.inventory.infrastructure.persistence
 
+import com.stayops.shared.config.MongoPersistence
+
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.inventory.infrastructure.persistence.dao.RoomInventoryMongoDao
@@ -11,6 +13,7 @@ import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
 import org.springframework.stereotype.Repository
 import java.time.LocalDate
 
+@MongoPersistence
 @Repository
 class MongoRoomInventoryRepository(
     private val mongo: RoomInventoryMongoDao,

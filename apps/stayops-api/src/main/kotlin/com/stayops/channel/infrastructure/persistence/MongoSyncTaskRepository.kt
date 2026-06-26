@@ -1,5 +1,7 @@
 package com.stayops.channel.infrastructure.persistence
 
+import com.stayops.shared.config.MongoPersistence
+
 import com.stayops.channel.domain.model.SyncTask
 import com.stayops.channel.domain.model.SyncTaskStatus
 import com.stayops.channel.domain.repository.SyncTaskRepository
@@ -20,6 +22,7 @@ import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Repository
 import java.time.Instant
 
+@MongoPersistence
 @Repository
 class MongoSyncTaskRepository(
     private val mongo: SyncTaskMongoDao,

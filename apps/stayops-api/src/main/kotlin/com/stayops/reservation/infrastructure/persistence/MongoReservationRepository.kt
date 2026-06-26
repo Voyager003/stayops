@@ -1,5 +1,7 @@
 package com.stayops.reservation.infrastructure.persistence
 
+import com.stayops.shared.config.MongoPersistence
+
 import com.stayops.reservation.domain.model.DateType
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationSearchCriteria
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Repository
 import java.time.Instant
 import java.time.LocalDate
 
+@MongoPersistence
 @Repository
 class MongoReservationRepository(
     private val mongo: ReservationMongoDao,

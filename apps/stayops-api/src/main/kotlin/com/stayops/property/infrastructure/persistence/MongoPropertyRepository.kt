@@ -1,11 +1,14 @@
 package com.stayops.property.infrastructure.persistence
 
+import com.stayops.shared.config.MongoPersistence
+
 import com.stayops.property.domain.model.Property
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.property.infrastructure.persistence.dao.PropertyMongoDao
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
+@MongoPersistence
 @Repository
 class MongoPropertyRepository(
     private val mongo: PropertyMongoDao

@@ -1,5 +1,7 @@
 package com.stayops.shared.scheduler
 
+import com.stayops.shared.config.MongoPersistence
+
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.data.annotation.Id
 import org.springframework.data.mongodb.core.MongoTemplate
@@ -11,6 +13,7 @@ import org.springframework.data.mongodb.core.query.Update
 import org.springframework.stereotype.Component
 import java.time.Instant
 
+@MongoPersistence
 @Component
 class MongoSchedulerLock(
     private val mongoTemplate: MongoTemplate

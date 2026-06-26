@@ -1,5 +1,7 @@
 package com.stayops.statistics.infrastructure.persistence
 
+import com.stayops.shared.config.MongoPersistence
+
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.statistics.application.required.StatisticsQueryReader
 import com.stayops.statistics.application.required.StatisticsQueryReader.CancelAggregation
@@ -12,6 +14,7 @@ import org.springframework.stereotype.Repository
 import java.math.BigDecimal
 import java.time.LocalDate
 
+@MongoPersistence
 @Repository
 class MongoStatisticsQueryReader(
     private val mongoTemplate: MongoTemplate

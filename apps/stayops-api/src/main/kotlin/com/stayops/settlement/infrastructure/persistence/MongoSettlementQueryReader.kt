@@ -1,5 +1,7 @@
 package com.stayops.settlement.infrastructure.persistence
 
+import com.stayops.shared.config.MongoPersistence
+
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.settlement.application.dto.ChannelSettlement
 import com.stayops.settlement.application.dto.DailySettlement
@@ -14,6 +16,7 @@ import org.springframework.stereotype.Repository
 import java.math.BigDecimal
 import java.time.LocalDate
 
+@MongoPersistence
 @Repository
 class MongoSettlementQueryReader(
     private val mongoTemplate: MongoTemplate

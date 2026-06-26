@@ -1,11 +1,14 @@
 package com.stayops.member.infrastructure.persistence
 
+import com.stayops.shared.config.MongoPersistence
+
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.repository.MemberRepository
 import com.stayops.member.infrastructure.persistence.dao.MemberMongoDao
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
+@MongoPersistence
 @Repository
 class MongoMemberRepository(
     private val mongo: MemberMongoDao

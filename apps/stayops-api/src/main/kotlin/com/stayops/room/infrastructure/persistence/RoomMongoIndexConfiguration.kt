@@ -1,10 +1,13 @@
 package com.stayops.room.infrastructure.persistence
 
+import com.stayops.shared.config.MongoPersistence
+
 import jakarta.annotation.PostConstruct
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
 import org.springframework.stereotype.Component
 
+@MongoPersistence
 @Component
 class RoomMongoIndexConfiguration(
     private val mongoTemplate: MongoTemplate

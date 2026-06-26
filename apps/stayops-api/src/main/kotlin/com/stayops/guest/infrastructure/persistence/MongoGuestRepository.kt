@@ -1,5 +1,7 @@
 package com.stayops.guest.infrastructure.persistence
 
+import com.stayops.shared.config.MongoPersistence
+
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.model.GuestTier
 import com.stayops.guest.domain.repository.GuestRepository
@@ -10,6 +12,7 @@ import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
+@MongoPersistence
 @Repository
 class MongoGuestRepository(
     private val mongo: GuestMongoDao,

@@ -1,5 +1,7 @@
 package com.stayops.payment.infrastructure.persistence
 
+import com.stayops.shared.config.MongoPersistence
+
 import com.stayops.payment.domain.model.Payment
 import com.stayops.payment.domain.repository.PaymentRepository
 import com.stayops.payment.infrastructure.persistence.dao.PaymentMongoDao
@@ -10,6 +12,7 @@ import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
+@MongoPersistence
 @Repository
 class MongoPaymentRepository(
     private val mongo: PaymentMongoDao,

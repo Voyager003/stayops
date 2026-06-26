@@ -1,11 +1,14 @@
 package com.stayops.room.infrastructure.persistence
 
+import com.stayops.shared.config.MongoPersistence
+
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.repository.RoomRepository
 import com.stayops.room.infrastructure.persistence.dao.RoomMongoDao
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
+@MongoPersistence
 @Repository
 class MongoRoomRepository(
     private val mongo: RoomMongoDao

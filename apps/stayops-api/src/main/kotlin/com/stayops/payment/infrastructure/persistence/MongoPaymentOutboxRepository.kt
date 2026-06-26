@@ -1,5 +1,7 @@
 package com.stayops.payment.infrastructure.persistence
 
+import com.stayops.shared.config.MongoPersistence
+
 import com.stayops.payment.domain.model.PaymentOutboxStatus
 import com.stayops.payment.domain.model.PaymentOutboxType
 import com.stayops.payment.domain.model.PaymentOutboxMessage
@@ -18,6 +20,7 @@ import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 import java.time.Instant
 
+@MongoPersistence
 @Repository
 class MongoPaymentOutboxRepository(
     private val mongo: PaymentOutboxMongoDao,

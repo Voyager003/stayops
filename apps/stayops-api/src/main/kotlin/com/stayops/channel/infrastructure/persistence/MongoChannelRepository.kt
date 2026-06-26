@@ -1,5 +1,7 @@
 package com.stayops.channel.infrastructure.persistence
 
+import com.stayops.shared.config.MongoPersistence
+
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.model.ChannelStatus
 import com.stayops.channel.domain.repository.ChannelRepository
@@ -11,6 +13,7 @@ import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
+@MongoPersistence
 @Repository
 class MongoChannelRepository(
     private val mongo: ChannelMongoDao,

@@ -1,9 +1,15 @@
 package com.stayops.reservation.infrastructure.persistence.dao
 
+import com.stayops.shared.config.MongoPersistence
+
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.infrastructure.persistence.ReservationDocument
 import org.springframework.data.mongodb.repository.MongoRepository
 
+
+
+
+@MongoPersistence
 interface ReservationMongoDao : MongoRepository<ReservationDocument, String> {
     fun findByPropertyId(propertyId: String): List<ReservationDocument>
     fun findByPropertyIdAndStatus(propertyId: String, status: ReservationStatus): List<ReservationDocument>
