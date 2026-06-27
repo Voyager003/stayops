@@ -1,4 +1,4 @@
-package com.stayops.statistics.infrastructure.persistence
+package com.stayops.statistics.infrastructure.persistence.rdb
 
 import com.stayops.jooq.generated.Tables.RESERVATIONS
 import com.stayops.reservation.domain.model.ReservationStatus

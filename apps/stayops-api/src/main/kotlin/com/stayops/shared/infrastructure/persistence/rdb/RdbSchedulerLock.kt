@@ -1,7 +1,8 @@
-package com.stayops.shared.scheduler
+package com.stayops.shared.infrastructure.persistence.rdb
 
 import com.stayops.jooq.generated.Tables.SCHEDULER_LOCKS
 import com.stayops.shared.config.RdbPersistence
+import com.stayops.shared.scheduler.SchedulerLock
 import org.jooq.DSLContext
 import org.springframework.stereotype.Component
 import java.time.Instant

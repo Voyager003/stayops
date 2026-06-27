@@ -2,6 +2,7 @@ package com.stayops.shared.scheduler
 
 import com.stayops.RdbTestcontainersConfiguration
 import com.stayops.jooq.generated.Tables.SCHEDULER_LOCKS
+import com.stayops.shared.infrastructure.persistence.rdb.RdbSchedulerLock
 import org.assertj.core.api.Assertions.assertThat
 import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
