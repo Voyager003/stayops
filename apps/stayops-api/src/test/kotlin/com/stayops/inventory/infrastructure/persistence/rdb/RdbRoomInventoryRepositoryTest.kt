@@ -59,6 +59,7 @@ class RdbRoomInventoryRepositoryTest @Autowired constructor(
         totalCount: Int = 5,
         reservedCount: Int = 0,
         blockedCount: Int = 0,
+        heldCount: Int = 0,
         version: Long? = null
     ) = RoomInventory.reconstitute(
         id = id,
@@ -68,6 +69,7 @@ class RdbRoomInventoryRepositoryTest @Autowired constructor(
         totalCount = totalCount,
         reservedCount = reservedCount,
         blockedCount = blockedCount,
+        heldCount = heldCount,
         version = version,
         createdAt = Instant.now(clock),
         updatedAt = Instant.now(clock)
@@ -86,6 +88,7 @@ class RdbRoomInventoryRepositoryTest @Autowired constructor(
             assertThat(saved.id).isEqualTo(inventory.id)
             assertThat(saved.totalCount).isEqualTo(5)
             assertThat(saved.availableCount).isEqualTo(5)
+            assertThat(saved.heldCount).isEqualTo(0)
             assertThat(saved.version).isEqualTo(0L)
         }
 
@@ -103,6 +106,17 @@ class RdbRoomInventoryRepositoryTest @Autowired constructor(
             assertThat(found).isNotNull
             assertThat(found!!.reservedCount).isEqualTo(1)
             assertThat(found.availableCount).isEqualTo(4)
+        }
+
+        @Test
+        fun `hold 후 저장하면 heldCount가 유지된다`() {
+            insertPropertyAndRoomType("prop-1", "rt-1")
+            val inventory = inventoryRepository.save(newInventory())
+
+            val held = inventoryRepository.save(inventory.hold())
+
+            assertThat(held.heldCount).isEqualTo(1)
+            assertThat(held.availableCount).isEqualTo(4)
         }
     }
 

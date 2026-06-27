@@ -33,6 +33,7 @@ class RdbRoomInventoryRepository(
                     .set(ROOM_INVENTORIES.TOTAL_COUNT, inventory.totalCount)
                     .set(ROOM_INVENTORIES.RESERVED_COUNT, inventory.reservedCount)
                     .set(ROOM_INVENTORIES.BLOCKED_COUNT, inventory.blockedCount)
+                    .set(ROOM_INVENTORIES.HELD_COUNT, inventory.heldCount)
                     .set(ROOM_INVENTORIES.VERSION, 0L)
                     .set(ROOM_INVENTORIES.CREATED_AT, inventory.createdAt.toOffsetDateTime())
                     .set(ROOM_INVENTORIES.UPDATED_AT, inventory.updatedAt.toOffsetDateTime())
@@ -45,6 +46,7 @@ class RdbRoomInventoryRepository(
                     .set(ROOM_INVENTORIES.TOTAL_COUNT, inventory.totalCount)
                     .set(ROOM_INVENTORIES.RESERVED_COUNT, inventory.reservedCount)
                     .set(ROOM_INVENTORIES.BLOCKED_COUNT, inventory.blockedCount)
+                    .set(ROOM_INVENTORIES.HELD_COUNT, inventory.heldCount)
                     .set(ROOM_INVENTORIES.VERSION, inventory.version + 1)
                     .set(ROOM_INVENTORIES.CREATED_AT, inventory.createdAt.toOffsetDateTime())
                     .set(ROOM_INVENTORIES.UPDATED_AT, inventory.updatedAt.toOffsetDateTime())
@@ -103,6 +105,7 @@ class RdbRoomInventoryRepository(
             totalCount = get(ROOM_INVENTORIES.TOTAL_COUNT),
             reservedCount = get(ROOM_INVENTORIES.RESERVED_COUNT),
             blockedCount = get(ROOM_INVENTORIES.BLOCKED_COUNT),
+            heldCount = get(ROOM_INVENTORIES.HELD_COUNT),
             version = get(ROOM_INVENTORIES.VERSION),
             createdAt = get(ROOM_INVENTORIES.CREATED_AT).toInstant(),
             updatedAt = get(ROOM_INVENTORIES.UPDATED_AT).toInstant()

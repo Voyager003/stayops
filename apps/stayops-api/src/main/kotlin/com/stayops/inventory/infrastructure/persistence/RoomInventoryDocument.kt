@@ -19,6 +19,7 @@ data class RoomInventoryDocument(
     val totalCount: Int,
     val reservedCount: Int,
     val blockedCount: Int,
+    val heldCount: Int = 0,
     @Version val version: Long?,
     val createdAt: Instant,
     val updatedAt: Instant
@@ -31,6 +32,7 @@ data class RoomInventoryDocument(
         totalCount = totalCount,
         reservedCount = reservedCount,
         blockedCount = blockedCount,
+        heldCount = heldCount,
         version = version,
         createdAt = createdAt,
         updatedAt = updatedAt
@@ -45,6 +47,7 @@ data class RoomInventoryDocument(
             totalCount = inventory.totalCount,
             reservedCount = inventory.reservedCount,
             blockedCount = inventory.blockedCount,
+            heldCount = inventory.heldCount,
             version = inventory.version,
             createdAt = inventory.createdAt,
             updatedAt = inventory.updatedAt

@@ -38,7 +38,8 @@ class MongoRoomInventoryRepositoryTest @Autowired constructor(
         roomTypeId: String = "rt-1",
         date: LocalDate = today,
         totalCount: Int = 5,
-        blockedCount: Int = 0
+        blockedCount: Int = 0,
+        heldCount: Int = 0
     ) = RoomInventory.reconstitute(
         id = id,
         propertyId = propertyId,
@@ -47,6 +48,7 @@ class MongoRoomInventoryRepositoryTest @Autowired constructor(
         totalCount = totalCount,
         reservedCount = 0,
         blockedCount = blockedCount,
+        heldCount = heldCount,
         version = null,
         createdAt = Instant.now(clock),
         updatedAt = Instant.now(clock)
@@ -74,6 +76,18 @@ class MongoRoomInventoryRepositoryTest @Autowired constructor(
             val found = inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate("prop-1", "rt-1", today)
             assertThat(found).isNotNull
             assertThat(found!!.reservedCount).isEqualTo(1)
+            assertThat(found.availableCount).isEqualTo(4)
+        }
+
+        @Test
+        fun `hold 후 저장하면 heldCount가 유지된다`() {
+            val inventory = inventoryRepository.save(newInventory())
+
+            inventoryRepository.save(inventory.hold())
+
+            val found = inventoryRepository.findByPropertyIdAndRoomTypeIdAndDate("prop-1", "rt-1", today)
+            assertThat(found).isNotNull
+            assertThat(found!!.heldCount).isEqualTo(1)
             assertThat(found.availableCount).isEqualTo(4)
         }
 
