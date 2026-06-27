@@ -114,7 +114,7 @@ class PaymentOutboxMessageTest : BehaviorSpec({
             val second = PaymentOutboxMessage.createConfirm(
                 id = "outbox-99",
                 paymentId = first.paymentId,
-                reservationId = first.reservationId,
+                reservationId = first.reservationId!!,
                 memberId = first.memberId,
                 paymentKey = first.paymentKey,
                 orderId = first.orderId,

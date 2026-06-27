@@ -26,6 +26,7 @@ class RdbPaymentOutboxRepository(
             .set(PAYMENT_OUTBOX_MESSAGES.ID, message.id)
             .set(PAYMENT_OUTBOX_MESSAGES.PAYMENT_ID, message.paymentId)
             .set(PAYMENT_OUTBOX_MESSAGES.RESERVATION_ID, message.reservationId)
+            .set(PAYMENT_OUTBOX_MESSAGES.RESERVATION_INTENT_ID, message.reservationIntentId)
             .set(PAYMENT_OUTBOX_MESSAGES.MEMBER_ID, message.memberId)
             .set(PAYMENT_OUTBOX_MESSAGES.TYPE, message.type.name)
             .set(PAYMENT_OUTBOX_MESSAGES.PAYMENT_KEY, message.paymentKey)
@@ -48,6 +49,7 @@ class RdbPaymentOutboxRepository(
             .doUpdate()
             .set(PAYMENT_OUTBOX_MESSAGES.PAYMENT_ID, message.paymentId)
             .set(PAYMENT_OUTBOX_MESSAGES.RESERVATION_ID, message.reservationId)
+            .set(PAYMENT_OUTBOX_MESSAGES.RESERVATION_INTENT_ID, message.reservationIntentId)
             .set(PAYMENT_OUTBOX_MESSAGES.MEMBER_ID, message.memberId)
             .set(PAYMENT_OUTBOX_MESSAGES.TYPE, message.type.name)
             .set(PAYMENT_OUTBOX_MESSAGES.PAYMENT_KEY, message.paymentKey)
@@ -106,6 +108,7 @@ class RdbPaymentOutboxRepository(
             id = get(PAYMENT_OUTBOX_MESSAGES.ID),
             paymentId = get(PAYMENT_OUTBOX_MESSAGES.PAYMENT_ID),
             reservationId = get(PAYMENT_OUTBOX_MESSAGES.RESERVATION_ID),
+            reservationIntentId = get(PAYMENT_OUTBOX_MESSAGES.RESERVATION_INTENT_ID),
             memberId = get(PAYMENT_OUTBOX_MESSAGES.MEMBER_ID),
             type = PaymentOutboxType.valueOf(get(PAYMENT_OUTBOX_MESSAGES.TYPE)),
             paymentKey = get(PAYMENT_OUTBOX_MESSAGES.PAYMENT_KEY),

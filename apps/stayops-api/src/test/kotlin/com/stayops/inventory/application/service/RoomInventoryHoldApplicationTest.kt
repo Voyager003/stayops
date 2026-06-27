@@ -7,6 +7,7 @@ import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.IdGenerator
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
+import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -32,7 +33,7 @@ class RoomInventoryHoldApplicationTest : BehaviorSpec({
         clock = clock
     )
 
-    fun inventory(date: LocalDate): RoomInventory =
+    fun inventory(date: LocalDate, heldCount: Int = 0): RoomInventory =
         RoomInventory.reconstitute(
             id = "inv-$date",
             propertyId = "prop-1",
@@ -41,11 +42,15 @@ class RoomInventoryHoldApplicationTest : BehaviorSpec({
             totalCount = 3,
             reservedCount = 1,
             blockedCount = 0,
-            heldCount = 0,
+            heldCount = heldCount,
             version = 1L,
             createdAt = fixedInstant,
             updatedAt = fixedInstant
         )
+
+    beforeTest {
+        clearAllMocks()
+    }
 
     given("재고 hold 생성 시") {
         `when`("숙박 날짜 범위의 모든 재고가 가용하면") {
@@ -54,10 +59,11 @@ class RoomInventoryHoldApplicationTest : BehaviorSpec({
             val firstDate = checkIn
             val secondDate = checkIn.plusDays(1)
             val savedHold = slot<InventoryHold>()
+            val savedInventories = mutableListOf<RoomInventory>()
 
             every { inventoryAccess.getOrThrow("prop-1", "rt-1", firstDate) } returns inventory(firstDate)
             every { inventoryAccess.getOrThrow("prop-1", "rt-1", secondDate) } returns inventory(secondDate)
-            every { inventoryAccess.saveAndEvict(any()) } answers { firstArg() }
+            every { inventoryAccess.saveAndEvict(capture(savedInventories)) } answers { firstArg() }
             every { inventoryHoldRepository.save(capture(savedHold)) } answers { firstArg() }
 
             val result = sut.hold(
@@ -74,9 +80,43 @@ class RoomInventoryHoldApplicationTest : BehaviorSpec({
                 result.reservationIntentId shouldBe "intent-1"
                 result.dates shouldBe listOf(firstDate, secondDate)
                 savedHold.captured.quantity shouldBe 1
-                verify(exactly = 2) {
-                    inventoryAccess.saveAndEvict(match { it.heldCount == 1 })
-                }
+                savedInventories.map { it.date } shouldBe listOf(firstDate, secondDate)
+                savedInventories.map { it.heldCount } shouldBe listOf(1, 1)
+            }
+        }
+    }
+
+    given("재고 hold 소비 시") {
+        `when`("HELD 상태의 hold가 존재하면") {
+            val checkIn = LocalDate.of(2026, 4, 1)
+            val checkOut = LocalDate.of(2026, 4, 3)
+            val firstDate = checkIn
+            val secondDate = checkIn.plusDays(1)
+            val savedHolds = mutableListOf<InventoryHold>()
+            val savedInventories = mutableListOf<RoomInventory>()
+
+            every { inventoryHoldRepository.findByReservationIntentId("intent-1") } returns InventoryHold.create(
+                id = "hold-1",
+                reservationIntentId = "intent-1",
+                propertyId = "prop-1",
+                roomTypeId = "rt-1",
+                dates = listOf(firstDate, secondDate),
+                quantity = 1,
+                expiresAt = fixedInstant.plusSeconds(900),
+                now = fixedInstant
+            )
+            every { inventoryAccess.getOrThrow("prop-1", "rt-1", firstDate) } returns inventory(firstDate, heldCount = 1)
+            every { inventoryAccess.getOrThrow("prop-1", "rt-1", secondDate) } returns inventory(secondDate, heldCount = 1)
+            every { inventoryAccess.saveAndEvict(capture(savedInventories)) } answers { firstArg() }
+            every { inventoryHoldRepository.save(capture(savedHolds)) } answers { firstArg() }
+
+            sut.consume("intent-1")
+
+            then("각 날짜의 hold를 예약 재고로 전환하고 hold를 소비 상태로 저장한다") {
+                savedInventories.map { it.date } shouldBe listOf(firstDate, secondDate)
+                savedInventories.map { it.heldCount } shouldBe listOf(0, 0)
+                savedInventories.map { it.reservedCount } shouldBe listOf(2, 2)
+                savedHolds.last().status.name shouldBe "CONSUMED"
             }
         }
     }

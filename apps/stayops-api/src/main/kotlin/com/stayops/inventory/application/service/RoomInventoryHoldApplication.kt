@@ -3,9 +3,11 @@ package com.stayops.inventory.application.service
 import com.stayops.inventory.application.provided.InventoryHoldService
 import com.stayops.inventory.application.provided.InventoryHoldSnapshot
 import com.stayops.inventory.domain.model.InventoryHold
+import com.stayops.inventory.domain.model.InventoryHoldStatus
 import com.stayops.inventory.domain.repository.InventoryHoldRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.IdGenerator
+import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -63,6 +65,39 @@ class RoomInventoryHoldApplication(
             quantity
         )
         return hold.toSnapshot()
+    }
+
+    @Transactional
+    override fun consume(reservationIntentId: String) {
+        val hold = inventoryHoldRepository.findByReservationIntentId(reservationIntentId)
+            ?: throw NotFoundException("INVENTORY_HOLD_NOT_FOUND", "재고 hold를 찾을 수 없습니다: $reservationIntentId")
+
+        if (hold.status == InventoryHoldStatus.CONSUMED) {
+            return
+        }
+
+        val now = clock.instant()
+        val processing = if (hold.status == InventoryHoldStatus.PAYMENT_PROCESSING) {
+            hold
+        } else {
+            inventoryHoldRepository.save(hold.startPaymentProcessing(now))
+        }
+
+        processing.dates.forEach { date ->
+            val consumed = (1..processing.quantity).fold(
+                inventoryAccess.getOrThrow(processing.propertyId, processing.roomTypeId, date)
+            ) { inventory, _ ->
+                inventory.consumeHold()
+            }
+            inventoryAccess.saveAndEvict(consumed)
+        }
+
+        inventoryHoldRepository.save(processing.consume(now))
+        log.info(
+            "재고 hold 소비: holdId={}, reservationIntentId={}",
+            processing.id,
+            reservationIntentId
+        )
     }
 
     private fun InventoryHold.toSnapshot(): InventoryHoldSnapshot =

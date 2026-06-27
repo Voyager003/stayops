@@ -13,6 +13,8 @@ interface InventoryHoldService {
         quantity: Int,
         expiresAt: Instant
     ): InventoryHoldSnapshot
+
+    fun consume(reservationIntentId: String)
 }
 
 data class InventoryHoldSnapshot(

@@ -141,21 +141,13 @@ class PaymentWebhookApplication(
         )
         if (existingOutbox == null) {
             paymentOutboxRepository.save(
-                PaymentOutboxMessage.createConfirm(
-                    id = idGenerator.generate(),
-                    paymentId = savedPayment.id,
-                    reservationId = savedPayment.requireReservationId(),
-                    memberId = savedPayment.memberId,
-                    paymentKey = paymentKey,
-                    orderId = savedPayment.orderId,
-                    amount = savedPayment.amount,
-                    now = clock.instant()
-                )
+                savedPayment.toConfirmOutbox(paymentKey)
             )
             log.info(
-                "결제 웹훅 승인 Outbox 생성: paymentId={}, reservationId={}, orderId={}, paymentKeySuffix={}",
+                "결제 웹훅 승인 Outbox 생성: paymentId={}, reservationId={}, reservationIntentId={}, orderId={}, paymentKeySuffix={}",
                 savedPayment.id,
                 savedPayment.reservationId,
+                savedPayment.reservationIntentId,
                 savedPayment.orderId,
                 paymentKeySuffix(paymentKey)
             )
@@ -168,6 +160,31 @@ class PaymentWebhookApplication(
             )
         }
     }
+
+    private fun Payment.toConfirmOutbox(paymentKey: String): PaymentOutboxMessage =
+        if (reservationIntentId != null) {
+            PaymentOutboxMessage.createConfirmForReservationIntent(
+                id = idGenerator.generate(),
+                paymentId = id,
+                reservationIntentId = reservationIntentId,
+                memberId = memberId,
+                paymentKey = paymentKey,
+                orderId = orderId,
+                amount = amount,
+                now = clock.instant()
+            )
+        } else {
+            PaymentOutboxMessage.createConfirm(
+                id = idGenerator.generate(),
+                paymentId = id,
+                reservationId = requireReservationId(),
+                memberId = memberId,
+                paymentKey = paymentKey,
+                orderId = orderId,
+                amount = amount,
+                now = clock.instant()
+            )
+        }
 
     private fun failPaymentIfWaiting(payment: Payment, externalStatus: String) {
         if (payment.status == PaymentStatus.PENDING || payment.status == PaymentStatus.CONFIRM_REQUESTED) {
