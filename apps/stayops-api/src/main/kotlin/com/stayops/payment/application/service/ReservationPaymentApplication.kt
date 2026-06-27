@@ -40,6 +40,20 @@ class ReservationPaymentApplication(
             )
         ).toSnapshot()
 
+    override fun createPendingPaymentForReservationIntent(
+        reservationIntentId: String,
+        memberId: String,
+        amount: Money
+    ): ReservationPaymentSnapshot =
+        paymentRepository.save(
+            Payment.createForReservationIntent(
+                id = idGenerator.generate(),
+                reservationIntentId = reservationIntentId,
+                memberId = memberId,
+                amount = amount
+            )
+        ).toSnapshot()
+
     override fun createApprovedExternalPayment(
         reservationId: String,
         memberId: String,
@@ -185,6 +199,7 @@ class ReservationPaymentApplication(
         ReservationPaymentSnapshot(
             id = id,
             reservationId = reservationId,
+            reservationIntentId = reservationIntentId,
             memberId = memberId,
             orderId = orderId,
             amount = amount,

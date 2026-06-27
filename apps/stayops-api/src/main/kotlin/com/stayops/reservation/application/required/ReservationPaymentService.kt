@@ -10,6 +10,12 @@ interface ReservationPaymentService {
         amount: Money
     ): ReservationPaymentSnapshot
 
+    fun createPendingPaymentForReservationIntent(
+        reservationIntentId: String,
+        memberId: String,
+        amount: Money
+    ): ReservationPaymentSnapshot
+
     fun createApprovedExternalPayment(
         reservationId: String,
         memberId: String,
@@ -42,7 +48,8 @@ interface ReservationPaymentService {
 
 data class ReservationPaymentSnapshot(
     val id: String,
-    val reservationId: String,
+    val reservationId: String?,
+    val reservationIntentId: String? = null,
     val memberId: String,
     val orderId: String,
     val amount: Money,

@@ -12,7 +12,8 @@ import java.time.Instant
 @Document("payments")
 data class PaymentDocument(
     @Id val id: String,
-    val reservationId: String,
+    val reservationId: String?,
+    val reservationIntentId: String?,
     val memberId: String,
     val orderId: String,
     val amount: BigDecimal,
@@ -30,6 +31,7 @@ data class PaymentDocument(
     fun toDomain(): Payment = Payment.reconstitute(
         id = id,
         reservationId = reservationId,
+        reservationIntentId = reservationIntentId,
         memberId = memberId,
         orderId = orderId,
         amount = Money.of(amount, currency),
@@ -47,6 +49,7 @@ data class PaymentDocument(
         fun from(payment: Payment): PaymentDocument = PaymentDocument(
             id = payment.id,
             reservationId = payment.reservationId,
+            reservationIntentId = payment.reservationIntentId,
             memberId = payment.memberId,
             orderId = payment.orderId,
             amount = payment.amount.amount,

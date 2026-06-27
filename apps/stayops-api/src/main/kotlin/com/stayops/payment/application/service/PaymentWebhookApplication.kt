@@ -144,7 +144,7 @@ class PaymentWebhookApplication(
                 PaymentOutboxMessage.createConfirm(
                     id = idGenerator.generate(),
                     paymentId = savedPayment.id,
-                    reservationId = savedPayment.reservationId,
+                    reservationId = savedPayment.requireReservationId(),
                     memberId = savedPayment.memberId,
                     paymentKey = paymentKey,
                     orderId = savedPayment.orderId,

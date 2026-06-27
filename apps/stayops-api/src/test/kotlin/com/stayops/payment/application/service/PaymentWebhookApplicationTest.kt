@@ -143,7 +143,7 @@ class PaymentWebhookApplicationTest : BehaviorSpec({
                 val existingOutbox = PaymentOutboxMessage.createConfirm(
                     id = "outbox-existing",
                     paymentId = payment.id,
-                    reservationId = payment.reservationId,
+                    reservationId = payment.requireReservationId(),
                     memberId = payment.memberId,
                     paymentKey = "toss_pk_123",
                     orderId = payment.orderId,

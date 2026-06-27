@@ -5,7 +5,8 @@ import java.time.Instant
 
 class Payment private constructor(
     val id: String,
-    val reservationId: String,
+    val reservationId: String?,
+    val reservationIntentId: String?,
     val memberId: String,
     val orderId: String,
     val amount: Money,
@@ -101,6 +102,10 @@ class Payment private constructor(
         )
     }
 
+    fun requireReservationId(): String = checkNotNull(reservationId) {
+        "예약 확정 결제에는 reservationId가 필요합니다"
+    }
+
     private fun copyState(
         status: PaymentStatus = this.status,
         paymentKey: String? = this.paymentKey,
@@ -111,6 +116,7 @@ class Payment private constructor(
     ): Payment = Payment(
         id = id,
         reservationId = reservationId,
+        reservationIntentId = reservationIntentId,
         memberId = memberId,
         orderId = orderId,
         amount = amount,
@@ -153,6 +159,37 @@ class Payment private constructor(
             return Payment(
                 id = id,
                 reservationId = reservationId,
+                reservationIntentId = null,
+                memberId = memberId,
+                orderId = orderId,
+                amount = amount,
+                status = PaymentStatus.PENDING,
+                paymentKey = null,
+                method = null,
+                failReason = null,
+                approvedAt = null,
+                version = 0L,
+                createdAt = now,
+                updatedAt = now
+            )
+        }
+
+        fun createForReservationIntent(
+            id: String,
+            reservationIntentId: String,
+            memberId: String,
+            amount: Money
+        ): Payment {
+            require(reservationIntentId.isNotBlank()) { "reservationIntentId는 필수입니다" }
+            require(memberId.isNotBlank()) { "memberId는 필수입니다" }
+
+            val now = Instant.now()
+            val orderId = "STAYOPS-$reservationIntentId-${now.toEpochMilli()}"
+
+            return Payment(
+                id = id,
+                reservationId = null,
+                reservationIntentId = reservationIntentId,
                 memberId = memberId,
                 orderId = orderId,
                 amount = amount,
@@ -169,7 +206,8 @@ class Payment private constructor(
 
         fun reconstitute(
             id: String,
-            reservationId: String,
+            reservationId: String?,
+            reservationIntentId: String? = null,
             memberId: String,
             orderId: String,
             amount: Money,
@@ -184,6 +222,7 @@ class Payment private constructor(
         ): Payment = Payment(
             id = id,
             reservationId = reservationId,
+            reservationIntentId = reservationIntentId,
             memberId = memberId,
             orderId = orderId,
             amount = amount,

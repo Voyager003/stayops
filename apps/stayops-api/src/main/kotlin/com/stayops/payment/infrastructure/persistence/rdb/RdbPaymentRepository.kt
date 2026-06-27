@@ -24,6 +24,7 @@ class RdbPaymentRepository(
         dsl.insertInto(PAYMENTS)
             .set(PAYMENTS.ID, payment.id)
             .set(PAYMENTS.RESERVATION_ID, payment.reservationId)
+            .set(PAYMENTS.RESERVATION_INTENT_ID, payment.reservationIntentId)
             .set(PAYMENTS.MEMBER_ID, payment.memberId)
             .set(PAYMENTS.ORDER_ID, payment.orderId)
             .set(PAYMENTS.AMOUNT, payment.amount.amount)
@@ -39,6 +40,7 @@ class RdbPaymentRepository(
             .onConflict(PAYMENTS.ID)
             .doUpdate()
             .set(PAYMENTS.RESERVATION_ID, payment.reservationId)
+            .set(PAYMENTS.RESERVATION_INTENT_ID, payment.reservationIntentId)
             .set(PAYMENTS.MEMBER_ID, payment.memberId)
             .set(PAYMENTS.ORDER_ID, payment.orderId)
             .set(PAYMENTS.AMOUNT, payment.amount.amount)
@@ -94,6 +96,7 @@ class RdbPaymentRepository(
         Payment.reconstitute(
             id = get(PAYMENTS.ID),
             reservationId = get(PAYMENTS.RESERVATION_ID),
+            reservationIntentId = get(PAYMENTS.RESERVATION_INTENT_ID),
             memberId = get(PAYMENTS.MEMBER_ID),
             orderId = get(PAYMENTS.ORDER_ID),
             amount = Money.of(get(PAYMENTS.AMOUNT), get(PAYMENTS.CURRENCY)),
