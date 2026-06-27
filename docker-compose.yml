@@ -1,23 +1,4 @@
 services:
-  mongodb:
-    image: mongo:8
-    ports:
-      - "27017:27017"
-    command: ["--replSet", "rs0"]
-    volumes:
-      - mongodb_data:/data/db
-
-  mongo-init:
-    image: mongo:8
-    depends_on:
-      - mongodb
-    restart: "no"
-    entrypoint: >
-      mongosh --host mongodb --eval '
-        try { rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "localhost:27017" }] }); }
-        catch(e) { if (e.codeName !== "AlreadyInitialized") throw e; }
-      '
-
   redis:
     image: redis:7-alpine
     ports:
@@ -39,13 +20,9 @@ services:
     ports:
       - "8080:8080"
     environment:
-      SPRING_PROFILES_ACTIVE: local
-      SPRING_MONGODB_URI: mongodb://mongodb:27017/stayops?replicaSet=rs0
       SPRING_DATA_REDIS_HOST: redis
       MOCK_OTA_ENDPOINT: http://mock-ota:8081
     depends_on:
-      - mongodb
-      - mongo-init
       - redis
     restart: unless-stopped
 
@@ -93,7 +70,6 @@ services:
       - loki
 
 volumes:
-  mongodb_data:
   redis_data:
   mongo_ota_data:
   loki_data:
