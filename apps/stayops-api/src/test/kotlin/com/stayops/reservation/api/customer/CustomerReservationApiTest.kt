@@ -2,7 +2,6 @@ package com.stayops.reservation.api.customer
 
 import com.stayops.reservation.application.service.CustomerReservationApplication
 import com.stayops.reservation.application.service.CustomerReservationIntentResult
-import com.stayops.reservation.application.service.CustomerReservationResult
 import com.stayops.reservation.application.required.ReservationPaymentSnapshot
 import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.*
@@ -53,30 +52,6 @@ class CustomerReservationApiTest {
     @AfterEach
     fun tearDown() {
         SecurityContextHolder.clearContext()
-    }
-
-    private fun sampleCustomerReservationResult(): CustomerReservationResult {
-        val reservation = Reservation.create(
-            id = "rsv-1", propertyId = "prop-1", roomTypeId = "rt-1",
-            guestId = "guest-1",
-            guestInfo = GuestInfo("김고객", "010-1111-2222", null),
-            dateRange = DateRange.of(LocalDate.of(2026, 4, 1), LocalDate.of(2026, 4, 3)),
-            numberOfGuests = 2,
-            channel = ReservationChannel("DIRECT", commissionRate = BigDecimal.ZERO),
-            pricing = ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO),
-            memberId = "member-1"
-        )
-        val payment = ReservationPaymentSnapshot(
-            id = "pay-1",
-            reservationId = "rsv-1",
-            memberId = "member-1",
-            orderId = "STAYOPS-rsv-1-123",
-            amount = Money.won(200_000),
-            status = ReservationPaymentStatus.PENDING,
-            paymentKey = null,
-            failReason = null
-        )
-        return CustomerReservationResult(reservation, payment)
     }
 
     private fun sampleCustomerReservationIntentResult(): CustomerReservationIntentResult {
@@ -154,34 +129,6 @@ class CustomerReservationApiTest {
 
     @Nested
     inner class `결제_확인` {
-
-        @Test
-        fun `유효한 요청이면 202를 반환한다`() {
-            mockCustomer()
-            val result = sampleCustomerReservationResult()
-            val requestedPayment = result.payment.copy(
-                status = ReservationPaymentStatus.CONFIRM_REQUESTED,
-                paymentKey = "toss_pk_123"
-            )
-            every { customerReservationApplication.confirmPayment(any(), any(), any(), any(), any()) } returns
-                CustomerReservationResult(result.reservation, requestedPayment)
-
-            mockMvc.post("/api/v1/customer/reservations/rsv-1/confirm-payment") {
-                contentType = MediaType.APPLICATION_JSON
-                content = """
-                    {
-                        "paymentKey": "toss_pk_123",
-                        "orderId": "STAYOPS-rsv-1-123",
-                        "amount": 200000
-                    }
-                """.trimIndent()
-            }.andExpect {
-                status { isAccepted() }
-                jsonPath("$.reservationStatus") { value("PENDING") }
-                jsonPath("$.paymentStatus") { value("CONFIRM_REQUESTED") }
-                jsonPath("$.confirmationStatus") { value("CONFIRMING") }
-            }
-        }
 
         @Test
         fun `예약 intent 결제 승인 요청이면 202를 반환한다`() {

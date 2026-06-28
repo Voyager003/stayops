@@ -20,7 +20,7 @@ data class RateLimitProperties(
             RateLimitRuleProperties(
                 "customer-reservation-payment-confirm",
                 "POST",
-                "/api/v1/customer/reservations/{reservationId}/confirm-payment",
+                "/api/v1/customer/reservation-intents/{reservationIntentId}/confirm-payment",
                 10,
                 60,
                 RateLimitIdentityType.MEMBER
