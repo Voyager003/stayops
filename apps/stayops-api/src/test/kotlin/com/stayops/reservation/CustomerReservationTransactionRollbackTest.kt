@@ -7,20 +7,12 @@ import com.stayops.member.domain.repository.MemberRepository
 import com.stayops.reservation.application.service.CustomerReservationApplication
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
-import com.stayops.guest.domain.repository.GuestRepository
 import com.stayops.inventory.application.service.RoomInventoryApplication
-import com.stayops.reservation.application.service.ReservationPaymentOutboxApplication
-import com.stayops.payment.domain.model.PaymentCancelReason
-import com.stayops.payment.domain.model.PaymentOutboxType
-import com.stayops.payment.domain.model.PaymentStatus
-import com.stayops.payment.domain.repository.PaymentOutboxRepository
+import com.stayops.inventory.domain.repository.InventoryHoldRepository
 import com.stayops.payment.domain.repository.PaymentRepository
-import com.stayops.payment.application.required.PaymentConfirmResult
-import com.stayops.payment.application.required.PaymentGateway
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
-import com.stayops.reservation.application.required.ReservationPaymentStatus
-import com.stayops.reservation.domain.model.ReservationStatus
+import com.stayops.reservation.domain.repository.ReservationIntentRepository
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomType
@@ -29,9 +21,8 @@ import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money
 import com.stayops.shared.domain.MutableClock
-import com.ninjasquad.springmockk.MockkBean
-import io.mockk.every
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -39,17 +30,15 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.data.mongodb.core.MongoTemplate
-import java.math.BigDecimal
 import java.time.Clock
-import java.time.Instant
 import java.time.LocalDate
 
 /**
- * 결제 승인 시점 재고 차감 모델의 보상 처리 통합 테스트.
+ * 예약 intent 생성 시점 재고 hold 모델의 트랜잭션 롤백 통합 테스트.
  *
  * 검증 목표:
- * 1) 예약 생성은 재고를 선점하지 않고 PENDING 예약과 결제만 만든다
- * 2) 결제 승인 worker가 재고 부족을 감지하면 부분 차감 재고를 복원하고 보상 취소 Outbox를 만든다
+ * 1) intent 생성은 전체 숙박일 재고를 hold 할 수 있을 때만 성공한다
+ * 2) 중간 날짜의 재고 부족으로 실패하면 앞 날짜의 부분 hold, intent, payment가 남지 않는다
  */
 @SpringBootTest
 @Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
@@ -62,13 +51,11 @@ class CustomerReservationTransactionRollbackTest @Autowired constructor(
     private val inventoryApplication: RoomInventoryApplication,
     private val memberRepository: MemberRepository,
     private val reservationRepository: ReservationRepository,
-    private val guestRepository: GuestRepository,
+    private val reservationIntentRepository: ReservationIntentRepository,
+    private val inventoryHoldRepository: InventoryHoldRepository,
     private val paymentRepository: PaymentRepository,
-    private val paymentOutboxRepository: PaymentOutboxRepository,
-    private val reservationPaymentOutboxApplication: ReservationPaymentOutboxApplication,
     private val mongoTemplate: MongoTemplate,
-    private val clock: Clock,
-    @MockkBean private val paymentGateway: PaymentGateway
+    private val clock: Clock
 ) {
 
     private val propertyId = "prop-rollback"
@@ -142,10 +129,10 @@ class CustomerReservationTransactionRollbackTest @Autowired constructor(
     }
 
     @Nested
-    inner class `결제 승인 시점 재고 차감 중 재고 부족 시` {
+    inner class `예약 intent 생성 중 재고 부족 시` {
 
         @Test
-        fun `예약 생성은 재고를 차감하지 않고 PENDING 예약과 결제를 저장한다`() {
+        fun `전체 날짜 재고가 부족하면 intent와 payment를 생성하지 않고 부분 hold를 롤백한다`() {
             // Given: night1 가용=1, night2 가용=0
             val night1Before = inventoryApplication.getAvailability(propertyId, roomTypeId, night1, night1)[0]
             val night2Before = inventoryApplication.getAvailability(propertyId, roomTypeId, night2, night2)[0]
@@ -153,88 +140,54 @@ class CustomerReservationTransactionRollbackTest @Autowired constructor(
             assertThat(night1Before.reservedCount).isEqualTo(0)
             assertThat(night2Before.availableCount).isEqualTo(0)
 
-            // When: 2박 예약 생성
-            val result = customerReservationApplication.createReservation(
-                memberId = memberId,
-                propertyId = propertyId,
-                roomTypeId = roomTypeId,
-                checkIn = checkIn,
-                checkOut = checkOut,
-                numberOfGuests = 2,
-                guestName = "롤백테스트고객",
-                guestPhone = "010-9999-9999",
-                guestEmail = "rollback@test.com"
-            )
+            assertThatThrownBy {
+                customerReservationApplication.createReservationIntent(
+                    memberId = memberId,
+                    propertyId = propertyId,
+                    roomTypeId = roomTypeId,
+                    checkIn = checkIn,
+                    checkOut = checkOut,
+                    numberOfGuests = 2,
+                    guestName = "롤백테스트고객",
+                    guestPhone = "010-9999-9999",
+                    guestEmail = "rollback@test.com"
+                )
+            }.isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("가용 객실이 없습니다")
 
-            // Then: PENDING 예약과 결제는 저장되지만 재고는 변하지 않는다.
-            assertThat(result.reservation.status).isEqualTo(ReservationStatus.PENDING)
-            assertThat(result.payment.status).isEqualTo(ReservationPaymentStatus.PENDING)
+            // Then: night1 부분 hold는 롤백되고, night2 재고는 그대로 유지된다.
             val night1After = inventoryApplication.getAvailability(propertyId, roomTypeId, night1, night1)[0]
-            assertThat(night1After.reservedCount).isEqualTo(0)
-            assertThat(night1After.availableCount).isEqualTo(1)
-            val night2After = inventoryApplication.getAvailability(propertyId, roomTypeId, night2, night2)[0]
-            assertThat(night2After.reservedCount).isEqualTo(0)
-            assertThat(night2After.availableCount).isEqualTo(0)
-        }
-
-        @Test
-        fun `결제 승인 worker가 재고 부족을 감지하면 예약 취소와 결제 취소 Outbox를 생성한다`() {
-            // Given: night1=가용 1, night2=가용 0 (위 setUp과 동일)
-            val result = customerReservationApplication.createReservation(
-                memberId = memberId,
-                propertyId = propertyId,
-                roomTypeId = roomTypeId,
-                checkIn = checkIn,
-                checkOut = checkOut,
-                numberOfGuests = 2,
-                guestName = "롤백테스트고객",
-                guestPhone = "010-9999-9999",
-                guestEmail = "rollback@test.com"
-            )
-            every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
-                paymentKey = "toss_pk_shortage",
-                orderId = result.payment.orderId,
-                method = "카드",
-                approvedAt = Instant.parse("2026-04-13T10:00:00Z"),
-                totalAmount = BigDecimal(200_000)
-            )
-
-            // When: 승인 요청 접수 후 worker가 PG 승인 성공, night1 reserve 성공, night2 reserve 실패를 처리
-            customerReservationApplication.confirmPayment(
-                memberId = memberId,
-                reservationId = result.reservation.id,
-                paymentKey = "toss_pk_shortage",
-                orderId = result.payment.orderId,
-                amount = BigDecimal(200_000)
-            )
-            reservationPaymentOutboxApplication.processPendingMessages(workerId = "inventory-shortage-worker")
-
-            // Then: 예약은 확정되지 않고 취소된다.
-            val reservation = reservationRepository.findById(result.reservation.id)
-            assertThat(reservation?.status).isEqualTo(ReservationStatus.CANCELLED)
-
-            // Then: PG 승인 결제는 보상 취소 요청 상태가 되고 취소 Outbox가 남는다.
-            val payment = paymentRepository.findByReservationId(result.reservation.id)
-            assertThat(payment?.status).isEqualTo(PaymentStatus.CANCEL_REQUESTED)
-            val cancelOutbox = paymentOutboxRepository.findByPaymentIdAndType(
-                payment!!.id,
-                PaymentOutboxType.CANCEL_PAYMENT
-            )
-            assertThat(cancelOutbox).isNotNull
-            assertThat(cancelOutbox?.cancelReason).isEqualTo(PaymentCancelReason.INVENTORY_UNAVAILABLE.message)
-
-            // Then: night1 부분 차감분은 복원되고, night2 재고는 그대로 유지된다.
-            val night1After = inventoryApplication.getAvailability(propertyId, roomTypeId, night1, night1)[0]
-            assertThat(night1After.reservedCount)
+            assertThat(night1After.heldCount)
                 .withFailMessage(
-                    "night1 부분 차감 재고가 복원되지 않음. reservedCount=%d (예상: 0)",
-                    night1After.reservedCount
+                    "night1 부분 hold가 롤백되지 않음. heldCount=%d (예상: 0)",
+                    night1After.heldCount
                 )
                 .isEqualTo(0)
             assertThat(night1After.availableCount).isEqualTo(1)
             val night2After = inventoryApplication.getAvailability(propertyId, roomTypeId, night2, night2)[0]
             assertThat(night2After.reservedCount).isEqualTo(0)
+            assertThat(night2After.heldCount).isEqualTo(0)
             assertThat(night2After.availableCount).isEqualTo(0)
+
+            assertThat(reservationRepository.findPageByMemberId(memberId, 0, 20).content).isEmpty()
+            assertThat(paymentRepository.findByMemberId(memberId)).isEmpty()
+            assertThat(
+                inventoryHoldRepository.findActiveByPropertyIdAndRoomTypeIdAndDates(
+                    propertyId = propertyId,
+                    roomTypeId = roomTypeId,
+                    dates = listOf(night1, night2),
+                    now = clock.instant()
+                )
+            ).isEmpty()
+            assertThat(
+                reservationIntentRepository.existsActiveByMemberIdAndRoomTypeIdAndCheckInAndCheckOut(
+                    memberId = memberId,
+                    roomTypeId = roomTypeId,
+                    checkIn = checkIn,
+                    checkOut = checkOut,
+                    now = clock.instant()
+                )
+            ).isFalse()
         }
     }
 }
