@@ -4,6 +4,7 @@ import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
+import com.stayops.inventory.application.provided.InventoryHoldService
 import com.stayops.inventory.application.provided.InventoryReservationService
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
@@ -14,6 +15,7 @@ import com.stayops.reservation.application.required.ReservationPaymentService
 import com.stayops.reservation.application.required.ReservationPaymentSnapshot
 import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.*
+import com.stayops.reservation.domain.repository.ReservationIntentRepository
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomTypeRepository
@@ -45,8 +47,10 @@ class CustomerReservationApplicationTest : BehaviorSpec({
     val channelRepository = mockk<ChannelRepository>()
     val ratePlanRepository = mockk<RatePlanRepository>()
     val reservationRepository = mockk<ReservationRepository>()
+    val reservationIntentRepository = mockk<ReservationIntentRepository>()
     val reservationPaymentPort = mockk<ReservationPaymentService>()
     val inventoryReservationService = mockk<InventoryReservationService>()
+    val inventoryHoldService = mockk<InventoryHoldService>()
     val rateResolverService = RateResolverService()
     val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
     val fixedInstant = Instant.parse("2026-04-08T10:00:00Z")
@@ -67,6 +71,19 @@ class CustomerReservationApplicationTest : BehaviorSpec({
         clock = clock,
         idGenerator = idGenerator
     )
+    val intentCreationApplication = CustomerReservationIntentCreationApplication(
+        propertyRepository = propertyRepository,
+        roomTypeRepository = roomTypeRepository,
+        channelRepository = channelRepository,
+        ratePlanRepository = ratePlanRepository,
+        reservationRepository = reservationRepository,
+        reservationIntentRepository = reservationIntentRepository,
+        inventoryHoldService = inventoryHoldService,
+        reservationPaymentService = reservationPaymentPort,
+        rateResolverService = rateResolverService,
+        clock = clock,
+        idGenerator = idGenerator
+    )
     val queryApplication = CustomerReservationQueryApplication(
         reservationRepository = reservationRepository,
         reservationPaymentPort = reservationPaymentPort
@@ -74,6 +91,11 @@ class CustomerReservationApplicationTest : BehaviorSpec({
     val paymentApplication = CustomerReservationPaymentApplication(
         reservationRepository = reservationRepository,
         reservationPaymentPort = reservationPaymentPort,
+        clock = clock
+    )
+    val intentPaymentApplication = CustomerReservationIntentPaymentApplication(
+        reservationIntentRepository = reservationIntentRepository,
+        reservationPaymentService = reservationPaymentPort,
         clock = clock
     )
     val cancellationApplication = CustomerReservationCancellationApplication(
@@ -84,6 +106,8 @@ class CustomerReservationApplicationTest : BehaviorSpec({
     )
     val service = CustomerReservationApplication(
         creationApplication = creationApplication,
+        intentCreationApplication = intentCreationApplication,
+        intentPaymentApplication = intentPaymentApplication,
         queryApplication = queryApplication,
         paymentApplication = paymentApplication,
         cancellationApplication = cancellationApplication

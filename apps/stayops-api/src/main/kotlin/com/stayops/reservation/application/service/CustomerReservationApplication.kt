@@ -10,6 +10,8 @@ import java.time.LocalDate
 @Service
 class CustomerReservationApplication(
     private val creationApplication: CustomerReservationCreationApplication,
+    private val intentCreationApplication: CustomerReservationIntentCreationApplication,
+    private val intentPaymentApplication: CustomerReservationIntentPaymentApplication,
     private val queryApplication: CustomerReservationQueryApplication,
     private val paymentApplication: CustomerReservationPaymentApplication,
     private val cancellationApplication: CustomerReservationCancellationApplication
@@ -38,6 +40,29 @@ class CustomerReservationApplication(
             guestEmail = guestEmail
         )
 
+    fun createReservationIntent(
+        memberId: String,
+        propertyId: String,
+        roomTypeId: String,
+        checkIn: LocalDate,
+        checkOut: LocalDate,
+        numberOfGuests: Int,
+        guestName: String,
+        guestPhone: String,
+        guestEmail: String?
+    ): CustomerReservationIntentResult =
+        intentCreationApplication.createReservationIntent(
+            memberId = memberId,
+            propertyId = propertyId,
+            roomTypeId = roomTypeId,
+            checkIn = checkIn,
+            checkOut = checkOut,
+            numberOfGuests = numberOfGuests,
+            guestName = guestName,
+            guestPhone = guestPhone,
+            guestEmail = guestEmail
+        )
+
     fun getMyReservations(memberId: String, page: Int = 0, size: Int = 20): PagedResult<CustomerReservationReadResult> =
         queryApplication.getMyReservations(memberId, page, size)
 
@@ -54,6 +79,21 @@ class CustomerReservationApplication(
         paymentApplication.confirmPayment(
             memberId = memberId,
             reservationId = reservationId,
+            paymentKey = paymentKey,
+            orderId = orderId,
+            amount = amount
+        )
+
+    fun confirmReservationIntentPayment(
+        memberId: String,
+        reservationIntentId: String,
+        paymentKey: String,
+        orderId: String,
+        amount: BigDecimal
+    ): CustomerReservationIntentResult =
+        intentPaymentApplication.confirmPayment(
+            memberId = memberId,
+            reservationIntentId = reservationIntentId,
             paymentKey = paymentKey,
             orderId = orderId,
             amount = amount

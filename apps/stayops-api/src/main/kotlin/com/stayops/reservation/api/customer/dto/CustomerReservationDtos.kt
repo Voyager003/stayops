@@ -1,8 +1,10 @@
 package com.stayops.reservation.api.customer.dto
 
 import com.stayops.reservation.application.required.ReservationPaymentStatus
+import com.stayops.reservation.application.service.CustomerReservationIntentResult
 import com.stayops.reservation.application.service.CustomerReservationReadResult
 import com.stayops.reservation.application.service.CustomerReservationResult
+import com.stayops.reservation.domain.model.ReservationIntentStatus
 import com.stayops.reservation.domain.model.ReservationStatus
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
@@ -59,6 +61,30 @@ data class CustomerReservationResponse(
             ),
             checkIn = result.reservation.dateRange.checkIn,
             checkOut = result.reservation.dateRange.checkOut
+        )
+    }
+}
+
+data class CustomerReservationIntentResponse(
+    val reservationIntentId: String,
+    val intentStatus: ReservationIntentStatus,
+    val orderId: String,
+    val amount: BigDecimal,
+    val paymentStatus: ReservationPaymentStatus,
+    val checkIn: LocalDate,
+    val checkOut: LocalDate,
+    val expiresAt: Instant
+) {
+    companion object {
+        fun from(result: CustomerReservationIntentResult) = CustomerReservationIntentResponse(
+            reservationIntentId = result.intent.id,
+            intentStatus = result.intent.status,
+            orderId = result.payment.orderId,
+            amount = result.payment.amount.amount,
+            paymentStatus = result.payment.status,
+            checkIn = result.intent.dateRange.checkIn,
+            checkOut = result.intent.dateRange.checkOut,
+            expiresAt = result.intent.expiresAt
         )
     }
 }

@@ -26,6 +26,9 @@ class MongoPaymentRepository(
             CompoundIndexDefinition(Document(mapOf("reservationId" to 1)))
         )
         indexOps.createIndex(
+            CompoundIndexDefinition(Document(mapOf("reservationIntentId" to 1)))
+        )
+        indexOps.createIndex(
             CompoundIndexDefinition(Document(mapOf("memberId" to 1)))
         )
         indexOps.createIndex(
@@ -41,6 +44,9 @@ class MongoPaymentRepository(
 
     override fun findByReservationId(reservationId: String): Payment? =
         mongo.findByReservationId(reservationId)?.toDomain()
+
+    override fun findByReservationIntentId(reservationIntentId: String): Payment? =
+        mongo.findByReservationIntentId(reservationIntentId)?.toDomain()
 
     override fun findByReservationIds(reservationIds: List<String>): List<Payment> =
         if (reservationIds.isEmpty()) emptyList() else mongo.findByReservationIdIn(reservationIds).map { it.toDomain() }

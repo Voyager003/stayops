@@ -70,6 +70,12 @@ class RdbPaymentRepository(
             .fetchOne()
             ?.toDomain()
 
+    override fun findByReservationIntentId(reservationIntentId: String): Payment? =
+        dsl.selectFrom(PAYMENTS)
+            .where(PAYMENTS.RESERVATION_INTENT_ID.eq(reservationIntentId))
+            .fetchOne()
+            ?.toDomain()
+
     override fun findByReservationIds(reservationIds: List<String>): List<Payment> =
         if (reservationIds.isEmpty()) {
             emptyList()

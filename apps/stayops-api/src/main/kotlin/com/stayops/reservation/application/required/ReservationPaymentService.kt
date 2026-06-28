@@ -26,12 +26,22 @@ interface ReservationPaymentService {
 
     fun findByReservationId(reservationId: String): ReservationPaymentSnapshot?
 
+    fun findByReservationIntentId(reservationIntentId: String): ReservationPaymentSnapshot?
+
     fun findByReservationIds(reservationIds: List<String>): List<ReservationPaymentSnapshot>
 
     fun findByMemberId(memberId: String): List<ReservationPaymentSnapshot>
 
     fun requestConfirm(
         reservationId: String,
+        memberId: String,
+        paymentKey: String,
+        orderId: String,
+        amount: BigDecimal
+    ): ReservationPaymentSnapshot
+
+    fun requestConfirmForReservationIntent(
+        reservationIntentId: String,
         memberId: String,
         paymentKey: String,
         orderId: String,

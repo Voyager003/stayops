@@ -1,6 +1,7 @@
 package com.stayops.reservation.api.customer
 
 import com.stayops.reservation.application.service.CustomerReservationApplication
+import com.stayops.reservation.application.service.CustomerReservationIntentResult
 import com.stayops.reservation.application.service.CustomerReservationResult
 import com.stayops.reservation.application.required.ReservationPaymentSnapshot
 import com.stayops.reservation.application.required.ReservationPaymentStatus
@@ -27,6 +28,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import java.math.BigDecimal
+import java.time.Instant
 import java.time.LocalDate
 
 class CustomerReservationApiTest {
@@ -34,7 +36,10 @@ class CustomerReservationApiTest {
     private val customerReservationApplication = mockk<CustomerReservationApplication>()
     private val memberAccessApplication = mockk<MemberAccessApplication>()
     private val mockMvc: MockMvc = MockMvcBuilders
-        .standaloneSetup(CustomerReservationApi(customerReservationApplication, memberAccessApplication))
+        .standaloneSetup(
+            CustomerReservationApi(customerReservationApplication, memberAccessApplication),
+            CustomerReservationIntentApi(customerReservationApplication, memberAccessApplication)
+        )
         .setCustomArgumentResolvers(AuthenticationPrincipalArgumentResolver())
         .setControllerAdvice(GlobalExceptionHandler())
         .build()
@@ -74,6 +79,36 @@ class CustomerReservationApiTest {
         return CustomerReservationResult(reservation, payment)
     }
 
+    private fun sampleCustomerReservationIntentResult(): CustomerReservationIntentResult {
+        val intent = ReservationIntent.create(
+            id = "intent-1",
+            memberId = "member-1",
+            propertyId = "prop-1",
+            roomTypeId = "rt-1",
+            guestInfo = GuestInfo("김고객", "010-1111-2222", "kim@test.com"),
+            dateRange = DateRange.of(LocalDate.of(2026, 4, 1), LocalDate.of(2026, 4, 3)),
+            numberOfGuests = 2,
+            channel = ReservationChannel("DIRECT", commissionRate = BigDecimal.ZERO),
+            pricing = ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO),
+            paymentId = "pay-1",
+            holdId = "hold-1",
+            expiresAt = Instant.parse("2026-04-01T00:15:00Z"),
+            now = Instant.parse("2026-04-01T00:00:00Z")
+        )
+        val payment = ReservationPaymentSnapshot(
+            id = "pay-1",
+            reservationId = null,
+            reservationIntentId = "intent-1",
+            memberId = "member-1",
+            orderId = "STAYOPS-intent-1-123",
+            amount = Money.won(200_000),
+            status = ReservationPaymentStatus.PENDING,
+            paymentKey = null,
+            failReason = null
+        )
+        return CustomerReservationIntentResult(intent, payment)
+    }
+
     private fun mockCustomer() {
         val customer = Member.create(
             id = "member-1", email = "customer@test.com",
@@ -91,7 +126,7 @@ class CustomerReservationApiTest {
         @Test
         fun `유효한 요청이면 201을 반환한다`() {
             mockCustomer()
-            every { customerReservationApplication.createReservation(any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns sampleCustomerReservationResult()
+            every { customerReservationApplication.createReservationIntent(any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns sampleCustomerReservationIntentResult()
 
             mockMvc.post("/api/v1/customer/reservations") {
                 contentType = MediaType.APPLICATION_JSON
@@ -109,9 +144,9 @@ class CustomerReservationApiTest {
                 """.trimIndent()
             }.andExpect {
                 status { isCreated() }
-                jsonPath("$.reservationId") { value("rsv-1") }
+                jsonPath("$.reservationIntentId") { value("intent-1") }
+                jsonPath("$.intentStatus") { value("PAYMENT_WAITING") }
                 jsonPath("$.paymentStatus") { value("PENDING") }
-                jsonPath("$.confirmationStatus") { value("PAYMENT_WAITING") }
                 jsonPath("$.orderId") { exists() }
             }
         }
@@ -145,6 +180,37 @@ class CustomerReservationApiTest {
                 jsonPath("$.reservationStatus") { value("PENDING") }
                 jsonPath("$.paymentStatus") { value("CONFIRM_REQUESTED") }
                 jsonPath("$.confirmationStatus") { value("CONFIRMING") }
+            }
+        }
+
+        @Test
+        fun `예약 intent 결제 승인 요청이면 202를 반환한다`() {
+            mockCustomer()
+            val result = sampleCustomerReservationIntentResult()
+            val requestedPayment = result.payment.copy(
+                status = ReservationPaymentStatus.CONFIRM_REQUESTED,
+                paymentKey = "toss_pk_123"
+            )
+            every { customerReservationApplication.confirmReservationIntentPayment(any(), any(), any(), any(), any()) } returns
+                CustomerReservationIntentResult(
+                    result.intent.requestPaymentConfirmation(Instant.parse("2026-04-01T00:01:00Z")),
+                    requestedPayment
+                )
+
+            mockMvc.post("/api/v1/customer/reservation-intents/intent-1/confirm-payment") {
+                contentType = MediaType.APPLICATION_JSON
+                content = """
+                    {
+                        "paymentKey": "toss_pk_123",
+                        "orderId": "STAYOPS-intent-1-123",
+                        "amount": 200000
+                    }
+                """.trimIndent()
+            }.andExpect {
+                status { isAccepted() }
+                jsonPath("$.reservationIntentId") { value("intent-1") }
+                jsonPath("$.intentStatus") { value("CONFIRM_REQUESTED") }
+                jsonPath("$.paymentStatus") { value("CONFIRM_REQUESTED") }
             }
         }
     }

@@ -77,6 +77,9 @@ class ReservationPaymentApplication(
     override fun findByReservationId(reservationId: String): ReservationPaymentSnapshot? =
         paymentRepository.findByReservationId(reservationId)?.toSnapshot()
 
+    override fun findByReservationIntentId(reservationIntentId: String): ReservationPaymentSnapshot? =
+        paymentRepository.findByReservationIntentId(reservationIntentId)?.toSnapshot()
+
     override fun findByReservationIds(reservationIds: List<String>): List<ReservationPaymentSnapshot> =
         paymentRepository.findByReservationIds(reservationIds).map { it.toSnapshot() }
 
@@ -111,6 +114,46 @@ class ReservationPaymentApplication(
                     id = idGenerator.generate(),
                     paymentId = savedPayment.id,
                     reservationId = reservationId,
+                    memberId = memberId,
+                    paymentKey = paymentKey,
+                    orderId = savedPayment.orderId,
+                    amount = savedPayment.amount,
+                    now = clock.instant()
+                )
+            )
+        }
+
+        return savedPayment.toSnapshot()
+    }
+
+    override fun requestConfirmForReservationIntent(
+        reservationIntentId: String,
+        memberId: String,
+        paymentKey: String,
+        orderId: String,
+        amount: BigDecimal
+    ): ReservationPaymentSnapshot {
+        val payment = findPaymentByReservationIntentId(reservationIntentId)
+        validatePaymentOwner(payment, memberId)
+        validateConfirmRequest(payment, orderId, amount)
+
+        val requestedPayment = payment.requestConfirm(paymentKey)
+        val savedPayment = if (requestedPayment === payment) {
+            payment
+        } else {
+            paymentRepository.save(requestedPayment)
+        }
+
+        val existingOutbox = paymentOutboxRepository.findByPaymentIdAndType(
+            savedPayment.id,
+            PaymentOutboxType.CONFIRM_PAYMENT
+        )
+        if (existingOutbox == null) {
+            paymentOutboxRepository.save(
+                PaymentOutboxMessage.createConfirmForReservationIntent(
+                    id = idGenerator.generate(),
+                    paymentId = savedPayment.id,
+                    reservationIntentId = reservationIntentId,
                     memberId = memberId,
                     paymentKey = paymentKey,
                     orderId = savedPayment.orderId,
@@ -168,6 +211,10 @@ class ReservationPaymentApplication(
     private fun findPaymentByReservationId(reservationId: String): Payment =
         paymentRepository.findByReservationId(reservationId)
             ?: throw NotFoundException("PAYMENT_NOT_FOUND", "결제 정보를 찾을 수 없습니다: $reservationId")
+
+    private fun findPaymentByReservationIntentId(reservationIntentId: String): Payment =
+        paymentRepository.findByReservationIntentId(reservationIntentId)
+            ?: throw NotFoundException("PAYMENT_NOT_FOUND", "결제 정보를 찾을 수 없습니다: $reservationIntentId")
 
     private fun validatePaymentOwner(payment: Payment, memberId: String) {
         if (payment.memberId != memberId) {
