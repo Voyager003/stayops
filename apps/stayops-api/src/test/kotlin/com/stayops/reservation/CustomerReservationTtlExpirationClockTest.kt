@@ -8,10 +8,12 @@ import com.stayops.reservation.application.service.CustomerReservationApplicatio
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.inventory.application.service.RoomInventoryApplication
-import com.stayops.payment.application.required.PaymentGateway
+import com.stayops.inventory.domain.model.InventoryHoldStatus
+import com.stayops.inventory.domain.repository.InventoryHoldRepository
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
-import com.stayops.reservation.domain.model.ReservationStatus
+import com.stayops.reservation.domain.model.ReservationIntentStatus
+import com.stayops.reservation.domain.repository.ReservationIntentRepository
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomRepository
@@ -19,7 +21,6 @@ import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.Money
 import com.stayops.shared.domain.MutableClock
 import com.stayops.shared.exception.BusinessException
-import com.ninjasquad.springmockk.MockkBean
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
@@ -38,13 +39,13 @@ import java.time.Instant
 import java.time.LocalDate
 
 /**
- * PENDING 예약의 결제 가능 시간 만료를 Clock 추상화로 결정적으로 검증.
+ * 예약 intent의 결제 가능 시간 만료를 Clock 추상화로 결정적으로 검증.
  *
  * 본 테스트는 Clock 추상화로:
  * 1) Clock.fixed가 아닌 MutableClock을 @Primary Bean으로 주입
  * 2) 예약 생성 시점의 시각으로 시작 (T0)
  * 3) Clock을 16분 진행 (T0 + 16분) — 실제 시간 흐름 시뮬레이션
- * 4) 만료된 예약의 결제 확인이 차단되고 재고가 변하지 않는지 검증한다.
+ * 4) 만료된 intent의 결제 확인이 차단되고 hold 상태가 유지되는지 검증한다.
  */
 @SpringBootTest
 @Import(TestcontainersConfiguration::class, CustomerReservationTtlExpirationClockTest.TestClockConfig::class)
@@ -56,9 +57,10 @@ class CustomerReservationTtlExpirationClockTest @Autowired constructor(
     private val channelRepository: ChannelRepository,
     private val inventoryApplication: RoomInventoryApplication,
     private val memberRepository: MemberRepository,
+    private val reservationIntentRepository: ReservationIntentRepository,
+    private val inventoryHoldRepository: InventoryHoldRepository,
     private val mongoTemplate: MongoTemplate,
-    private val clock: Clock,
-    @MockkBean private val paymentGateway: PaymentGateway
+    private val clock: Clock
 ) {
 
     /**
@@ -130,7 +132,7 @@ class CustomerReservationTtlExpirationClockTest @Autowired constructor(
     }
 
     @Test
-    fun `Clock을 16분 진행하면 PENDING 예약 결제 확인이 만료로 차단되고 재고는 변하지 않는다`() {
+    fun `Clock을 16분 진행하면 PAYMENT_WAITING intent 결제 확인이 만료로 차단되고 hold는 유지된다`() {
         val mutableClock = clock as MutableClock
 
         // Given: T0 = 2026-05-15 10:00:00 UTC, 재고 1실 가용
@@ -139,8 +141,8 @@ class CustomerReservationTtlExpirationClockTest @Autowired constructor(
         )[0].availableCount
         assertThat(initialAvailable).isEqualTo(1)
 
-        // When: T0에 PENDING 예약 생성 → expiresAt = T0 + 15분 = 10:15:00
-        val reservationResult = customerReservationApplication.createReservation(
+        // When: T0에 예약 intent 생성 → expiresAt = T0 + 15분 = 10:15:00
+        val intentResult = customerReservationApplication.createReservationIntent(
             memberId = memberId,
             propertyId = propertyId,
             roomTypeId = roomTypeId,
@@ -151,48 +153,47 @@ class CustomerReservationTtlExpirationClockTest @Autowired constructor(
             guestPhone = "010-1234-5678",
             guestEmail = "ttl@test.com"
         )
-        assertThat(reservationResult.reservation.status).isEqualTo(ReservationStatus.PENDING)
-        assertThat(reservationResult.reservation.expiresAt)
+        assertThat(intentResult.intent.status).isEqualTo(ReservationIntentStatus.PAYMENT_WAITING)
+        assertThat(intentResult.intent.expiresAt)
             .withFailMessage("expiresAt이 Clock 기준 + 15분으로 정확히 계산되어야 함")
             .isEqualTo(TestClockConfig.initialInstant.plusSeconds(15 * 60))
 
-        // 예약 직후: 재고를 차감하지 않음
-        val afterReservation = inventoryApplication.getAvailability(
+        // intent 생성 직후: hold로 가용 재고를 점유함
+        val afterIntent = inventoryApplication.getAvailability(
             propertyId, roomTypeId, checkIn, checkIn
         )[0]
-        assertThat(afterReservation.reservedCount).isEqualTo(0)
-        assertThat(afterReservation.availableCount).isEqualTo(initialAvailable)
+        assertThat(afterIntent.reservedCount).isEqualTo(0)
+        assertThat(afterIntent.heldCount).isEqualTo(1)
+        assertThat(afterIntent.availableCount).isEqualTo(initialAvailable - 1)
+        assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+            .isEqualTo(InventoryHoldStatus.HELD)
 
         // When: 16분 진행 후 결제 확인 시도
         mutableClock.advance(Duration.ofMinutes(16))
 
         assertThatThrownBy {
-            customerReservationApplication.confirmPayment(
+            customerReservationApplication.confirmReservationIntentPayment(
                 memberId = memberId,
-                reservationId = reservationResult.reservation.id,
+                reservationIntentId = intentResult.intent.id,
                 paymentKey = "toss_pk_expired",
-                orderId = reservationResult.payment.orderId,
+                orderId = intentResult.payment.orderId,
                 amount = BigDecimal(100_000)
             )
         }.isInstanceOf(BusinessException::class.java)
             .hasMessage("결제 가능 시간이 만료되었습니다")
 
-        // Then: 예약은 자동 취소되지 않고 PENDING 상태로 남는다
-        val reservationAfterExpiredPaymentAttempt = mongoTemplate.findById(
-            reservationResult.reservation.id, org.bson.Document::class.java, "reservations"
-        )
-        assertThat(reservationAfterExpiredPaymentAttempt!!.getString("status"))
-            .withFailMessage(
-                "만료된 결제 확인은 예약을 자동 취소하지 않아야 함. 현재 status=%s",
-                reservationAfterExpiredPaymentAttempt.getString("status")
-            )
-            .isEqualTo(ReservationStatus.PENDING.name)
+        // Then: 결제 확인 실패만으로는 intent/hold를 즉시 만료 처리하지 않는다
+        val intentAfterExpiredPaymentAttempt = reservationIntentRepository.findById(intentResult.intent.id)!!
+        assertThat(intentAfterExpiredPaymentAttempt.status).isEqualTo(ReservationIntentStatus.PAYMENT_WAITING)
+        assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+            .isEqualTo(InventoryHoldStatus.HELD)
 
-        // Then: 재고는 처음 상태 그대로 유지됨
+        // Then: hold가 유지되어 가용 재고는 점유된 상태 그대로 남는다
         val afterExpiry = inventoryApplication.getAvailability(
             propertyId, roomTypeId, checkIn, checkIn
         )[0]
         assertThat(afterExpiry.reservedCount).isEqualTo(0)
-        assertThat(afterExpiry.availableCount).isEqualTo(initialAvailable)
+        assertThat(afterExpiry.heldCount).isEqualTo(1)
+        assertThat(afterExpiry.availableCount).isEqualTo(initialAvailable - 1)
     }
 }
