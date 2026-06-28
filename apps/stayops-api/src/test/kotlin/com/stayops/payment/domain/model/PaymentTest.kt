@@ -81,6 +81,20 @@ class PaymentTest : BehaviorSpec({
             }
         }
 
+        `when`("예약 intent 결제를 최종 예약과 연결하면") {
+            val linked = Payment.createForReservationIntent(
+                id = "pay-intent-1",
+                reservationIntentId = "intent-1",
+                memberId = "member-1",
+                amount = Money.won(200_000)
+            ).attachReservation("rsv-1")
+
+            then("reservationIntentId를 유지하고 reservationId가 설정된다") {
+                linked.reservationIntentId shouldBe "intent-1"
+                linked.reservationId shouldBe "rsv-1"
+            }
+        }
+
         `when`("memberId가 빈 문자열이면") {
             then("예외가 발생한다") {
                 shouldThrow<IllegalArgumentException> {

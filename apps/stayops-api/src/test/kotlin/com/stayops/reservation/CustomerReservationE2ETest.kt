@@ -8,6 +8,8 @@ import com.stayops.reservation.application.service.CustomerReservationApplicatio
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.inventory.application.service.RoomInventoryApplication
+import com.stayops.inventory.domain.model.InventoryHoldStatus
+import com.stayops.inventory.domain.repository.InventoryHoldRepository
 import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.application.service.ReservationApplication
 import com.stayops.reservation.application.service.ReservationPaymentOutboxApplication
@@ -18,7 +20,9 @@ import com.stayops.payment.application.required.PaymentConfirmResult
 import com.stayops.payment.application.required.PaymentGateway
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
+import com.stayops.reservation.domain.model.ReservationIntentStatus
 import com.stayops.reservation.domain.model.ReservationStatus
+import com.stayops.reservation.domain.repository.ReservationIntentRepository
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomType
@@ -56,6 +60,8 @@ class CustomerReservationE2ETest @Autowired constructor(
     private val reservationApplication: ReservationApplication,
     private val memberRepository: MemberRepository,
     private val reservationRepository: ReservationRepository,
+    private val reservationIntentRepository: ReservationIntentRepository,
+    private val inventoryHoldRepository: InventoryHoldRepository,
     private val paymentRepository: PaymentRepository,
     private val reservationPaymentOutboxApplication: ReservationPaymentOutboxApplication,
     private val mongoTemplate: MongoTemplate,
@@ -129,9 +135,9 @@ class CustomerReservationE2ETest @Autowired constructor(
     inner class `전체_예매_플로우` {
 
         @Test
-        fun `예약_생성_결제_확인_취소_전체_흐름`() {
-            // 1. 예약 생성
-            val reservationResult = customerReservationApplication.createReservation(
+        fun `예약_intent_생성_결제_승인_예약_확정_취소_전체_흐름`() {
+            // 1. 예약 intent 생성
+            val intentResult = customerReservationApplication.createReservationIntent(
                 memberId = "customer-e2e",
                 propertyId = "prop-e2e",
                 roomTypeId = "rt-e2e",
@@ -143,58 +149,61 @@ class CustomerReservationE2ETest @Autowired constructor(
                 guestEmail = "e2e@test.com"
             )
 
-            assertThat(reservationResult.reservation.status).isEqualTo(ReservationStatus.PENDING)
-            assertThat(reservationResult.payment.status).isEqualTo(ReservationPaymentStatus.PENDING)
-            assertThat(reservationResult.reservation.memberId).isEqualTo("customer-e2e")
+            assertThat(intentResult.intent.status).isEqualTo(ReservationIntentStatus.PAYMENT_WAITING)
+            assertThat(intentResult.payment.status).isEqualTo(ReservationPaymentStatus.PENDING)
+            assertThat(intentResult.payment.reservationId).isNull()
+            assertThat(intentResult.payment.reservationIntentId).isEqualTo(intentResult.intent.id)
+            assertThat(reservationRepository.findPageByMemberId("customer-e2e", 0, 20).content).isEmpty()
+            assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+                .isEqualTo(InventoryHoldStatus.HELD)
 
             // 2. 결제 확인
             every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
                 paymentKey = "toss_pk_e2e",
-                orderId = reservationResult.payment.orderId,
+                orderId = intentResult.payment.orderId,
                 method = "카드",
                 approvedAt = Instant.now(clock),
                 totalAmount = BigDecimal(200_000)
             )
 
-            val requested = customerReservationApplication.confirmPayment(
+            val requested = customerReservationApplication.confirmReservationIntentPayment(
                 memberId = "customer-e2e",
-                reservationId = reservationResult.reservation.id,
+                reservationIntentId = intentResult.intent.id,
                 paymentKey = "toss_pk_e2e",
-                orderId = reservationResult.payment.orderId,
+                orderId = intentResult.payment.orderId,
                 amount = BigDecimal(200_000)
             )
-            assertThat(requested.reservation.status).isEqualTo(ReservationStatus.PENDING)
+            assertThat(requested.intent.status).isEqualTo(ReservationIntentStatus.CONFIRM_REQUESTED)
             assertThat(requested.payment.status).isEqualTo(ReservationPaymentStatus.CONFIRM_REQUESTED)
 
             reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
 
-            val paymentCompletedReservation = reservationRepository.findById(reservationResult.reservation.id)!!
-            val confirmedPayment = paymentRepository.findByReservationId(reservationResult.reservation.id)!!
+            val reservedIntent = reservationIntentRepository.findById(intentResult.intent.id)!!
+            val reservationId = reservedIntent.reservationId!!
+            val paymentCompletedReservation = reservationRepository.findById(reservationId)!!
+            val confirmedPayment = paymentRepository.findByReservationIntentId(intentResult.intent.id)!!
 
-            assertThat(paymentCompletedReservation.status).isEqualTo(ReservationStatus.PENDING)
+            assertThat(reservedIntent.status).isEqualTo(ReservationIntentStatus.RESERVED)
+            assertThat(paymentCompletedReservation.status).isEqualTo(ReservationStatus.CONFIRMED)
             assertThat(confirmedPayment.status).isEqualTo(PaymentStatus.APPROVED)
             assertThat(confirmedPayment.paymentKey).isEqualTo("toss_pk_e2e")
+            assertThat(confirmedPayment.reservationId).isEqualTo(reservationId)
+            assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+                .isEqualTo(InventoryHoldStatus.CONSUMED)
 
             // 3. 마이페이지 조회
             val myReservations = customerReservationApplication.getMyReservations("customer-e2e")
             assertThat(myReservations.content).hasSize(1)
-            assertThat(myReservations.content[0].reservation.id).isEqualTo(reservationResult.reservation.id)
-            assertThat(myReservations.content[0].reservation.status).isEqualTo(ReservationStatus.PENDING)
+            assertThat(myReservations.content[0].reservation.id).isEqualTo(reservationId)
+            assertThat(myReservations.content[0].reservation.status).isEqualTo(ReservationStatus.CONFIRMED)
             assertThat(myReservations.content[0].payment?.status).isEqualTo(ReservationPaymentStatus.APPROVED)
 
-            // 4. PMS가 결제 완료 예약을 수동 확정
-            val confirmedReservation = reservationApplication.confirmReservation(
-                propertyId = "prop-e2e",
-                reservationId = reservationResult.reservation.id
-            )
-            assertThat(confirmedReservation.status).isEqualTo(ReservationStatus.CONFIRMED)
-
-            // 5. 예약 취소 + 환불
+            // 4. 예약 취소 + 환불
             every { paymentGateway.cancel("toss_pk_e2e", any(), any()) } returns PaymentCancelResult("toss_pk_e2e")
 
             val cancelRequested = customerReservationApplication.cancelReservation(
                 memberId = "customer-e2e",
-                reservationId = reservationResult.reservation.id
+                reservationId = reservationId
             )
 
             assertThat(cancelRequested.reservation.status).isEqualTo(ReservationStatus.CANCELLED)
@@ -202,7 +211,7 @@ class CustomerReservationE2ETest @Autowired constructor(
 
             reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
 
-            val cancelledPayment = paymentRepository.findByReservationId(reservationResult.reservation.id)!!
+            val cancelledPayment = paymentRepository.findByReservationId(reservationId)!!
             assertThat(cancelledPayment.status).isEqualTo(PaymentStatus.CANCELLED)
         }
     }

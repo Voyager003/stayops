@@ -236,18 +236,6 @@ class ReservationPaymentOutboxApplication(
             return
         }
 
-        val approvedPayment = if (payment.status == PaymentStatus.APPROVED) {
-            payment
-        } else {
-            paymentRepository.save(
-                payment.approve(
-                    paymentKey = confirmResult.paymentKey,
-                    method = confirmResult.method ?: "unknown",
-                    approvedAt = confirmResult.approvedAt ?: now
-                )
-            )
-        }
-
         val guest = guestRepository.findByPropertyIdAndPhone(
             reservationIntent.propertyId,
             reservationIntent.guestInfo.phone
@@ -276,6 +264,17 @@ class ReservationPaymentOutboxApplication(
             ).confirm()
         )
 
+        val approvedPayment = if (payment.status == PaymentStatus.APPROVED) {
+            paymentRepository.save(payment.attachReservation(reservation.id))
+        } else {
+            paymentRepository.save(
+                payment.approve(
+                    paymentKey = confirmResult.paymentKey,
+                    method = confirmResult.method ?: "unknown",
+                    approvedAt = confirmResult.approvedAt ?: now
+                ).attachReservation(reservation.id)
+            )
+        }
         inventoryHoldService.consume(reservationIntent.id)
         reservationIntentRepository.save(reservationIntent.markReserved(reservation.id, now))
         publishReservationCreatedForInventorySync(reservation)

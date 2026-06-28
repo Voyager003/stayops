@@ -106,7 +106,16 @@ class Payment private constructor(
         "예약 확정 결제에는 reservationId가 필요합니다"
     }
 
+    fun attachReservation(reservationId: String): Payment {
+        require(reservationId.isNotBlank()) { "reservationId는 필수입니다" }
+        check(this.reservationId == null || this.reservationId == reservationId) {
+            "이미 다른 예약에 연결된 결제입니다: ${this.reservationId}"
+        }
+        return copyState(reservationId = reservationId)
+    }
+
     private fun copyState(
+        reservationId: String? = this.reservationId,
         status: PaymentStatus = this.status,
         paymentKey: String? = this.paymentKey,
         method: String? = this.method,
