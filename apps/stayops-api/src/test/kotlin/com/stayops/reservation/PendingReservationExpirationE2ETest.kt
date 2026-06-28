@@ -8,10 +8,13 @@ import com.stayops.reservation.application.service.CustomerReservationApplicatio
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.inventory.application.service.RoomInventoryApplication
-import com.stayops.payment.application.required.PaymentGateway
+import com.stayops.inventory.domain.model.InventoryHoldStatus
+import com.stayops.inventory.domain.repository.InventoryHoldRepository
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
-import com.stayops.reservation.domain.model.ReservationStatus
+import com.stayops.reservation.application.service.ReservationIntentExpirationApplication
+import com.stayops.reservation.domain.model.ReservationIntentStatus
+import com.stayops.reservation.domain.repository.ReservationIntentRepository
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomRepository
@@ -19,7 +22,6 @@ import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money
 import com.stayops.shared.domain.MutableClock
-import com.ninjasquad.springmockk.MockkBean
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -28,11 +30,8 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.data.mongodb.core.MongoTemplate
-import org.springframework.data.mongodb.core.query.Criteria
-import org.springframework.data.mongodb.core.query.Query
-import org.springframework.data.mongodb.core.query.Update
 import java.time.Clock
-import java.time.Instant
+import java.time.Duration
 import java.time.LocalDate
 
 @SpringBootTest
@@ -45,9 +44,11 @@ class PendingExpirationE2ETest @Autowired constructor(
     private val channelRepository: ChannelRepository,
     private val inventoryApplication: RoomInventoryApplication,
     private val memberRepository: MemberRepository,
+    private val reservationIntentRepository: ReservationIntentRepository,
+    private val inventoryHoldRepository: InventoryHoldRepository,
+    private val expirationApplication: ReservationIntentExpirationApplication,
     private val mongoTemplate: MongoTemplate,
-    private val clock: Clock,
-    @MockkBean private val paymentGateway: PaymentGateway
+    private val clock: Clock
 ) {
 
     private lateinit var checkIn: LocalDate
@@ -113,10 +114,10 @@ class PendingExpirationE2ETest @Autowired constructor(
     }
 
     @Nested
-    inner class `PENDING_만료_처리` {
+    inner class `예약_intent_만료_처리` {
 
         @Test
-        fun `만료된_PENDING은_자동_취소되지_않고_새_예약을_막지_않는다`() {
+        fun `만료된_PAYMENT_WAITING_intent는_EXPIRED로_변경되고_hold를_해제해_새_intent를_막지_않는다`() {
             // Given: 예약 전 재고 확인
             val beforeInventory = inventoryApplication.getAvailability(
                 "prop-exp", "rt-exp", checkIn, checkIn
@@ -124,8 +125,7 @@ class PendingExpirationE2ETest @Autowired constructor(
             val initialAvailable = beforeInventory[0].availableCount
             assertThat(initialAvailable).isEqualTo(1)
 
-            // Create reservation -> PENDING
-            val reservationResult = customerReservationApplication.createReservation(
+            val intentResult = customerReservationApplication.createReservationIntent(
                 memberId = "customer-exp",
                 propertyId = "prop-exp",
                 roomTypeId = "rt-exp",
@@ -136,33 +136,33 @@ class PendingExpirationE2ETest @Autowired constructor(
                 guestPhone = "010-1111-1111",
                 guestEmail = "exp@test.com"
             )
-            assertThat(reservationResult.reservation.status).isEqualTo(ReservationStatus.PENDING)
+            assertThat(intentResult.intent.status).isEqualTo(ReservationIntentStatus.PAYMENT_WAITING)
 
-            // Verify: PENDING 예약 생성은 재고를 차감하지 않는다
-            val afterReservation = inventoryApplication.getAvailability(
+            val afterIntent = inventoryApplication.getAvailability(
                 "prop-exp", "rt-exp", checkIn, checkIn
             )
-            assertThat(afterReservation[0].availableCount).isEqualTo(initialAvailable)
-            assertThat(afterReservation[0].reservedCount).isEqualTo(0)
+            assertThat(afterIntent[0].availableCount).isEqualTo(initialAvailable - 1)
+            assertThat(afterIntent[0].heldCount).isEqualTo(1)
+            assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+                .isEqualTo(InventoryHoldStatus.HELD)
 
-            // Manually set expiresAt to past via MongoTemplate
-            mongoTemplate.updateFirst(
-                Query.query(Criteria.where("_id").`is`(reservationResult.reservation.id)),
-                Update.update("expiresAt", Instant.now(clock).minusSeconds(3600)),
-                "reservations"
+            (clock as MutableClock).advance(Duration.ofMinutes(16))
+            val expiredCount = expirationApplication.expirePaymentWaitingIntents()
+
+            assertThat(expiredCount).isEqualTo(1)
+            assertThat(reservationIntentRepository.findById(intentResult.intent.id)!!.status)
+                .isEqualTo(ReservationIntentStatus.EXPIRED)
+            assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+                .isEqualTo(InventoryHoldStatus.RELEASED)
+
+            val afterExpiration = inventoryApplication.getAvailability(
+                "prop-exp", "rt-exp", checkIn, checkIn
             )
+            assertThat(afterExpiration[0].availableCount).isEqualTo(initialAvailable)
+            assertThat(afterExpiration[0].heldCount).isEqualTo(0)
+            assertThat(afterExpiration[0].reservedCount).isEqualTo(0)
 
-            // Then: scheduler 없이 기존 만료 예약은 PENDING 상태로 남는다
-            val reservationDoc = mongoTemplate.findOne(
-                Query.query(Criteria.where("_id").`is`(reservationResult.reservation.id)),
-                org.bson.Document::class.java,
-                "reservations"
-            )
-            assertThat(reservationDoc).isNotNull
-            assertThat(reservationDoc!!.getString("status")).isEqualTo(ReservationStatus.PENDING.name)
-
-            // When: 같은 조건으로 다시 예약 생성
-            val secondReservation = customerReservationApplication.createReservation(
+            val secondIntent = customerReservationApplication.createReservationIntent(
                 memberId = "customer-exp",
                 propertyId = "prop-exp",
                 roomTypeId = "rt-exp",
@@ -174,15 +174,14 @@ class PendingExpirationE2ETest @Autowired constructor(
                 guestEmail = "exp@test.com"
             )
 
-            // Then: 만료된 PENDING은 새 예약 생성을 막지 않는다
-            assertThat(secondReservation.reservation.status).isEqualTo(ReservationStatus.PENDING)
+            assertThat(secondIntent.intent.status).isEqualTo(ReservationIntentStatus.PAYMENT_WAITING)
 
-            // Then: inventory should remain at pre-reservation value
-            val afterExpiry = inventoryApplication.getAvailability(
+            val afterSecondIntent = inventoryApplication.getAvailability(
                 "prop-exp", "rt-exp", checkIn, checkIn
             )
-            assertThat(afterExpiry[0].availableCount).isEqualTo(initialAvailable)
-            assertThat(afterExpiry[0].reservedCount).isEqualTo(0)
+            assertThat(afterSecondIntent[0].availableCount).isEqualTo(initialAvailable - 1)
+            assertThat(afterSecondIntent[0].heldCount).isEqualTo(1)
+            assertThat(afterSecondIntent[0].reservedCount).isEqualTo(0)
         }
     }
 }
