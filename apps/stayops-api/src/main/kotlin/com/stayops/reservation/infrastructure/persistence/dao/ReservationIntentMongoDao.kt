@@ -3,6 +3,7 @@ package com.stayops.reservation.infrastructure.persistence.dao
 import com.stayops.reservation.domain.model.ReservationIntentStatus
 import com.stayops.reservation.infrastructure.persistence.ReservationIntentDocument
 import com.stayops.shared.config.MongoPersistence
+import org.springframework.data.domain.Pageable
 import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.data.mongodb.repository.Query
 import java.time.Instant
@@ -21,4 +22,11 @@ interface ReservationIntentMongoDao : MongoRepository<ReservationIntentDocument,
         statuses: Collection<ReservationIntentStatus>,
         expiresAt: Instant
     ): Boolean
+
+    @Query("{ 'status': { '\$in': ?0 }, 'expiresAt': { '\$lt': ?1 } }")
+    fun findExpiredByStatuses(
+        statuses: Collection<ReservationIntentStatus>,
+        now: Instant,
+        pageable: Pageable
+    ): List<ReservationIntentDocument>
 }

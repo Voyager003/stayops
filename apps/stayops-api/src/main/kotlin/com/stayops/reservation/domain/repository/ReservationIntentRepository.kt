@@ -7,6 +7,7 @@ import java.time.LocalDate
 interface ReservationIntentRepository {
     fun save(intent: ReservationIntent): ReservationIntent
     fun findById(id: String): ReservationIntent?
+    fun findExpiredPaymentWaiting(now: Instant, limit: Int): List<ReservationIntent>
     fun existsActiveByMemberIdAndRoomTypeIdAndCheckInAndCheckOut(
         memberId: String,
         roomTypeId: String,

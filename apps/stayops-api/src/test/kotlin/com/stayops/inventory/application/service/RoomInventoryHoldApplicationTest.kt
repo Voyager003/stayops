@@ -120,4 +120,39 @@ class RoomInventoryHoldApplicationTest : BehaviorSpec({
             }
         }
     }
+
+    given("재고 hold 해제 시") {
+        `when`("HELD 상태의 hold가 존재하면") {
+            val checkIn = LocalDate.of(2026, 4, 1)
+            val checkOut = LocalDate.of(2026, 4, 3)
+            val firstDate = checkIn
+            val secondDate = checkIn.plusDays(1)
+            val savedHolds = mutableListOf<InventoryHold>()
+            val savedInventories = mutableListOf<RoomInventory>()
+
+            every { inventoryHoldRepository.findByReservationIntentId("intent-1") } returns InventoryHold.create(
+                id = "hold-1",
+                reservationIntentId = "intent-1",
+                propertyId = "prop-1",
+                roomTypeId = "rt-1",
+                dates = listOf(firstDate, secondDate),
+                quantity = 1,
+                expiresAt = fixedInstant.plusSeconds(900),
+                now = fixedInstant
+            )
+            every { inventoryAccess.getOrThrow("prop-1", "rt-1", firstDate) } returns inventory(firstDate, heldCount = 1)
+            every { inventoryAccess.getOrThrow("prop-1", "rt-1", secondDate) } returns inventory(secondDate, heldCount = 1)
+            every { inventoryAccess.saveAndEvict(capture(savedInventories)) } answers { firstArg() }
+            every { inventoryHoldRepository.save(capture(savedHolds)) } answers { firstArg() }
+
+            sut.release("intent-1")
+
+            then("각 날짜의 hold 재고를 해제하고 hold를 RELEASED 상태로 저장한다") {
+                savedInventories.map { it.date } shouldBe listOf(firstDate, secondDate)
+                savedInventories.map { it.heldCount } shouldBe listOf(0, 0)
+                savedInventories.map { it.reservedCount } shouldBe listOf(1, 1)
+                savedHolds.last().status.name shouldBe "RELEASED"
+            }
+        }
+    }
 })

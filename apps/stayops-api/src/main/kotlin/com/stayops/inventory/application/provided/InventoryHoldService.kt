@@ -15,6 +15,8 @@ interface InventoryHoldService {
     ): InventoryHoldSnapshot
 
     fun consume(reservationIntentId: String)
+
+    fun release(reservationIntentId: String)
 }
 
 data class InventoryHoldSnapshot(

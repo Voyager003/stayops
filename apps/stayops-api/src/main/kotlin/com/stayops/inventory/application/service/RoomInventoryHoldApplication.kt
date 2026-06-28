@@ -100,6 +100,35 @@ class RoomInventoryHoldApplication(
         )
     }
 
+    @Transactional
+    override fun release(reservationIntentId: String) {
+        val hold = inventoryHoldRepository.findByReservationIntentId(reservationIntentId)
+            ?: throw NotFoundException("INVENTORY_HOLD_NOT_FOUND", "재고 hold를 찾을 수 없습니다: $reservationIntentId")
+
+        if (hold.status == InventoryHoldStatus.RELEASED || hold.status == InventoryHoldStatus.EXPIRED) {
+            return
+        }
+        check(hold.status == InventoryHoldStatus.HELD) {
+            "HELD 상태의 hold만 해제할 수 있습니다: ${hold.status}"
+        }
+
+        hold.dates.forEach { date ->
+            val released = (1..hold.quantity).fold(
+                inventoryAccess.getOrThrow(hold.propertyId, hold.roomTypeId, date)
+            ) { inventory, _ ->
+                inventory.releaseHold()
+            }
+            inventoryAccess.saveAndEvict(released)
+        }
+
+        inventoryHoldRepository.save(hold.release(clock.instant()))
+        log.info(
+            "재고 hold 해제: holdId={}, reservationIntentId={}",
+            hold.id,
+            reservationIntentId
+        )
+    }
+
     private fun InventoryHold.toSnapshot(): InventoryHoldSnapshot =
         InventoryHoldSnapshot(
             id = id,

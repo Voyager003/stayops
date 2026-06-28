@@ -94,6 +94,14 @@ class RdbReservationIntentRepository(
             .fetchOne()
             ?.toDomain()
 
+    override fun findExpiredPaymentWaiting(now: Instant, limit: Int): List<ReservationIntent> =
+        dsl.selectFrom(RESERVATION_INTENTS)
+            .where(RESERVATION_INTENTS.STATUS.eq(ReservationIntentStatus.PAYMENT_WAITING.name))
+            .and(RESERVATION_INTENTS.EXPIRES_AT.lt(now.toOffsetDateTime()))
+            .orderBy(RESERVATION_INTENTS.EXPIRES_AT.asc(), RESERVATION_INTENTS.ID.asc())
+            .limit(limit.coerceAtLeast(1))
+            .fetch { it.toDomain() }
+
     override fun existsActiveByMemberIdAndRoomTypeIdAndCheckInAndCheckOut(
         memberId: String,
         roomTypeId: String,
