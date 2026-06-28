@@ -11,7 +11,6 @@ import com.stayops.inventory.application.service.RoomInventoryApplication
 import com.stayops.inventory.domain.model.InventoryHoldStatus
 import com.stayops.inventory.domain.repository.InventoryHoldRepository
 import com.stayops.reservation.application.required.ReservationPaymentStatus
-import com.stayops.reservation.application.service.ReservationApplication
 import com.stayops.reservation.application.service.ReservationPaymentOutboxApplication
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentRepository
@@ -57,7 +56,6 @@ class CustomerReservationE2ETest @Autowired constructor(
     private val roomRepository: RoomRepository,
     private val channelRepository: ChannelRepository,
     private val inventoryApplication: RoomInventoryApplication,
-    private val reservationApplication: ReservationApplication,
     private val memberRepository: MemberRepository,
     private val reservationRepository: ReservationRepository,
     private val reservationIntentRepository: ReservationIntentRepository,
@@ -220,9 +218,8 @@ class CustomerReservationE2ETest @Autowired constructor(
     inner class `중복_예약_방지` {
 
         @Test
-        fun `동일_조건으로_두_번_예약하면_ConflictException_발생`() {
-            // 첫 번째 예약 — 성공
-            customerReservationApplication.createReservation(
+        fun `확정된_예약과_동일_조건으로_예약_intent를_생성하면_ConflictException_발생`() {
+            val intentResult = customerReservationApplication.createReservationIntent(
                 memberId = "customer-e2e",
                 propertyId = "prop-e2e",
                 roomTypeId = "rt-e2e",
@@ -233,10 +230,24 @@ class CustomerReservationE2ETest @Autowired constructor(
                 guestPhone = "010-9999-9999",
                 guestEmail = "e2e@test.com"
             )
+            every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
+                paymentKey = "toss_pk_duplicate",
+                orderId = intentResult.payment.orderId,
+                method = "카드",
+                approvedAt = Instant.now(clock),
+                totalAmount = BigDecimal(200_000)
+            )
+            customerReservationApplication.confirmReservationIntentPayment(
+                memberId = "customer-e2e",
+                reservationIntentId = intentResult.intent.id,
+                paymentKey = "toss_pk_duplicate",
+                orderId = intentResult.payment.orderId,
+                amount = BigDecimal(200_000)
+            )
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
 
-            // 두 번째 예약 — 동일 조건 → ConflictException
             assertThatThrownBy {
-                customerReservationApplication.createReservation(
+                customerReservationApplication.createReservationIntent(
                     memberId = "customer-e2e",
                     propertyId = "prop-e2e",
                     roomTypeId = "rt-e2e",
@@ -256,9 +267,8 @@ class CustomerReservationE2ETest @Autowired constructor(
     inner class `결제_확인_멱등성` {
 
         @Test
-        fun `결제가_이미_완료된_PENDING_예약에_confirmPayment를_다시_호출하면_기존_결과_반환`() {
-            // 1. 예약 생성
-            val reservationResult = customerReservationApplication.createReservation(
+        fun `결제가_이미_완료된_예약_intent에_confirmPayment를_다시_호출하면_기존_결과_반환`() {
+            val intentResult = customerReservationApplication.createReservationIntent(
                 memberId = "customer-e2e",
                 propertyId = "prop-e2e",
                 roomTypeId = "rt-e2e",
@@ -273,35 +283,35 @@ class CustomerReservationE2ETest @Autowired constructor(
             // 2. 첫 번째 결제 확인
             every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
                 paymentKey = "toss_pk_idempotent",
-                orderId = reservationResult.payment.orderId,
+                orderId = intentResult.payment.orderId,
                 method = "카드",
                 approvedAt = Instant.now(clock),
                 totalAmount = BigDecimal(200_000)
             )
 
-            val firstResult = customerReservationApplication.confirmPayment(
+            val firstResult = customerReservationApplication.confirmReservationIntentPayment(
                 memberId = "customer-e2e",
-                reservationId = reservationResult.reservation.id,
+                reservationIntentId = intentResult.intent.id,
                 paymentKey = "toss_pk_idempotent",
-                orderId = reservationResult.payment.orderId,
+                orderId = intentResult.payment.orderId,
                 amount = BigDecimal(200_000)
             )
 
-            assertThat(firstResult.reservation.status).isEqualTo(ReservationStatus.PENDING)
+            assertThat(firstResult.intent.status).isEqualTo(ReservationIntentStatus.CONFIRM_REQUESTED)
             assertThat(firstResult.payment.status).isEqualTo(ReservationPaymentStatus.CONFIRM_REQUESTED)
 
             reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
 
             // 3. 두 번째 결제 확인 — Toss 호출 없이 기존 결과 반환
-            val secondResult = customerReservationApplication.confirmPayment(
+            val secondResult = customerReservationApplication.confirmReservationIntentPayment(
                 memberId = "customer-e2e",
-                reservationId = reservationResult.reservation.id,
+                reservationIntentId = intentResult.intent.id,
                 paymentKey = "toss_pk_idempotent",
-                orderId = reservationResult.payment.orderId,
+                orderId = intentResult.payment.orderId,
                 amount = BigDecimal(200_000)
             )
 
-            assertThat(secondResult.reservation.status).isEqualTo(ReservationStatus.PENDING)
+            assertThat(secondResult.intent.status).isEqualTo(ReservationIntentStatus.RESERVED)
             assertThat(secondResult.payment.status).isEqualTo(ReservationPaymentStatus.APPROVED)
         }
     }
@@ -310,15 +320,15 @@ class CustomerReservationE2ETest @Autowired constructor(
     inner class `재고_정합성` {
 
         @Test
-        fun `예약_생성_후_재고는_유지되고_결제_승인_worker_처리_후_차감된다`() {
+        fun `예약_intent_생성_시_hold로_재고를_점유하고_결제_승인_worker_처리_후_예약_재고로_전환된다`() {
             // 예약 전 재고 확인
             val beforeInventory = inventoryApplication.getAvailability(
                 "prop-e2e", "rt-e2e", checkIn, checkIn.plusDays(1)
             )
             val initialAvailable = beforeInventory[0].availableCount
 
-            // 예약 생성 (재고 차감 없음)
-            val reservationResult = customerReservationApplication.createReservation(
+            // 예약 intent 생성 (hold 재고 점유)
+            val intentResult = customerReservationApplication.createReservationIntent(
                 memberId = "customer-e2e",
                 propertyId = "prop-e2e",
                 roomTypeId = "rt-e2e",
@@ -330,22 +340,24 @@ class CustomerReservationE2ETest @Autowired constructor(
                 guestEmail = null
             )
 
-            val afterReservation = inventoryApplication.getAvailability(
+            val afterIntent = inventoryApplication.getAvailability(
                 "prop-e2e", "rt-e2e", checkIn, checkIn.plusDays(1)
             )
-            assertThat(afterReservation[0].availableCount).isEqualTo(initialAvailable)
+            assertThat(afterIntent[0].availableCount).isEqualTo(initialAvailable - 1)
+            assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+                .isEqualTo(InventoryHoldStatus.HELD)
 
             // 결제 확인
             every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
-                paymentKey = "toss_pk_inv", orderId = reservationResult.payment.orderId,
+                paymentKey = "toss_pk_inv", orderId = intentResult.payment.orderId,
                 method = "카드", approvedAt = Instant.now(clock),
                 totalAmount = BigDecimal(200_000)
             )
-            customerReservationApplication.confirmPayment(
+            customerReservationApplication.confirmReservationIntentPayment(
                 memberId = "customer-e2e",
-                reservationId = reservationResult.reservation.id,
+                reservationIntentId = intentResult.intent.id,
                 paymentKey = "toss_pk_inv",
-                orderId = reservationResult.payment.orderId,
+                orderId = intentResult.payment.orderId,
                 amount = BigDecimal(200_000)
             )
             reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
@@ -354,10 +366,13 @@ class CustomerReservationE2ETest @Autowired constructor(
                 "prop-e2e", "rt-e2e", checkIn, checkIn.plusDays(1)
             )
             assertThat(afterConfirm[0].availableCount).isEqualTo(initialAvailable - 1)
+            assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+                .isEqualTo(InventoryHoldStatus.CONSUMED)
+            val reservationId = reservationIntentRepository.findById(intentResult.intent.id)!!.reservationId!!
 
             // 취소 (재고 복원)
             every { paymentGateway.cancel("toss_pk_inv", any(), any()) } returns PaymentCancelResult("toss_pk_inv")
-            customerReservationApplication.cancelReservation("customer-e2e", reservationResult.reservation.id)
+            customerReservationApplication.cancelReservation("customer-e2e", reservationId)
             reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
 
             val afterCancel = inventoryApplication.getAvailability(
