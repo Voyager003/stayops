@@ -15,6 +15,7 @@ Terraform으로 구성한다.
 - Session Manager 접속을 위한 EC2 IAM Role, Instance Profile
 - App EC2 2대
 - MongoDB EC2 3대
+- PostgreSQL RDS 1대
 - Redis EC2 1대
 - Mock OTA EC2 1대
 - Observability EC2 1대
@@ -24,11 +25,12 @@ Terraform으로 구성한다.
 - 내부 DNS Record
 - 초기 배포 bundle 저장용 S3 artifact bucket
 
-최종 Terraform-managed EC2는 8대다.
+최종 Terraform-managed EC2는 8대이고, RDB profile 검증용 PostgreSQL은 EC2가 아니라 RDS로 생성한다.
 
 ```text
 App EC2 x 2
 MongoDB EC2 x 3
+PostgreSQL RDS x 1
 Redis EC2 x 1
 Mock OTA EC2 x 1
 Observability EC2 x 1
@@ -39,10 +41,11 @@ Observability EC2 x 1
 ```text
 Public App EC2 x 1
 Private single-node MongoDB EC2 x 1
+PostgreSQL RDS x 1
 Public subnet x 1
-Private subnet x 1
+Private subnet x 2
 Elastic IP x 1
-Route 53 Private Hosted Zone / minimal-mongo private DNS
+Route 53 Private Hosted Zone / minimal-mongo, postgres private DNS
 S3 artifact bucket
 Session Manager용 IAM Role / Instance Profile
 ```
@@ -50,7 +53,20 @@ Session Manager용 IAM Role / Instance Profile
 minimal App EC2는 Nginx, StayOps app, Redis, Mock OTA, Mock OTA MongoDB를 같은 Docker Compose
 stack으로 실행한다. minimal MongoDB는 transaction 지원을 위해 standalone이 아니라 single-node
 replica set으로 실행한다.
-minimal은 최소 작동 구성이므로 기본 예시는 단일 AZ에 public subnet 1개, private subnet 1개만 둔다.
+minimal은 최소 작동 구성이므로 App EC2와 MongoDB EC2 수를 각각 1대로 유지한다. 다만 RDS DB subnet
+group은 서로 다른 AZ의 subnet을 요구하므로 minimal Terraform 예시는 public subnet 1개와 private
+subnet 2개를 둔다.
+
+PostgreSQL RDS는 다음 기준으로 생성한다.
+
+- 공통: private subnet 배치, public access 비활성화, storage encryption 활성화
+- minimal: 단일 AZ, 낮은 instance class, 짧은 backup retention, deletion protection 비활성화
+- production: Multi-AZ, backup retention 확대, deletion protection 활성화, final snapshot 유지
+
+RDS master password는 tfvars에 직접 넣지 않는다. `manage_master_user_password = true`를 사용해
+AWS Secrets Manager에 RDS-managed secret으로 저장한다. Terraform output의
+`postgres_master_user_secret_arn`은 app 배포 시 `SPRING_DATASOURCE_PASSWORD`를 준비할 때 참조할
+secret ARN이다. app에서 사용할 내부 endpoint는 `postgres.<private_zone_name>:5432`다.
 
 기존 수동 public App EC2와 기존 수동 MongoDB EC2는 Terraform state에 없으므로
 Terraform이 자동으로 삭제하지 않는다.

@@ -92,3 +92,23 @@ output "minimal_mongo_private_dns" {
   description = "Private DNS name of the minimal single-node MongoDB EC2."
   value       = local.is_minimal ? "minimal-mongo.${var.private_zone_name}" : null
 }
+
+output "postgres_endpoint" {
+  description = "RDS PostgreSQL endpoint address."
+  value       = aws_db_instance.postgres.address
+}
+
+output "postgres_private_dns" {
+  description = "Private DNS name for the RDB profile PostgreSQL endpoint."
+  value       = "postgres.${var.private_zone_name}"
+}
+
+output "postgres_database_name" {
+  description = "Initial PostgreSQL database name."
+  value       = aws_db_instance.postgres.db_name
+}
+
+output "postgres_master_user_secret_arn" {
+  description = "Secrets Manager secret ARN that stores the RDS-managed PostgreSQL master password."
+  value       = aws_db_instance.postgres.master_user_secret[0].secret_arn
+}

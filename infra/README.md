@@ -14,6 +14,7 @@ StayOps 서버 운영 방식에 따라 인프라 구성을 분리한다.
 - `redis`: Redis, Redis exporter, node-exporter, Promtail
 - `observability`: Prometheus, Loki, Grafana, node-exporter
 - `mongodb-rss`: 3-node MongoDB replica set, MongoDB exporter, node-exporter, Promtail
+- `postgresql-rds`: RDB profile 검증용 PostgreSQL RDS
 
 운영 수준에서 app EC2를 2대 이상으로 확장할 때 Redis는 app 인스턴스 내부가 아니라 private
 Redis EC2의 공용 endpoint를 사용한다. StayOps는 Redis 기반 Spring Session과 재고 캐시를
@@ -26,6 +27,7 @@ Redis EC2의 공용 endpoint를 사용한다. StayOps는 Redis 기반 Spring Ses
 - Redis EC2 1대
 - Mock OTA EC2 1대
 - MongoDB EC2 3대
+- PostgreSQL RDS 1대
 - Observability EC2 1대
 
 기본 앱 실행:
@@ -91,6 +93,7 @@ docker compose --env-file .env up -d
 
 - `app`: StayOps app, Redis, Nginx, Mock OTA, Mock OTA MongoDB
 - `mongodb-single-rs`: 단일 MongoDB 노드로 구성한 single-node replica set
+- `postgresql-rds`: RDB profile 검증용 PostgreSQL RDS
 
 최소 구성의 MongoDB도 standalone으로 두지 않는다. StayOps는 `MongoTransactionManager` 기반
 MongoDB transaction을 사용하므로 MongoDB가 replica set 모드로 실행되어야 한다.
@@ -114,10 +117,11 @@ cp env.example .env
 docker compose --env-file .env up -d
 ```
 
-Terraform minimal topology에서는 App EC2 1대와 MongoDB EC2 1대를 생성한다. App EC2는 public
-subnet에서 Nginx로 HTTP 트래픽을 받고, MongoDB EC2는 private subnet에서 single-node replica set을
-실행한다. HTTPS가 필요하면 ALB를 사용하는 production topology를 사용하거나, 별도의 인증서 자동화
-구성을 추가해야 한다.
+Terraform minimal topology에서는 App EC2 1대, MongoDB EC2 1대, PostgreSQL RDS 1대를 생성한다.
+App EC2는 public subnet에서 Nginx로 HTTP 트래픽을 받고, MongoDB EC2는 private subnet에서
+single-node replica set을 실행한다. PostgreSQL RDS도 private subnet에 두며, RDS DB subnet group
+조건 때문에 minimal도 private subnet은 2개 AZ에 둔다. HTTPS가 필요하면 ALB를 사용하는 production
+topology를 사용하거나, 별도의 인증서 자동화 구성을 추가해야 한다.
 
 ## 선택 기준
 
