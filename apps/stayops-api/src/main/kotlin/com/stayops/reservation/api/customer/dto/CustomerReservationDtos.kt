@@ -13,7 +13,7 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-data class CreateCustomerReservationRequest(
+data class CreateReservationIntentRequest(
     @field:NotBlank
     val propertyId: String,
 

@@ -23,9 +23,9 @@ class RateLimitFilterTest {
     private val properties = RateLimitProperties(
         rules = listOf(
             RateLimitRuleProperties(
-                id = "customer-reservation-create",
+                id = "customer-reservation-intent-create",
                 method = "POST",
-                pathPattern = "/api/v1/customer/reservations",
+                pathPattern = "/api/v1/customer/reservation-intents",
                 limit = 1,
                 windowSeconds = 60,
                 identityType = RateLimitIdentityType.MEMBER
@@ -65,7 +65,7 @@ class RateLimitFilterTest {
             UsernamePasswordAuthenticationToken(member, null, emptyList())
         every { rateLimiter.check(properties.rules[0].toRule(), "member:member-1") } returns RateLimitResult.blocked(42)
 
-        val request = MockHttpServletRequest("POST", "/api/v1/customer/reservations")
+        val request = MockHttpServletRequest("POST", "/api/v1/customer/reservation-intents")
         val response = MockHttpServletResponse()
         var called = false
         val chain = FilterChain { _, _ -> called = true }
@@ -83,7 +83,7 @@ class RateLimitFilterTest {
     fun should_fail_open_when_redis_rate_limiter_fails() {
         every { rateLimiter.check(any(), any()) } throws IllegalStateException("redis down")
 
-        val request = MockHttpServletRequest("POST", "/api/v1/customer/reservations")
+        val request = MockHttpServletRequest("POST", "/api/v1/customer/reservation-intents")
         request.remoteAddr = "10.0.0.10"
         val response = MockHttpServletResponse()
         var called = false

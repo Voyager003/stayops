@@ -44,6 +44,7 @@ class SecurityConfig {
                 authorize("/api/v1/customer/auth/**", permitAll)
                 authorize("/api/v1/customer/booking-drafts/**", permitAll)
                 authorize("/api/v1/customer/properties/**", permitAll)
+                authorize("/api/v1/customer/reservation-intents/**", authenticated)
                 authorize("/api/v1/customer/reservations/**", authenticated)
                 authorize(anyRequest, authenticated)
             }

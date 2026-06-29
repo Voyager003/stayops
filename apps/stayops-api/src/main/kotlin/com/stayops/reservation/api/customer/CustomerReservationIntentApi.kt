@@ -3,6 +3,7 @@ package com.stayops.reservation.api.customer
 import com.stayops.member.application.service.MemberAccessApplication
 import com.stayops.member.domain.model.Member
 import com.stayops.reservation.api.customer.dto.CustomerReservationIntentResponse
+import com.stayops.reservation.api.customer.dto.CreateReservationIntentRequest
 import com.stayops.reservation.api.customer.dto.PaymentConfirmRequest
 import com.stayops.reservation.application.service.CustomerReservationApplication
 import jakarta.validation.Valid
@@ -21,6 +22,26 @@ class CustomerReservationIntentApi(
     private val customerReservationApplication: CustomerReservationApplication,
     private val memberAccessApplication: MemberAccessApplication
 ) {
+
+    @PostMapping
+    fun createReservationIntent(
+        @Valid @RequestBody request: CreateReservationIntentRequest,
+        @AuthenticationPrincipal member: Member?
+    ): ResponseEntity<CustomerReservationIntentResponse> {
+        val customer = memberAccessApplication.requireCustomer(member)
+        val result = customerReservationApplication.createReservationIntent(
+            memberId = customer.id,
+            propertyId = request.propertyId,
+            roomTypeId = request.roomTypeId,
+            checkIn = request.checkIn,
+            checkOut = request.checkOut,
+            numberOfGuests = request.numberOfGuests,
+            guestName = request.guestName,
+            guestPhone = request.guestPhone,
+            guestEmail = request.guestEmail
+        )
+        return ResponseEntity.status(HttpStatus.CREATED).body(CustomerReservationIntentResponse.from(result))
+    }
 
     @PostMapping("/{reservationIntentId}/confirm-payment")
     fun confirmPayment(

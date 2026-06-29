@@ -30,13 +30,12 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-class CustomerReservationApiTest {
+class CustomerReservationIntentApiTest {
 
     private val customerReservationApplication = mockk<CustomerReservationApplication>()
     private val memberAccessApplication = mockk<MemberAccessApplication>()
     private val mockMvc: MockMvc = MockMvcBuilders
         .standaloneSetup(
-            CustomerReservationApi(customerReservationApplication, memberAccessApplication),
             CustomerReservationIntentApi(customerReservationApplication, memberAccessApplication)
         )
         .setCustomArgumentResolvers(AuthenticationPrincipalArgumentResolver())
@@ -96,14 +95,14 @@ class CustomerReservationApiTest {
     }
 
     @Nested
-    inner class `예약_생성` {
+    inner class `예약_intent_생성` {
 
         @Test
-        fun `유효한 요청이면 201을 반환한다`() {
+        fun `유효한 예약 intent 생성 요청이면 201을 반환한다`() {
             mockCustomer()
             every { customerReservationApplication.createReservationIntent(any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns sampleCustomerReservationIntentResult()
 
-            mockMvc.post("/api/v1/customer/reservations") {
+            mockMvc.post("/api/v1/customer/reservation-intents") {
                 contentType = MediaType.APPLICATION_JSON
                 content = """
                     {
