@@ -65,22 +65,28 @@ loadtest/          # k6 부하 테스트와 테스트 데이터 seed script
 ### MongoDB 프로필 실행
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.mongo.yml up -d mongodb mongo-init redis mongo-ota mock-ota
+docker compose -f docker-compose.yml -f docker-compose.mongo.yml up -d mongodb mongo-init redis mock-ota-mongo mock-ota
 SPRING_PROFILES_ACTIVE=local,mongo ./gradlew :apps:stayops-api:bootRun
 ```
 
 ### RDB 프로필 실행
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.rdb.yml up -d postgres redis mongo-ota mock-ota
+docker compose -f docker-compose.yml -f docker-compose.rdb.yml up -d postgres redis mock-ota-mongo mock-ota
 SPRING_PROFILES_ACTIVE=local,rdb ./gradlew :apps:stayops-api:bootRun
 ```
+
+`mongodb`는 StayOps app이 `mongo` 프로필에서 사용하는 DB이고, `mock-ota-mongo`는 Mock OTA 서버 전용
+MongoDB입니다. 따라서 RDB 프로필에서도 `mock-ota-mongo`는 함께 실행됩니다.
 
 ### Docker로 애플리케이션까지 실행
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.mongo.yml up -d app
-docker compose -f docker-compose.yml -f docker-compose.rdb.yml up -d app
+MOCK_OTA_PMS_WEBHOOK_URL='http://app:8080/api/v1/properties/{propertyId}/channels/webhook/{channelCode}' \
+  docker compose -f docker-compose.yml -f docker-compose.mongo.yml up -d app
+
+MOCK_OTA_PMS_WEBHOOK_URL='http://app:8080/api/v1/properties/{propertyId}/channels/webhook/{channelCode}' \
+  docker compose -f docker-compose.yml -f docker-compose.rdb.yml up -d app
 ```
 
 ### 빌드 및 테스트
