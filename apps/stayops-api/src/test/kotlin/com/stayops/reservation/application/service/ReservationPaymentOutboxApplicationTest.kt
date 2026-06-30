@@ -178,6 +178,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         every { inventoryReservationService.reserve(any(), any(), any()) } returns Unit
         every { inventoryReservationService.release(any(), any(), any()) } returns Unit
         every { inventoryHoldService.consume(any()) } returns Unit
+        every { inventoryHoldService.release(any()) } returns Unit
     }
 
     given("결제 승인 Outbox 처리 시") {
@@ -261,6 +262,100 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
                     })
                 }
                 verify { eventPublisher.publishEvent(any<ReservationCreated>()) }
+                verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
+            }
+        }
+
+        `when`("ReservationIntent 기반 결제에서 PG가 결제를 최종 거절하면") {
+            then("Payment와 intent를 실패 처리하고 hold를 해제한다") {
+                val message = confirmIntentMessage()
+                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                every { paymentRepository.findById("pay-intent-1") } returns confirmRequestedIntentPayment()
+                every { reservationIntentRepository.findById("intent-1") } returns reservationIntent()
+                every { paymentGateway.confirm(any(), any(), any(), any()) } throws
+                    PaymentGatewayException.PaymentDeclined("CARD_DECLINED", "카드 승인이 거절되었습니다")
+
+                application.processPendingMessages(workerId = "worker-1")
+
+                verify { paymentRepository.save(match { it.status == PaymentStatus.FAILED }) }
+                verify { reservationIntentRepository.save(match { it.status == ReservationIntentStatus.PAYMENT_FAILED }) }
+                verify(exactly = 1) { inventoryHoldService.release("intent-1") }
+                verify(exactly = 0) { inventoryHoldService.consume(any()) }
+                verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
+            }
+        }
+
+        `when`("ReservationIntent 기반 결제에서 PG 승인 요청이 유효하지 않으면") {
+            then("Payment와 intent를 실패 처리하고 hold를 해제한다") {
+                val message = confirmIntentMessage()
+                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                every { paymentRepository.findById("pay-intent-1") } returns confirmRequestedIntentPayment()
+                every { reservationIntentRepository.findById("intent-1") } returns reservationIntent()
+                every { paymentGateway.confirm(any(), any(), any(), any()) } throws
+                    PaymentGatewayException.InvalidRequest("INVALID_REQUEST", "잘못된 결제 승인 요청입니다")
+
+                application.processPendingMessages(workerId = "worker-1")
+
+                verify { paymentRepository.save(match { it.status == PaymentStatus.FAILED }) }
+                verify { reservationIntentRepository.save(match { it.status == ReservationIntentStatus.PAYMENT_FAILED }) }
+                verify(exactly = 1) { inventoryHoldService.release("intent-1") }
+                verify(exactly = 0) { inventoryHoldService.consume(any()) }
+                verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.SKIPPED }) }
+            }
+        }
+
+        `when`("ReservationIntent 기반 결제에서 PG 승인 결과가 요청 값과 다르면") {
+            then("Payment와 intent를 실패 처리하고 hold를 해제한다") {
+                val message = confirmIntentMessage()
+                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                every { paymentRepository.findById("pay-intent-1") } returns confirmRequestedIntentPayment()
+                every { reservationIntentRepository.findById("intent-1") } returns reservationIntent()
+                every {
+                    paymentGateway.confirm(
+                        paymentKey = "toss_pk_123",
+                        orderId = message.orderId,
+                        amount = BigDecimal(200_000),
+                        idempotencyKey = message.idempotencyKey
+                    )
+                } returns PaymentConfirmResult(
+                    paymentKey = "toss_pk_123",
+                    orderId = "different-order-id",
+                    method = "카드",
+                    approvedAt = fixedInstant,
+                    totalAmount = BigDecimal(200_000)
+                )
+
+                application.processPendingMessages(workerId = "worker-1")
+
+                verify { paymentRepository.save(match { it.status == PaymentStatus.FAILED }) }
+                verify { reservationIntentRepository.save(match { it.status == ReservationIntentStatus.PAYMENT_FAILED }) }
+                verify(exactly = 1) { inventoryHoldService.release("intent-1") }
+                verify(exactly = 0) { inventoryHoldService.consume(any()) }
+                verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.SKIPPED }) }
+            }
+        }
+
+        `when`("ReservationIntent 기반 이미 처리된 결제 조회 결과가 DONE이 아니면") {
+            then("Payment와 intent를 실패 처리하고 hold를 해제한다") {
+                val message = confirmIntentMessage()
+                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                every { paymentRepository.findById("pay-intent-1") } returns confirmRequestedIntentPayment()
+                every { reservationIntentRepository.findById("intent-1") } returns reservationIntent()
+                every { paymentGateway.confirm(any(), any(), any(), any()) } throws
+                    PaymentGatewayException.AlreadyProcessed("toss_pk_123")
+                every { paymentGateway.inquire("toss_pk_123") } returns PaymentInquiryResult(
+                    paymentKey = "toss_pk_123",
+                    orderId = message.orderId,
+                    status = "ABORTED",
+                    totalAmount = BigDecimal(200_000)
+                )
+
+                application.processPendingMessages(workerId = "worker-1")
+
+                verify { paymentRepository.save(match { it.status == PaymentStatus.FAILED }) }
+                verify { reservationIntentRepository.save(match { it.status == ReservationIntentStatus.PAYMENT_FAILED }) }
+                verify(exactly = 1) { inventoryHoldService.release("intent-1") }
+                verify(exactly = 0) { inventoryHoldService.consume(any()) }
                 verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
             }
         }

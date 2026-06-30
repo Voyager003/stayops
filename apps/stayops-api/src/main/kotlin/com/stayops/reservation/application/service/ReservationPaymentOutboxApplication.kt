@@ -19,6 +19,7 @@ import com.stayops.payment.application.required.PaymentInquiryResult
 import com.stayops.reservation.domain.event.ReservationCreated
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationIntent
+import com.stayops.reservation.domain.model.ReservationIntentStatus
 import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationIntentRepository
 import com.stayops.reservation.domain.repository.ReservationRepository
@@ -152,6 +153,16 @@ class ReservationPaymentOutboxApplication(
         }
 
         if (payment.status == PaymentStatus.FAILED) {
+            log.warn(
+                "예약 intent 결제 승인 건너뜀: reservationIntentId={}, paymentId={}, outboxId={}, orderId={}, amount={}, paymentStatus={}, reason=already_failed",
+                reservationIntent.id,
+                payment.id,
+                message.id,
+                message.orderId,
+                message.amount.amount,
+                payment.status
+            )
+            releaseReservationIntentHold(reservationIntent)
             outboxRepository.save(message.skip("결제가 이미 실패 상태입니다", now))
             return
         }
@@ -169,14 +180,15 @@ class ReservationPaymentOutboxApplication(
         } catch (e: PaymentGatewayException.ProviderError) {
             recoverIntentByInquiry(message, payment, reservationIntent, e, failPaymentWhenNotDone = false)
         } catch (e: PaymentGatewayException.PaymentDeclined) {
-            paymentRepository.save(payment.fail(e.reason))
-            reservationIntentRepository.save(reservationIntent.failPayment(e.reason, clock.instant()))
+            logReservationIntentPaymentFailure(message, payment, reservationIntent, "PAYMENT_DECLINED", e.code, e.reason)
+            failReservationIntentPaymentAndReleaseHold(payment, reservationIntent, e.reason)
             outboxRepository.save(message.complete(clock.instant()))
         } catch (e: PaymentGatewayException.InvalidRequest) {
-            paymentRepository.save(payment.fail(e.reason))
-            reservationIntentRepository.save(reservationIntent.failPayment(e.reason, clock.instant()))
+            logReservationIntentPaymentFailure(message, payment, reservationIntent, "INVALID_REQUEST", e.code, e.reason)
+            failReservationIntentPaymentAndReleaseHold(payment, reservationIntent, e.reason)
             outboxRepository.save(message.skip("PG 요청이 유효하지 않습니다: ${e.reason}", clock.instant()))
         } catch (e: PaymentGatewayException.UnknownError) {
+            logReservationIntentPaymentFailure(message, payment, reservationIntent, "UNKNOWN_ERROR", e.code, e.reason)
             outboxRepository.save(message.fail(e.message ?: "알 수 없는 결제 오류", clock.instant()))
         }
     }
@@ -191,6 +203,17 @@ class ReservationPaymentOutboxApplication(
         val inquiry = try {
             paymentGateway.inquire(message.paymentKey)
         } catch (e: PaymentGatewayException) {
+            log.warn(
+                "예약 intent 결제 외부 상태 조회 실패: reservationIntentId={}, paymentId={}, outboxId={}, orderId={}, amount={}, paymentKeySuffix={}, cause={}, error={}",
+                reservationIntent.id,
+                payment.id,
+                message.id,
+                message.orderId,
+                message.amount.amount,
+                message.paymentKey.maskSuffix(),
+                cause.javaClass.simpleName,
+                e.message
+            )
             outboxRepository.save(message.fail(e.message ?: cause.message ?: "PG 상태 조회 실패", clock.instant()))
             return
         }
@@ -213,12 +236,35 @@ class ReservationPaymentOutboxApplication(
         }
 
         if (failPaymentWhenNotDone) {
-            paymentRepository.save(payment.fail("외부 결제 상태가 DONE이 아닙니다: ${inquiry.status}"))
-            reservationIntentRepository.save(reservationIntent.failPayment("외부 결제 상태가 DONE이 아닙니다: ${inquiry.status}", clock.instant()))
+            log.warn(
+                "예약 intent 결제 외부 상태 미완료로 실패 처리: reservationIntentId={}, paymentId={}, outboxId={}, orderId={}, amount={}, paymentKeySuffix={}, externalStatus={}",
+                reservationIntent.id,
+                payment.id,
+                message.id,
+                message.orderId,
+                message.amount.amount,
+                message.paymentKey.maskSuffix(),
+                inquiry.status
+            )
+            failReservationIntentPaymentAndReleaseHold(
+                payment,
+                reservationIntent,
+                "외부 결제 상태가 DONE이 아닙니다: ${inquiry.status}"
+            )
             outboxRepository.save(message.complete(clock.instant()))
             return
         }
 
+        log.warn(
+            "예약 intent 결제 외부 상태 미완료로 재시도: reservationIntentId={}, paymentId={}, outboxId={}, orderId={}, amount={}, paymentKeySuffix={}, externalStatus={}",
+            reservationIntent.id,
+            payment.id,
+            message.id,
+            message.orderId,
+            message.amount.amount,
+            message.paymentKey.maskSuffix(),
+            inquiry.status
+        )
         outboxRepository.save(message.fail("외부 결제 상태가 아직 DONE이 아닙니다: ${inquiry.status}", clock.instant()))
     }
 
@@ -230,8 +276,18 @@ class ReservationPaymentOutboxApplication(
         now: Instant
     ) {
         if (confirmResult.orderId != message.orderId || confirmResult.totalAmount.compareTo(message.amount.amount) != 0) {
-            paymentRepository.save(payment.fail("PG 승인 결과가 요청 값과 일치하지 않습니다"))
-            reservationIntentRepository.save(reservationIntent.failPayment("PG 승인 결과가 요청 값과 일치하지 않습니다", now))
+            log.warn(
+                "예약 intent 결제 승인 결과 불일치: reservationIntentId={}, paymentId={}, outboxId={}, expectedOrderId={}, actualOrderId={}, expectedAmount={}, actualAmount={}, paymentKeySuffix={}",
+                reservationIntent.id,
+                payment.id,
+                message.id,
+                message.orderId,
+                confirmResult.orderId,
+                message.amount.amount,
+                confirmResult.totalAmount,
+                message.paymentKey.maskSuffix()
+            )
+            failReservationIntentPaymentAndReleaseHold(payment, reservationIntent, "PG 승인 결과가 요청 값과 일치하지 않습니다")
             outboxRepository.save(message.skip("PG 승인 결과 불일치", now))
             return
         }
@@ -286,6 +342,55 @@ class ReservationPaymentOutboxApplication(
         )
         outboxRepository.save(message.complete(clock.instant()))
     }
+
+    private fun failReservationIntentPaymentAndReleaseHold(
+        payment: Payment,
+        reservationIntent: ReservationIntent,
+        reason: String
+    ) {
+        log.info(
+            "예약 intent 결제 실패 보상 처리: reservationIntentId={}, paymentId={}, holdId={}, reason={}",
+            reservationIntent.id,
+            payment.id,
+            reservationIntent.holdId,
+            reason
+        )
+        releaseReservationIntentHold(reservationIntent)
+        paymentRepository.save(payment.fail(reason))
+        reservationIntentRepository.save(reservationIntent.failPayment(reason, clock.instant()))
+    }
+
+    private fun releaseReservationIntentHold(reservationIntent: ReservationIntent) {
+        if (reservationIntent.status == ReservationIntentStatus.RESERVED) {
+            return
+        }
+        inventoryHoldService.release(reservationIntent.id)
+    }
+
+    private fun logReservationIntentPaymentFailure(
+        message: PaymentOutboxMessage,
+        payment: Payment,
+        reservationIntent: ReservationIntent,
+        errorType: String,
+        errorCode: String,
+        reason: String
+    ) {
+        log.warn(
+            "예약 intent 결제 승인 실패: reservationIntentId={}, paymentId={}, outboxId={}, orderId={}, amount={}, paymentKeySuffix={}, errorType={}, errorCode={}, reason={}",
+            reservationIntent.id,
+            payment.id,
+            message.id,
+            message.orderId,
+            message.amount.amount,
+            message.paymentKey.maskSuffix(),
+            errorType,
+            errorCode,
+            reason
+        )
+    }
+
+    private fun String.maskSuffix(): String =
+        takeLast(8).ifBlank { "***" }
 
     private fun recoverByInquiry(
         message: PaymentOutboxMessage,
