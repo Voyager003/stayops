@@ -3,6 +3,7 @@ package com.stayops.reservation.application.service
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.inventory.application.provided.InventoryHoldService
+import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.rate.domain.model.RatePlanStatus
 import com.stayops.rate.domain.repository.RatePlanRepository
@@ -36,6 +37,7 @@ class CustomerReservationIntentCreationApplication(
     private val ratePlanRepository: RatePlanRepository,
     private val reservationRepository: ReservationRepository,
     private val reservationIntentRepository: ReservationIntentRepository,
+    private val inventoryRepository: RoomInventoryRepository,
     private val inventoryHoldService: InventoryHoldService,
     private val reservationPaymentService: ReservationPaymentService,
     private val rateResolverService: RateResolverService,
@@ -101,22 +103,12 @@ class CustomerReservationIntentCreationApplication(
             additionalCharges = Money.ZERO,
             commissionRate = channel.commissionRate
         )
+        validateStayAvailability(propertyId, roomTypeId, dateRange)
 
         val reservationIntentId = idGenerator.generate()
+        val holdId = idGenerator.generate()
+        val paymentId = idGenerator.generate()
         val expiresAt = now.plusSeconds(PAYMENT_WAITING_TTL_MINUTES * 60)
-        val hold = inventoryHoldService.hold(
-            reservationIntentId = reservationIntentId,
-            propertyId = propertyId,
-            roomTypeId = roomTypeId,
-            dateRange = dateRange,
-            quantity = 1,
-            expiresAt = expiresAt
-        )
-        val payment = reservationPaymentService.createPendingPaymentForReservationIntent(
-            reservationIntentId = reservationIntentId,
-            memberId = memberId,
-            amount = pricing.totalAmount
-        )
         val intent = reservationIntentRepository.save(
             ReservationIntent.create(
                 id = reservationIntentId,
@@ -128,11 +120,26 @@ class CustomerReservationIntentCreationApplication(
                 numberOfGuests = numberOfGuests,
                 channel = ReservationChannel(channelCode = DIRECT_CHANNEL_CODE, commissionRate = channel.commissionRate),
                 pricing = pricing,
-                paymentId = payment.id,
-                holdId = hold.id,
+                paymentId = paymentId,
+                holdId = holdId,
                 expiresAt = expiresAt,
                 now = now
             )
+        )
+        val hold = inventoryHoldService.hold(
+            holdId = holdId,
+            reservationIntentId = reservationIntentId,
+            propertyId = propertyId,
+            roomTypeId = roomTypeId,
+            dateRange = dateRange,
+            quantity = 1,
+            expiresAt = expiresAt
+        )
+        val payment = reservationPaymentService.createPendingPaymentForReservationIntent(
+            paymentId = paymentId,
+            reservationIntentId = reservationIntentId,
+            memberId = memberId,
+            amount = pricing.totalAmount
         )
 
         log.info(
@@ -142,6 +149,30 @@ class CustomerReservationIntentCreationApplication(
             hold.id
         )
         return CustomerReservationIntentResult(intent, payment)
+    }
+
+    private fun validateStayAvailability(
+        propertyId: String,
+        roomTypeId: String,
+        dateRange: DateRange
+    ) {
+        val inventoriesByDate = inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(
+            propertyId,
+            roomTypeId,
+            dateRange.checkIn,
+            dateRange.checkOut.minusDays(1)
+        ).associateBy { it.date }
+
+        val unavailableDate = dateRange.allDates().firstOrNull { date ->
+            (inventoriesByDate[date]?.availableCount ?: 0) <= 0
+        }
+
+        if (unavailableDate != null) {
+            throw BusinessException(
+                "ROOM_NOT_AVAILABLE",
+                "선택한 숙박 기간에 예약 가능한 객실이 없습니다: date=$unavailableDate"
+            )
+        }
     }
 }
 

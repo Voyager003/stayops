@@ -11,6 +11,7 @@ interface ReservationPaymentService {
     ): ReservationPaymentSnapshot
 
     fun createPendingPaymentForReservationIntent(
+        paymentId: String,
         reservationIntentId: String,
         memberId: String,
         amount: Money

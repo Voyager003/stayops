@@ -4,6 +4,8 @@ import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.inventory.application.provided.InventoryHoldService
 import com.stayops.inventory.application.provided.InventoryHoldSnapshot
+import com.stayops.inventory.domain.model.RoomInventory
+import com.stayops.inventory.domain.repository.RoomInventoryRepository
 import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo
 import com.stayops.property.domain.model.Property
@@ -24,6 +26,8 @@ import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
+import com.stayops.shared.exception.BusinessException
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.every
@@ -44,12 +48,13 @@ class CustomerReservationIntentCreationApplicationTest : BehaviorSpec({
     val ratePlanRepository = mockk<RatePlanRepository>()
     val reservationRepository = mockk<ReservationRepository>()
     val reservationIntentRepository = mockk<ReservationIntentRepository>()
+    val inventoryRepository = mockk<RoomInventoryRepository>()
     val inventoryHoldService = mockk<InventoryHoldService>()
     val reservationPaymentService = mockk<ReservationPaymentService>()
     val rateResolverService = RateResolverService()
     val fixedInstant = Instant.parse("2026-04-08T10:00:00Z")
     val clock = Clock.fixed(fixedInstant, ZoneId.of("Asia/Seoul"))
-    val generatedIds = ArrayDeque(listOf("intent-1"))
+    val generatedIds = ArrayDeque(listOf("intent-1", "hold-1", "pay-1"))
     val idGenerator = object : IdGenerator {
         override fun generate(): String = generatedIds.removeFirst()
     }
@@ -60,6 +65,7 @@ class CustomerReservationIntentCreationApplicationTest : BehaviorSpec({
         ratePlanRepository = ratePlanRepository,
         reservationRepository = reservationRepository,
         reservationIntentRepository = reservationIntentRepository,
+        inventoryRepository = inventoryRepository,
         inventoryHoldService = inventoryHoldService,
         reservationPaymentService = reservationPaymentService,
         rateResolverService = rateResolverService,
@@ -96,6 +102,21 @@ class CustomerReservationIntentCreationApplicationTest : BehaviorSpec({
 
     fun directChannel(): Channel = Channel.createDirect(id = "ch-1", propertyId = "prop-1")
 
+    fun inventory(date: LocalDate, availableCount: Int = 1): RoomInventory =
+        RoomInventory.reconstitute(
+            id = "inv-$date",
+            propertyId = "prop-1",
+            roomTypeId = "rt-1",
+            date = date,
+            totalCount = 1,
+            reservedCount = 1 - availableCount,
+            blockedCount = 0,
+            heldCount = 0,
+            version = 0L,
+            createdAt = fixedInstant,
+            updatedAt = fixedInstant
+        )
+
     fun pendingPayment(): ReservationPaymentSnapshot =
         ReservationPaymentSnapshot(
             id = "pay-1",
@@ -111,7 +132,7 @@ class CustomerReservationIntentCreationApplicationTest : BehaviorSpec({
 
     beforeTest {
         generatedIds.clear()
-        generatedIds += "intent-1"
+        generatedIds += listOf("intent-1", "hold-1", "pay-1")
     }
 
     given("예약 intent 생성 시") {
@@ -137,7 +158,19 @@ class CustomerReservationIntentCreationApplicationTest : BehaviorSpec({
                 )
             } returns emptyList()
             every {
+                inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(
+                    "prop-1",
+                    "rt-1",
+                    checkIn,
+                    checkOut.minusDays(1)
+                )
+            } returns listOf(
+                inventory(checkIn),
+                inventory(checkIn.plusDays(1))
+            )
+            every {
                 inventoryHoldService.hold(
+                    holdId = "hold-1",
                     reservationIntentId = "intent-1",
                     propertyId = "prop-1",
                     roomTypeId = "rt-1",
@@ -156,6 +189,7 @@ class CustomerReservationIntentCreationApplicationTest : BehaviorSpec({
             )
             every {
                 reservationPaymentService.createPendingPaymentForReservationIntent(
+                    paymentId = "pay-1",
                     reservationIntentId = "intent-1",
                     memberId = "member-1",
                     amount = Money.won(200_000)
@@ -183,7 +217,78 @@ class CustomerReservationIntentCreationApplicationTest : BehaviorSpec({
                 result.payment.reservationId shouldBe null
                 result.payment.reservationIntentId shouldBe "intent-1"
                 savedIntent.captured.pricing.totalAmount.amount shouldBe BigDecimal("200000")
+                verify { reservationIntentRepository.save(any()) }
+                verify {
+                    inventoryHoldService.hold(
+                        holdId = "hold-1",
+                        reservationIntentId = "intent-1",
+                        propertyId = "prop-1",
+                        roomTypeId = "rt-1",
+                        dateRange = DateRange.of(checkIn, checkOut),
+                        quantity = 1,
+                        expiresAt = expiresAt
+                    )
+                }
+                verify {
+                    reservationPaymentService.createPendingPaymentForReservationIntent(
+                        paymentId = "pay-1",
+                        reservationIntentId = "intent-1",
+                        memberId = "member-1",
+                        amount = Money.won(200_000)
+                    )
+                }
                 verify(exactly = 0) { reservationRepository.save(any()) }
+            }
+        }
+
+        `when`("선택한 숙박일 중 마감일이 있으면") {
+            every {
+                reservationRepository.existsActiveByMemberIdAndRoomTypeIdAndCheckInAndCheckOut(
+                    "member-1",
+                    "rt-1",
+                    checkIn,
+                    checkOut,
+                    fixedInstant
+                )
+            } returns false
+            every { propertyRepository.findById("prop-1") } returns activeProperty()
+            every { roomTypeRepository.findById("rt-1") } returns activeRoomType()
+            every { channelRepository.findByPropertyIdAndCode("prop-1", "DIRECT") } returns directChannel()
+            every {
+                ratePlanRepository.findByPropertyIdAndRoomTypeIdAndStatus(
+                    "prop-1",
+                    "rt-1",
+                    RatePlanStatus.ACTIVE
+                )
+            } returns emptyList()
+            every {
+                inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(
+                    "prop-1",
+                    "rt-1",
+                    checkIn,
+                    checkOut.minusDays(1)
+                )
+            } returns listOf(
+                inventory(checkIn),
+                inventory(checkIn.plusDays(1), availableCount = 0)
+            )
+
+            then("예약 intent를 만들기 전에 비즈니스 예외로 차단한다") {
+                val ex = shouldThrow<BusinessException> {
+                    sut.createReservationIntent(
+                        memberId = "member-1",
+                        propertyId = "prop-1",
+                        roomTypeId = "rt-1",
+                        checkIn = checkIn,
+                        checkOut = checkOut,
+                        numberOfGuests = 2,
+                        guestName = "김고객",
+                        guestPhone = "010-1111-2222",
+                        guestEmail = "kim@test.com"
+                    )
+                }
+
+                ex.code shouldBe "ROOM_NOT_AVAILABLE"
             }
         }
     }

@@ -4,7 +4,6 @@ import com.stayops.inventory.domain.model.InventoryHold
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.InventoryHoldRepository
 import com.stayops.shared.domain.DateRange
-import com.stayops.shared.domain.IdGenerator
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
@@ -23,13 +22,9 @@ class RoomInventoryHoldApplicationTest : BehaviorSpec({
     val inventoryHoldRepository = mockk<InventoryHoldRepository>()
     val fixedInstant = Instant.parse("2026-04-08T10:00:00Z")
     val clock = Clock.fixed(fixedInstant, ZoneOffset.UTC)
-    val idGenerator = object : IdGenerator {
-        override fun generate(): String = "hold-1"
-    }
     val sut = RoomInventoryHoldApplication(
         inventoryAccess = inventoryAccess,
         inventoryHoldRepository = inventoryHoldRepository,
-        idGenerator = idGenerator,
         clock = clock
     )
 
@@ -67,6 +62,7 @@ class RoomInventoryHoldApplicationTest : BehaviorSpec({
             every { inventoryHoldRepository.save(capture(savedHold)) } answers { firstArg() }
 
             val result = sut.hold(
+                holdId = "hold-1",
                 reservationIntentId = "intent-1",
                 propertyId = "prop-1",
                 roomTypeId = "rt-1",

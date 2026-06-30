@@ -9,6 +9,7 @@ import com.stayops.reservation.application.service.CustomerReservationApplicatio
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -58,5 +59,18 @@ class CustomerReservationIntentApi(
             amount = request.amount
         )
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(CustomerReservationIntentResponse.from(result))
+    }
+
+    @GetMapping("/{reservationIntentId}")
+    fun getReservationIntent(
+        @PathVariable reservationIntentId: String,
+        @AuthenticationPrincipal member: Member?
+    ): ResponseEntity<CustomerReservationIntentResponse> {
+        val customer = memberAccessApplication.requireCustomer(member)
+        val result = customerReservationApplication.getReservationIntentPaymentStatus(
+            memberId = customer.id,
+            reservationIntentId = reservationIntentId
+        )
+        return ResponseEntity.ok(CustomerReservationIntentResponse.from(result))
     }
 }

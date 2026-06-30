@@ -41,13 +41,14 @@ class ReservationPaymentApplication(
         ).toSnapshot()
 
     override fun createPendingPaymentForReservationIntent(
+        paymentId: String,
         reservationIntentId: String,
         memberId: String,
         amount: Money
     ): ReservationPaymentSnapshot =
         paymentRepository.save(
             Payment.createForReservationIntent(
-                id = idGenerator.generate(),
+                id = paymentId,
                 reservationIntentId = reservationIntentId,
                 memberId = memberId,
                 amount = amount

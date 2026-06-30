@@ -22,6 +22,23 @@ class CustomerReservationIntentPaymentApplication(
 
     private val log = LoggerFactory.getLogger(javaClass)
 
+    @Transactional(readOnly = true)
+    fun getPaymentStatus(
+        memberId: String,
+        reservationIntentId: String
+    ): CustomerReservationIntentResult {
+        val intent = reservationIntentRepository.findById(reservationIntentId)
+            ?: throw NotFoundException("RESERVATION_INTENT_NOT_FOUND", "예약 intent를 찾을 수 없습니다: $reservationIntentId")
+        if (intent.memberId != memberId) {
+            throw ForbiddenException("ACCESS_DENIED", "본인의 예약 intent만 조회할 수 있습니다")
+        }
+
+        val payment = reservationPaymentService.findByReservationIntentId(reservationIntentId)
+            ?: throw NotFoundException("PAYMENT_NOT_FOUND", "결제 정보를 찾을 수 없습니다: $reservationIntentId")
+
+        return CustomerReservationIntentResult(intent, payment)
+    }
+
     @Transactional
     fun confirmPayment(
         memberId: String,
@@ -40,6 +57,15 @@ class CustomerReservationIntentPaymentApplication(
             ?: throw NotFoundException("PAYMENT_NOT_FOUND", "결제 정보를 찾을 수 없습니다: $reservationIntentId")
 
         if (intent.status == ReservationIntentStatus.RESERVED || payment.status == ReservationPaymentStatus.APPROVED) {
+            return CustomerReservationIntentResult(intent, payment)
+        }
+        if (
+            intent.status == ReservationIntentStatus.PAYMENT_FAILED ||
+            intent.status == ReservationIntentStatus.EXPIRED ||
+            intent.status == ReservationIntentStatus.CANCELLED ||
+            payment.status == ReservationPaymentStatus.FAILED ||
+            payment.status == ReservationPaymentStatus.CANCELLED
+        ) {
             return CustomerReservationIntentResult(intent, payment)
         }
         if (clock.instant().isAfter(intent.expiresAt)) {

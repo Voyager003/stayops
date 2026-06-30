@@ -59,6 +59,15 @@ class CustomerReservationApplication(
             amount = amount
         )
 
+    fun getReservationIntentPaymentStatus(
+        memberId: String,
+        reservationIntentId: String
+    ): CustomerReservationIntentResult =
+        intentPaymentApplication.getPaymentStatus(
+            memberId = memberId,
+            reservationIntentId = reservationIntentId
+        )
+
     fun cancelReservation(memberId: String, reservationId: String): CustomerReservationResult =
         cancellationApplication.cancelReservation(memberId, reservationId)
 }

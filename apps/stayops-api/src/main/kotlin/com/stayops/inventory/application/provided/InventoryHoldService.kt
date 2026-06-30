@@ -6,6 +6,7 @@ import java.time.LocalDate
 
 interface InventoryHoldService {
     fun hold(
+        holdId: String,
         reservationIntentId: String,
         propertyId: String,
         roomTypeId: String,

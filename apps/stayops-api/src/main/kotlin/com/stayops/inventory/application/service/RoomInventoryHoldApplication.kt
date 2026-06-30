@@ -6,7 +6,6 @@ import com.stayops.inventory.domain.model.InventoryHold
 import com.stayops.inventory.domain.model.InventoryHoldStatus
 import com.stayops.inventory.domain.repository.InventoryHoldRepository
 import com.stayops.shared.domain.DateRange
-import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -18,7 +17,6 @@ import java.time.Instant
 class RoomInventoryHoldApplication(
     private val inventoryAccess: RoomInventoryAccessApplication,
     private val inventoryHoldRepository: InventoryHoldRepository,
-    private val idGenerator: IdGenerator,
     private val clock: Clock
 ) : InventoryHoldService {
 
@@ -26,6 +24,7 @@ class RoomInventoryHoldApplication(
 
     @Transactional
     override fun hold(
+        holdId: String,
         reservationIntentId: String,
         propertyId: String,
         roomTypeId: String,
@@ -45,7 +44,7 @@ class RoomInventoryHoldApplication(
 
         val hold = inventoryHoldRepository.save(
             InventoryHold.create(
-                id = idGenerator.generate(),
+                id = holdId,
                 reservationIntentId = reservationIntentId,
                 propertyId = propertyId,
                 roomTypeId = roomTypeId,

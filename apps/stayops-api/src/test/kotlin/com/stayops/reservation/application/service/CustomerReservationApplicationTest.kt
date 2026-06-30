@@ -176,6 +176,26 @@ class CustomerReservationApplicationTest : BehaviorSpec({
                 result.payment.paymentKey shouldBe "toss_pk_123"
             }
         }
+
+        `when`("고객이 예약 intent 결제 상태를 조회하면") {
+            clearAllMocks()
+            every {
+                intentPaymentApplication.getPaymentStatus(
+                    memberId = "member-1",
+                    reservationIntentId = "intent-1"
+                )
+            } returns intentResult()
+
+            val result = service.getReservationIntentPaymentStatus(
+                memberId = "member-1",
+                reservationIntentId = "intent-1"
+            )
+
+            then("intent 기준 결제 상태를 반환한다") {
+                result.intent.id shouldBe "intent-1"
+                result.payment.reservationIntentId shouldBe "intent-1"
+            }
+        }
     }
 
     given("내 예약 조회 시") {

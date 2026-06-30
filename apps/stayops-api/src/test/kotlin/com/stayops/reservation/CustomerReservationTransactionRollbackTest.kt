@@ -21,6 +21,7 @@ import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money
 import com.stayops.shared.domain.MutableClock
+import com.stayops.shared.exception.BusinessException
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
@@ -152,8 +153,8 @@ class CustomerReservationTransactionRollbackTest @Autowired constructor(
                     guestPhone = "010-9999-9999",
                     guestEmail = "rollback@test.com"
                 )
-            }.isInstanceOf(IllegalArgumentException::class.java)
-                .hasMessageContaining("가용 객실이 없습니다")
+            }.isInstanceOf(BusinessException::class.java)
+                .hasMessageContaining("선택한 숙박 기간에 예약 가능한 객실이 없습니다")
 
             // Then: night1 부분 hold는 롤백되고, night2 재고는 그대로 유지된다.
             val night1After = inventoryApplication.getAvailability(propertyId, roomTypeId, night1, night1)[0]

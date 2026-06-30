@@ -24,6 +24,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import java.math.BigDecimal
@@ -158,6 +159,29 @@ class CustomerReservationIntentApiTest {
                 jsonPath("$.intentStatus") { value("CONFIRM_REQUESTED") }
                 jsonPath("$.paymentStatus") { value("CONFIRM_REQUESTED") }
             }
+        }
+
+        @Test
+        fun `예약 intent 상태 조회 요청이면 현재 결제 상태를 반환한다`() {
+            mockCustomer()
+            val result = sampleCustomerReservationIntentResult()
+            every {
+                customerReservationApplication.getReservationIntentPaymentStatus("member-1", "intent-1")
+            } returns CustomerReservationIntentResult(
+                result.intent.requestPaymentConfirmation(Instant.parse("2026-04-01T00:01:00Z")),
+                result.payment.copy(
+                    status = ReservationPaymentStatus.CONFIRM_REQUESTED,
+                    paymentKey = "toss_pk_123"
+                )
+            )
+
+            mockMvc.get("/api/v1/customer/reservation-intents/intent-1")
+                .andExpect {
+                    status { isOk() }
+                    jsonPath("$.reservationIntentId") { value("intent-1") }
+                    jsonPath("$.intentStatus") { value("CONFIRM_REQUESTED") }
+                    jsonPath("$.paymentStatus") { value("CONFIRM_REQUESTED") }
+                }
         }
     }
 }
