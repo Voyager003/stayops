@@ -317,7 +317,7 @@ class ReservationPaymentOutboxApplication(
                 channel = reservationIntent.channel,
                 pricing = reservationIntent.pricing,
                 memberId = reservationIntent.memberId
-            ).confirm()
+            )
         )
 
         val approvedPayment = if (payment.status == PaymentStatus.APPROVED) {

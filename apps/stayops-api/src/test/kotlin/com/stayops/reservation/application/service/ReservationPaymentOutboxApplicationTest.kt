@@ -220,7 +220,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         }
 
         `when`("ReservationIntent 기반 결제의 PG 승인에 성공하면") {
-            then("hold를 소비하고 최종 Reservation을 생성한 뒤 intent를 RESERVED로 변경한다") {
+            then("hold를 소비하고 PENDING Reservation을 생성한 뒤 intent를 RESERVED로 변경한다") {
                 val message = confirmIntentMessage()
                 every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
                 every { paymentRepository.findById("pay-intent-1") } returns confirmRequestedIntentPayment()
@@ -249,7 +249,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
                 verify { guestRepository.save(match { it.propertyId == "prop-1" && it.phone == "010-1111-2222" }) }
                 verify {
                     reservationRepository.save(match {
-                        it.status == ReservationStatus.CONFIRMED &&
+                        it.status == ReservationStatus.PENDING &&
                             it.propertyId == "prop-1" &&
                             it.roomTypeId == "rt-1" &&
                             it.memberId == "member-1"

@@ -11,6 +11,7 @@ import com.stayops.inventory.application.service.RoomInventoryApplication
 import com.stayops.inventory.domain.model.InventoryHoldStatus
 import com.stayops.inventory.domain.repository.InventoryHoldRepository
 import com.stayops.reservation.application.required.ReservationPaymentStatus
+import com.stayops.reservation.application.service.ReservationApplication
 import com.stayops.reservation.application.service.ReservationPaymentOutboxApplication
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentRepository
@@ -51,6 +52,7 @@ import java.time.LocalDate
 @Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
 class CustomerReservationE2ETest @Autowired constructor(
     private val customerReservationApplication: CustomerReservationApplication,
+    private val reservationApplication: ReservationApplication,
     private val propertyRepository: PropertyRepository,
     private val roomTypeRepository: RoomTypeRepository,
     private val roomRepository: RoomRepository,
@@ -182,7 +184,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             val confirmedPayment = paymentRepository.findByReservationIntentId(intentResult.intent.id)!!
 
             assertThat(reservedIntent.status).isEqualTo(ReservationIntentStatus.RESERVED)
-            assertThat(paymentCompletedReservation.status).isEqualTo(ReservationStatus.CONFIRMED)
+            assertThat(paymentCompletedReservation.status).isEqualTo(ReservationStatus.PENDING)
             assertThat(confirmedPayment.status).isEqualTo(PaymentStatus.APPROVED)
             assertThat(confirmedPayment.paymentKey).isEqualTo("toss_pk_e2e")
             assertThat(confirmedPayment.reservationId).isEqualTo(reservationId)
@@ -193,10 +195,14 @@ class CustomerReservationE2ETest @Autowired constructor(
             val myReservations = customerReservationApplication.getMyReservations("customer-e2e")
             assertThat(myReservations.content).hasSize(1)
             assertThat(myReservations.content[0].reservation.id).isEqualTo(reservationId)
-            assertThat(myReservations.content[0].reservation.status).isEqualTo(ReservationStatus.CONFIRMED)
+            assertThat(myReservations.content[0].reservation.status).isEqualTo(ReservationStatus.PENDING)
             assertThat(myReservations.content[0].payment?.status).isEqualTo(ReservationPaymentStatus.APPROVED)
 
-            // 4. 예약 취소 + 환불
+            // 4. PMS 확정
+            val confirmedReservation = reservationApplication.confirmReservation("prop-e2e", reservationId)
+            assertThat(confirmedReservation.status).isEqualTo(ReservationStatus.CONFIRMED)
+
+            // 5. 예약 취소 + 환불
             every { paymentGateway.cancel("toss_pk_e2e", any(), any()) } returns PaymentCancelResult("toss_pk_e2e")
 
             val cancelRequested = customerReservationApplication.cancelReservation(

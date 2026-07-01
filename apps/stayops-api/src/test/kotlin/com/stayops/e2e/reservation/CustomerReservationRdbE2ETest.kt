@@ -44,9 +44,11 @@ import com.stayops.property.domain.model.Property
 import com.stayops.property.domain.model.PropertyType
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.reservation.application.service.CustomerReservationApplication
+import com.stayops.reservation.application.service.ReservationApplication
 import com.stayops.reservation.application.service.ReservationIntentExpirationApplication
 import com.stayops.reservation.application.service.ReservationPaymentOutboxApplication
 import com.stayops.reservation.domain.model.ReservationIntentStatus
+import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationIntentRepository
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.model.Room
@@ -81,6 +83,7 @@ import java.util.concurrent.TimeUnit
 @Import(RdbTestcontainersConfiguration::class, FixedTestClockConfig::class)
 class CustomerReservationRdbE2ETest @Autowired constructor(
     private val customerReservationApplication: CustomerReservationApplication,
+    private val reservationApplication: ReservationApplication,
     private val expirationApplication: ReservationIntentExpirationApplication,
     private val reservationPaymentOutboxApplication: ReservationPaymentOutboxApplication,
     private val propertyRepository: PropertyRepository,
@@ -110,6 +113,47 @@ class CustomerReservationRdbE2ETest @Autowired constructor(
         checkOut = checkIn.plusDays(1)
         clearRdb()
         createBookableProperty(totalRooms = 1)
+    }
+
+    @Nested
+    inner class `결제 완료 후 PMS 확정 대기` {
+
+        @Test
+        fun `PG 승인이 완료되어도 예약은 PENDING으로 남고 PMS 확정 후 CONFIRMED가 된다`() {
+            val intentResult = createIntent()
+            every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
+                paymentKey = "toss_pk_confirm_waiting",
+                orderId = intentResult.payment.orderId,
+                method = "카드",
+                approvedAt = Instant.now(clock),
+                totalAmount = intentResult.payment.amount.amount
+            )
+
+            customerReservationApplication.confirmReservationIntentPayment(
+                memberId = CUSTOMER_ID,
+                reservationIntentId = intentResult.intent.id,
+                paymentKey = "toss_pk_confirm_waiting",
+                orderId = intentResult.payment.orderId,
+                amount = intentResult.payment.amount.amount
+            )
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "rdb-e2e-worker")
+
+            val reservedIntent = reservationIntentRepository.findById(intentResult.intent.id)!!
+            val reservation = reservationRepository.findById(reservedIntent.reservationId!!)!!
+            val approvedPayment = paymentRepository.findByReservationIntentId(intentResult.intent.id)!!
+
+            assertThat(reservedIntent.status).isEqualTo(ReservationIntentStatus.RESERVED)
+            assertThat(reservation.status).isEqualTo(ReservationStatus.PENDING)
+            assertThat(approvedPayment.status).isEqualTo(PaymentStatus.APPROVED)
+            assertThat(approvedPayment.reservationId).isEqualTo(reservation.id)
+            assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+                .isEqualTo(InventoryHoldStatus.CONSUMED)
+            assertThat(availability().reservedCount).isEqualTo(1)
+
+            val confirmed = reservationApplication.confirmReservation(PROPERTY_ID, reservation.id)
+
+            assertThat(confirmed.status).isEqualTo(ReservationStatus.CONFIRMED)
+        }
     }
 
     @Nested
