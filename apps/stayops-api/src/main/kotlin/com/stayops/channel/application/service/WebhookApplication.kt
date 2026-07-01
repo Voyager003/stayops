@@ -109,7 +109,7 @@ class WebhookApplication(
         val guestName = payload["guestName"]?.toString()
             ?: throw BusinessException("INVALID_WEBHOOK", "guestName은 필수입니다")
 
-        // Resolve roomTypeId: use mapping if exists, otherwise roomTypeCode is the internal ID
+        // Mock OTA는 PMS roomTypeId를 그대로 보내고, 실제 OTA는 매핑된 외부 roomTypeCode를 보낼 수 있다.
         val roomTypeId = mapping?.findInternalId(roomTypeCode, MappingType.ROOM_TYPE) ?: roomTypeCode
 
         log.info(
