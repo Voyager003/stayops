@@ -1,4 +1,4 @@
-package com.stayops.reservation
+package com.stayops.e2e.reservation
 
 import com.stayops.TestcontainersConfiguration
 import com.stayops.member.domain.model.Member

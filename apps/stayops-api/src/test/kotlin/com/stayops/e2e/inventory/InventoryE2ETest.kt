@@ -1,4 +1,4 @@
-package com.stayops.inventory
+package com.stayops.e2e.inventory
 
 import com.stayops.TestcontainersConfiguration
 import com.stayops.inventory.application.service.RoomInventoryApplication

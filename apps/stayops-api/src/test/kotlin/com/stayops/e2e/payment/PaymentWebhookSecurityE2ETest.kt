@@ -1,4 +1,4 @@
-package com.stayops.payment
+package com.stayops.e2e.payment
 
 import com.ninjasquad.springmockk.MockkBean
 import com.stayops.TestcontainersConfiguration

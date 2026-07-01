@@ -1,4 +1,4 @@
-package com.stayops.channel
+package com.stayops.e2e.channel
 
 import com.stayops.TestcontainersConfiguration
 import com.stayops.channel.domain.model.Channel
