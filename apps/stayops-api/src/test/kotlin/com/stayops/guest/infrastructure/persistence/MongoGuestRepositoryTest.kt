@@ -1,6 +1,6 @@
-package com.stayops.guest.infrastructure.persistence
+package com.stayops.guest.infrastructure.persistence.mongo
 
-import com.stayops.guest.infrastructure.persistence.dao.GuestMongoDao
+import com.stayops.guest.infrastructure.persistence.mongo.dao.GuestMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.model.GuestTier

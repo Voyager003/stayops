@@ -1,4 +1,4 @@
-package com.stayops.reservation.infrastructure.persistence
+package com.stayops.reservation.infrastructure.persistence.mongo
 
 import com.stayops.TestcontainersConfiguration
 import com.stayops.reservation.domain.model.GuestInfo
@@ -7,7 +7,7 @@ import com.stayops.reservation.domain.model.ReservationIntent
 import com.stayops.reservation.domain.model.ReservationIntentStatus
 import com.stayops.reservation.domain.model.ReservationPricing
 import com.stayops.reservation.domain.repository.ReservationIntentRepository
-import com.stayops.reservation.infrastructure.persistence.dao.ReservationIntentMongoDao
+import com.stayops.reservation.infrastructure.persistence.mongo.dao.ReservationIntentMongoDao
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
 import org.assertj.core.api.Assertions.assertThat

@@ -3,8 +3,8 @@ package com.stayops.shared.security
 import com.stayops.TestcontainersConfiguration
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
-import com.stayops.member.infrastructure.persistence.MemberDocument
-import com.stayops.member.infrastructure.persistence.dao.MemberMongoDao
+import com.stayops.member.infrastructure.persistence.mongo.dao.MemberMongoDao
+import com.stayops.member.infrastructure.persistence.mongo.document.MemberDocument
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test

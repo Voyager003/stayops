@@ -1,6 +1,6 @@
-package com.stayops.inventory.infrastructure.persistence
+package com.stayops.inventory.infrastructure.persistence.mongo
 
-import com.stayops.inventory.infrastructure.persistence.dao.RoomInventoryMongoDao
+import com.stayops.inventory.infrastructure.persistence.mongo.dao.RoomInventoryMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.inventory.domain.model.RoomInventory
 import com.stayops.inventory.domain.repository.RoomInventoryRepository

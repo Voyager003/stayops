@@ -1,6 +1,7 @@
-package com.stayops.reservation.infrastructure.persistence
+package com.stayops.reservation.infrastructure.persistence.mongo
 
-import com.stayops.reservation.infrastructure.persistence.dao.ReservationMongoDao
+import com.stayops.reservation.infrastructure.persistence.mongo.dao.ReservationMongoDao
+import com.stayops.reservation.infrastructure.persistence.mongo.document.ReservationDocument
 import com.stayops.TestcontainersConfiguration
 import com.stayops.reservation.domain.model.*
 import com.stayops.reservation.domain.repository.ReservationRepository

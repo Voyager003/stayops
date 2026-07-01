@@ -36,7 +36,7 @@ class PersistenceNamingConventionTest {
                 .filter { it.fileName.toString().endsWith(".kt") }
                 .filter { Files.readString(it).contains("MongoRepository<") }
                 .filter { path ->
-                    !path.toString().contains("/infrastructure/persistence/dao/") ||
+                    !path.toString().contains("/infrastructure/persistence/mongo/dao/") ||
                         !path.fileName.toString().endsWith("Dao.kt")
                 }
                 .map { sourceRoot.relativize(it).toString() }
@@ -45,7 +45,7 @@ class PersistenceNamingConventionTest {
 
         assertTrue(
             actual = violations.isEmpty(),
-            message = "Spring Data contracts must be named *Dao and live in infrastructure/persistence/dao: $violations"
+            message = "Spring Data contracts must be named *Dao and live in infrastructure/persistence/mongo/dao: $violations"
         )
     }
 
@@ -61,7 +61,7 @@ class PersistenceNamingConventionTest {
                     val value = path.toString()
                     value.contains("/infrastructure/persistence/") ||
                         value.endsWith("/shared/config/MongoConfig.kt") ||
-                        value.endsWith("/shared/scheduler/MongoSchedulerLock.kt")
+                        value.endsWith("/shared/infrastructure/persistence/mongo/MongoSchedulerLock.kt")
                 }
                 .filter { path ->
                     val content = Files.readString(path)

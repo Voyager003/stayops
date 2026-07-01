@@ -4,9 +4,9 @@ import com.stayops.TestcontainersConfiguration
 import com.stayops.inventory.api.dto.InventoryUpdateAction
 import com.stayops.inventory.api.dto.UpdateInventoryRequest
 import com.stayops.inventory.application.service.RoomInventoryApplication
-import com.stayops.inventory.infrastructure.persistence.dao.RoomInventoryMongoDao
-import com.stayops.room.infrastructure.persistence.dao.RoomMongoDao
-import com.stayops.room.infrastructure.persistence.RoomDocument
+import com.stayops.inventory.infrastructure.persistence.mongo.dao.RoomInventoryMongoDao
+import com.stayops.room.infrastructure.persistence.mongo.dao.RoomMongoDao
+import com.stayops.room.infrastructure.persistence.mongo.document.RoomDocument
 import com.stayops.room.domain.model.RoomStatus
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole

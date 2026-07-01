@@ -3,8 +3,8 @@ package com.stayops.guest.api
 import com.stayops.TestcontainersConfiguration
 import com.stayops.guest.api.dto.UpdateGuestRequest
 import com.stayops.guest.domain.model.Guest
-import com.stayops.guest.infrastructure.persistence.GuestDocument
-import com.stayops.guest.infrastructure.persistence.dao.GuestMongoDao
+import com.stayops.guest.infrastructure.persistence.mongo.dao.GuestMongoDao
+import com.stayops.guest.infrastructure.persistence.mongo.document.GuestDocument
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
 import org.junit.jupiter.api.AfterEach

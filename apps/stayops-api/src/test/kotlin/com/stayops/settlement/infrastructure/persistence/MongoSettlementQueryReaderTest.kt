@@ -1,9 +1,9 @@
-package com.stayops.settlement.infrastructure.persistence
+package com.stayops.settlement.infrastructure.persistence.mongo
 
 import com.stayops.TestcontainersConfiguration
 import com.stayops.reservation.domain.model.ReservationStatus
-import com.stayops.reservation.infrastructure.persistence.ReservationDocument
-import com.stayops.reservation.infrastructure.persistence.dao.ReservationMongoDao
+import com.stayops.reservation.infrastructure.persistence.mongo.dao.ReservationMongoDao
+import com.stayops.reservation.infrastructure.persistence.mongo.document.ReservationDocument
 import com.stayops.settlement.application.required.SettlementQueryReader
 import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money

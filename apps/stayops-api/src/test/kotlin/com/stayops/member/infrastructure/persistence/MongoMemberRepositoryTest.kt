@@ -1,6 +1,6 @@
-package com.stayops.member.infrastructure.persistence
+package com.stayops.member.infrastructure.persistence.mongo
 
-import com.stayops.member.infrastructure.persistence.dao.MemberMongoDao
+import com.stayops.member.infrastructure.persistence.mongo.dao.MemberMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole

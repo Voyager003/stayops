@@ -1,10 +1,10 @@
-package com.stayops.inventory.infrastructure.persistence
+package com.stayops.inventory.infrastructure.persistence.mongo
 
 import com.stayops.TestcontainersConfiguration
 import com.stayops.inventory.domain.model.InventoryHold
 import com.stayops.inventory.domain.model.InventoryHoldStatus
 import com.stayops.inventory.domain.repository.InventoryHoldRepository
-import com.stayops.inventory.infrastructure.persistence.dao.InventoryHoldMongoDao
+import com.stayops.inventory.infrastructure.persistence.mongo.dao.InventoryHoldMongoDao
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested

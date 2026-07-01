@@ -4,7 +4,7 @@ import com.stayops.TestcontainersConfiguration
 import com.stayops.room.api.dto.CreateRoomRequest
 import com.stayops.room.api.dto.UpdateRoomStatusRequest
 import com.stayops.room.api.dto.RoomStatusAction
-import com.stayops.room.infrastructure.persistence.dao.RoomMongoDao
+import com.stayops.room.infrastructure.persistence.mongo.dao.RoomMongoDao
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
 import org.junit.jupiter.api.AfterEach

@@ -1,6 +1,6 @@
-package com.stayops.rate.infrastructure.persistence
+package com.stayops.rate.infrastructure.persistence.mongo
 
-import com.stayops.rate.infrastructure.persistence.dao.RatePlanMongoDao
+import com.stayops.rate.infrastructure.persistence.mongo.dao.RatePlanMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.rate.domain.model.DayOfWeekRate
 import com.stayops.rate.domain.model.RatePlan

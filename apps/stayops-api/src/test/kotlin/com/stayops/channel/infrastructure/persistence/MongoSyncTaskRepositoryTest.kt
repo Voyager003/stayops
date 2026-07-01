@@ -1,6 +1,6 @@
-package com.stayops.channel.infrastructure.persistence
+package com.stayops.channel.infrastructure.persistence.mongo
 
-import com.stayops.channel.infrastructure.persistence.dao.SyncTaskMongoDao
+import com.stayops.channel.infrastructure.persistence.mongo.dao.SyncTaskMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.channel.domain.model.SyncTask
 import com.stayops.channel.domain.model.SyncTaskStatus
