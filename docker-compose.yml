@@ -1,23 +1,4 @@
 services:
-  mongodb:
-    image: mongo:8
-    ports:
-      - "27017:27017"
-    command: ["--replSet", "rs0"]
-    volumes:
-      - mongodb_data:/data/db
-
-  mongo-init:
-    image: mongo:8
-    depends_on:
-      - mongodb
-    restart: "no"
-    entrypoint: >
-      mongosh --host mongodb --eval '
-        try { rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "localhost:27017" }] }); }
-        catch(e) { if (e.codeName !== "AlreadyInitialized") throw e; }
-      '
-
   redis:
     image: redis:7-alpine
     ports:
@@ -25,12 +6,12 @@ services:
     volumes:
       - redis_data:/data
 
-  mongo-ota:
+  mock-ota-mongo:
     image: mongo:8
     ports:
       - "27018:27017"
     volumes:
-      - mongo_ota_data:/data/db
+      - mock_ota_mongo_data:/data/db
 
   app:
     build:
@@ -39,14 +20,13 @@ services:
     ports:
       - "8080:8080"
     environment:
-      SPRING_PROFILES_ACTIVE: local
-      SPRING_MONGODB_URI: mongodb://mongodb:27017/stayops?replicaSet=rs0
       SPRING_DATA_REDIS_HOST: redis
       MOCK_OTA_ENDPOINT: http://mock-ota:8081
+      TOSS_SECRET_KEY: ${TOSS_SECRET_KEY:-}
+      TOSS_BASE_URL: ${TOSS_BASE_URL:-https://api.tosspayments.com/v1/payments}
     depends_on:
-      - mongodb
-      - mongo-init
       - redis
+      - mock-ota
     restart: unless-stopped
 
   mock-ota:
@@ -57,11 +37,11 @@ services:
       - "8081:8081"
     environment:
       MOCK_OTA_PMS_WEBHOOK_URL: ${MOCK_OTA_PMS_WEBHOOK_URL:-http://host.docker.internal:8080/api/v1/properties/{propertyId}/channels/webhook/{channelCode}}
-      SPRING_MONGODB_URI: mongodb://mongo-ota:27017/mock-ota
+      SPRING_MONGODB_URI: mongodb://mock-ota-mongo:27017/mock-ota
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
-      - mongo-ota
+      - mock-ota-mongo
     restart: unless-stopped
 
   loki:
@@ -93,8 +73,7 @@ services:
       - loki
 
 volumes:
-  mongodb_data:
   redis_data:
-  mongo_ota_data:
+  mock_ota_mongo_data:
   loki_data:
   grafana_data:

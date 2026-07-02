@@ -69,3 +69,11 @@ resource "aws_route53_record" "minimal_mongo" {
   ttl     = 60
   records = [aws_instance.minimal_mongo[0].private_ip]
 }
+
+resource "aws_route53_record" "postgres" {
+  zone_id = aws_route53_zone.private.zone_id
+  name    = "postgres.${var.private_zone_name}"
+  type    = "CNAME"
+  ttl     = 60
+  records = [aws_db_instance.postgres.address]
+}

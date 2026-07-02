@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration xmlns="http://www.jooq.org/xsd/jooq-codegen-3.20.0.xsd">
+    <generator>
+        <database>
+            <name>org.jooq.meta.extensions.ddl.DDLDatabase</name>
+            <properties>
+                <property>
+                    <key>scripts</key>
+                    <value>src/main/resources/db/migration/*.sql</value>
+                </property>
+                <property>
+                    <key>sort</key>
+                    <value>semantic</value>
+                </property>
+                <property>
+                    <key>defaultNameCase</key>
+                    <value>lower</value>
+                </property>
+            </properties>
+        </database>
+        <generate>
+            <daos>false</daos>
+            <pojos>false</pojos>
+            <records>true</records>
+            <fluentSetters>true</fluentSetters>
+            <implicitJoinPathsToMany>false</implicitJoinPathsToMany>
+        </generate>
+        <target>
+            <packageName>com.stayops.jooq.generated</packageName>
+            <directory>build/generated-src/jooq/main</directory>
+        </target>
+    </generator>
+</configuration>

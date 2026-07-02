@@ -36,4 +36,24 @@ class RateLimitRuleTest {
         assertThat(rule.matches("POST", "/api/v1/payments/toss/webhooks/toss")).isTrue()
         assertThat(rule.matches("GET", "/api/v1/payments/toss/webhooks/toss")).isFalse()
     }
+
+    @Test
+    fun should_match_customer_reservation_intent_payment_confirm_default_rule() {
+        val rule = RateLimitProperties.defaultRules()
+            .first { it.id == "customer-reservation-payment-confirm" }
+            .toRule()
+
+        assertThat(rule.matches("POST", "/api/v1/customer/reservation-intents/intent-1/confirm-payment")).isTrue()
+        assertThat(rule.matches("POST", "/api/v1/customer/reservations/rsv-1/confirm-payment")).isFalse()
+    }
+
+    @Test
+    fun should_match_customer_reservation_intent_create_default_rule() {
+        val rule = RateLimitProperties.defaultRules()
+            .first { it.id == "customer-reservation-intent-create" }
+            .toRule()
+
+        assertThat(rule.matches("POST", "/api/v1/customer/reservation-intents")).isTrue()
+        assertThat(rule.matches("POST", "/api/v1/customer/reservations")).isFalse()
+    }
 }

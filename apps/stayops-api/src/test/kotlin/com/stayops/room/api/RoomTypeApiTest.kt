@@ -3,7 +3,7 @@ package com.stayops.room.api
 import com.stayops.TestcontainersConfiguration
 import com.stayops.room.api.dto.CreateRoomTypeRequest
 import com.stayops.room.api.dto.UpdateRoomTypeRequest
-import com.stayops.room.infrastructure.persistence.dao.RoomTypeMongoDao
+import com.stayops.room.infrastructure.persistence.mongo.dao.RoomTypeMongoDao
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
 import org.junit.jupiter.api.AfterEach

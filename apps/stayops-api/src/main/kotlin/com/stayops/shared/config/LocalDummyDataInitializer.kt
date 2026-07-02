@@ -45,6 +45,7 @@ class LocalDummyDataInitializer(
 
         initMembers()
         initProperty()
+        grantOwnerAccess()
         initRoomTypes()
         initRooms()
         initInventory()
@@ -74,7 +75,7 @@ class LocalDummyDataInitializer(
             passwordHash = hash,
             name = "김사장",
             role = MemberRole.OWNER
-        ).grantAccess(PROPERTY_ID, PropertyRole.OWNER)
+        )
         memberRepository.save(owner)
 
         val customer = Member.create(
@@ -85,6 +86,11 @@ class LocalDummyDataInitializer(
             role = MemberRole.CUSTOMER
         )
         memberRepository.save(customer)
+    }
+
+    private fun grantOwnerAccess() {
+        val owner = memberRepository.findById(OWNER_ID) ?: return
+        memberRepository.save(owner.grantAccess(PROPERTY_ID, PropertyRole.OWNER))
     }
 
     private fun initProperty() {

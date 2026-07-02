@@ -38,6 +38,16 @@ resource "aws_security_group" "redis" {
   })
 }
 
+resource "aws_security_group" "postgres" {
+  name        = "${local.name_prefix}-postgres-sg"
+  description = "PostgreSQL RDS security group"
+  vpc_id      = aws_vpc.this.id
+
+  tags = merge(local.tags, {
+    Name = "${local.name_prefix}-postgres-sg"
+  })
+}
+
 resource "aws_security_group" "mock_ota" {
   name        = "${local.name_prefix}-mock-ota-sg"
   description = "Mock OTA security group"
@@ -112,6 +122,16 @@ resource "aws_vpc_security_group_egress_rule" "minimal_app_to_mongo" {
   to_port                      = 27017
 }
 
+resource "aws_vpc_security_group_egress_rule" "minimal_app_to_postgres" {
+  count = local.is_minimal ? 1 : 0
+
+  security_group_id            = aws_security_group.minimal_app[0].id
+  referenced_security_group_id = aws_security_group.postgres.id
+  from_port                    = 5432
+  ip_protocol                  = "tcp"
+  to_port                      = 5432
+}
+
 resource "aws_vpc_security_group_egress_rule" "minimal_app_to_https" {
   count = local.is_minimal ? 1 : 0
 
@@ -130,6 +150,16 @@ resource "aws_vpc_security_group_ingress_rule" "minimal_mongo_from_app" {
   from_port                    = 27017
   ip_protocol                  = "tcp"
   to_port                      = 27017
+}
+
+resource "aws_vpc_security_group_ingress_rule" "postgres_from_minimal_app" {
+  count = local.is_minimal ? 1 : 0
+
+  security_group_id            = aws_security_group.postgres.id
+  referenced_security_group_id = aws_security_group.minimal_app[0].id
+  from_port                    = 5432
+  ip_protocol                  = "tcp"
+  to_port                      = 5432
 }
 
 resource "aws_vpc_security_group_egress_rule" "minimal_mongo_to_https" {
@@ -208,6 +238,14 @@ resource "aws_vpc_security_group_egress_rule" "app_to_redis" {
   from_port                    = 6379
   ip_protocol                  = "tcp"
   to_port                      = 6379
+}
+
+resource "aws_vpc_security_group_egress_rule" "app_to_postgres" {
+  security_group_id            = aws_security_group.app.id
+  referenced_security_group_id = aws_security_group.postgres.id
+  from_port                    = 5432
+  ip_protocol                  = "tcp"
+  to_port                      = 5432
 }
 
 resource "aws_vpc_security_group_egress_rule" "app_to_mock_ota" {
@@ -296,6 +334,14 @@ resource "aws_vpc_security_group_ingress_rule" "redis_from_app" {
   from_port                    = 6379
   ip_protocol                  = "tcp"
   to_port                      = 6379
+}
+
+resource "aws_vpc_security_group_ingress_rule" "postgres_from_app" {
+  security_group_id            = aws_security_group.postgres.id
+  referenced_security_group_id = aws_security_group.app.id
+  from_port                    = 5432
+  ip_protocol                  = "tcp"
+  to_port                      = 5432
 }
 
 resource "aws_vpc_security_group_ingress_rule" "redis_exporter_from_observability" {

@@ -1,5 +1,8 @@
 package com.stayops.reservation.application.service
 
+import com.stayops.guest.domain.model.Guest
+import com.stayops.guest.domain.repository.GuestRepository
+import com.stayops.inventory.application.provided.InventoryHoldService
 import com.stayops.inventory.application.provided.InventoryReservationService
 import com.stayops.payment.domain.model.Payment
 import com.stayops.payment.domain.model.PaymentCancelReason
@@ -18,7 +21,10 @@ import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationChannel
 import com.stayops.reservation.domain.model.ReservationPricing
+import com.stayops.reservation.domain.model.ReservationIntent
+import com.stayops.reservation.domain.model.ReservationIntentStatus
 import com.stayops.reservation.domain.model.ReservationStatus
+import com.stayops.reservation.domain.repository.ReservationIntentRepository
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.IdGenerator
@@ -43,7 +49,10 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
     val outboxRepository = mockk<PaymentOutboxRepository>()
     val paymentRepository = mockk<PaymentRepository>()
     val reservationRepository = mockk<ReservationRepository>()
+    val reservationIntentRepository = mockk<ReservationIntentRepository>()
+    val guestRepository = mockk<GuestRepository>()
     val inventoryReservationService = mockk<InventoryReservationService>()
+    val inventoryHoldService = mockk<InventoryHoldService>()
     val paymentGateway = mockk<PaymentGateway>()
     val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
     val fixedInstant = Instant.parse("2026-04-13T10:00:00Z")
@@ -56,7 +65,10 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         outboxRepository = outboxRepository,
         paymentRepository = paymentRepository,
         reservationRepository = reservationRepository,
+        reservationIntentRepository = reservationIntentRepository,
+        guestRepository = guestRepository,
         inventoryReservationService = inventoryReservationService,
+        inventoryHoldService = inventoryHoldService,
         paymentGateway = paymentGateway,
         eventPublisher = eventPublisher,
         clock = clock,
@@ -79,6 +91,22 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         memberId = "member-1"
     )
 
+    fun reservationIntent() = ReservationIntent.create(
+        id = "intent-1",
+        memberId = "member-1",
+        propertyId = "prop-1",
+        roomTypeId = "rt-1",
+        guestInfo = GuestInfo("김고객", "010-1111-2222", "kim@test.com"),
+        dateRange = DateRange.of(checkIn, checkOut),
+        numberOfGuests = 2,
+        channel = ReservationChannel("DIRECT", commissionRate = BigDecimal.ZERO),
+        pricing = ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO),
+        paymentId = "pay-intent-1",
+        holdId = "hold-1",
+        expiresAt = fixedInstant.plusSeconds(900),
+        now = fixedInstant
+    ).requestPaymentConfirmation(fixedInstant)
+
     fun pendingPayment() = Payment.create(
         id = "pay-1",
         reservationId = "rsv-1",
@@ -87,6 +115,15 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
     )
 
     fun confirmRequestedPayment() = pendingPayment().requestConfirm("toss_pk_123")
+
+    fun pendingIntentPayment() = Payment.createForReservationIntent(
+        id = "pay-intent-1",
+        reservationIntentId = "intent-1",
+        memberId = "member-1",
+        amount = Money.won(200_000)
+    )
+
+    fun confirmRequestedIntentPayment() = pendingIntentPayment().requestConfirm("toss_pk_123")
 
     fun approvedPayment() = pendingPayment().approve(
         paymentKey = "toss_pk_123",
@@ -103,6 +140,17 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         memberId = "member-1",
         paymentKey = "toss_pk_123",
         orderId = pendingPayment().orderId,
+        amount = Money.won(200_000),
+        now = fixedInstant
+    )
+
+    fun confirmIntentMessage() = PaymentOutboxMessage.createConfirmForReservationIntent(
+        id = "outbox-intent-1",
+        paymentId = "pay-intent-1",
+        reservationIntentId = "intent-1",
+        memberId = "member-1",
+        paymentKey = "toss_pk_123",
+        orderId = pendingIntentPayment().orderId,
         amount = Money.won(200_000),
         now = fixedInstant
     )
@@ -124,9 +172,13 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         every { outboxRepository.save(any()) } answers { firstArg() }
         every { paymentRepository.save(any()) } answers { firstArg() }
         every { reservationRepository.save(any()) } answers { firstArg() }
+        every { reservationIntentRepository.save(any()) } answers { firstArg() }
+        every { guestRepository.save(any()) } answers { firstArg() }
         every { outboxRepository.findByPaymentIdAndType(any(), any()) } returns null
         every { inventoryReservationService.reserve(any(), any(), any()) } returns Unit
         every { inventoryReservationService.release(any(), any(), any()) } returns Unit
+        every { inventoryHoldService.consume(any()) } returns Unit
+        every { inventoryHoldService.release(any()) } returns Unit
     }
 
     given("결제 승인 Outbox 처리 시") {
@@ -163,6 +215,147 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
                             it.roomTypeId == "rt-1"
                     })
                 }
+                verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
+            }
+        }
+
+        `when`("ReservationIntent 기반 결제의 PG 승인에 성공하면") {
+            then("hold를 소비하고 PENDING Reservation을 생성한 뒤 intent를 RESERVED로 변경한다") {
+                val message = confirmIntentMessage()
+                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                every { paymentRepository.findById("pay-intent-1") } returns confirmRequestedIntentPayment()
+                every { reservationIntentRepository.findById("intent-1") } returns reservationIntent()
+                every { guestRepository.findByPropertyIdAndPhone("prop-1", "010-1111-2222") } returns null
+                every {
+                    paymentGateway.confirm(
+                        paymentKey = "toss_pk_123",
+                        orderId = message.orderId,
+                        amount = BigDecimal(200_000),
+                        idempotencyKey = message.idempotencyKey
+                    )
+                } returns PaymentConfirmResult(
+                    paymentKey = "toss_pk_123",
+                    orderId = message.orderId,
+                    method = "카드",
+                    approvedAt = fixedInstant,
+                    totalAmount = BigDecimal(200_000)
+                )
+
+                application.processPendingMessages(workerId = "worker-1")
+
+                verify { paymentRepository.save(match { it.status == PaymentStatus.APPROVED }) }
+                verify(exactly = 1) { inventoryHoldService.consume("intent-1") }
+                verify(exactly = 0) { inventoryReservationService.reserve(any(), any(), any()) }
+                verify { guestRepository.save(match { it.propertyId == "prop-1" && it.phone == "010-1111-2222" }) }
+                verify {
+                    reservationRepository.save(match {
+                        it.status == ReservationStatus.PENDING &&
+                            it.propertyId == "prop-1" &&
+                            it.roomTypeId == "rt-1" &&
+                            it.memberId == "member-1"
+                    })
+                }
+                verify {
+                    reservationIntentRepository.save(match {
+                        it.status == ReservationIntentStatus.RESERVED &&
+                            it.reservationId != null
+                    })
+                }
+                verify { eventPublisher.publishEvent(any<ReservationCreated>()) }
+                verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
+            }
+        }
+
+        `when`("ReservationIntent 기반 결제에서 PG가 결제를 최종 거절하면") {
+            then("Payment와 intent를 실패 처리하고 hold를 해제한다") {
+                val message = confirmIntentMessage()
+                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                every { paymentRepository.findById("pay-intent-1") } returns confirmRequestedIntentPayment()
+                every { reservationIntentRepository.findById("intent-1") } returns reservationIntent()
+                every { paymentGateway.confirm(any(), any(), any(), any()) } throws
+                    PaymentGatewayException.PaymentDeclined("CARD_DECLINED", "카드 승인이 거절되었습니다")
+
+                application.processPendingMessages(workerId = "worker-1")
+
+                verify { paymentRepository.save(match { it.status == PaymentStatus.FAILED }) }
+                verify { reservationIntentRepository.save(match { it.status == ReservationIntentStatus.PAYMENT_FAILED }) }
+                verify(exactly = 1) { inventoryHoldService.release("intent-1") }
+                verify(exactly = 0) { inventoryHoldService.consume(any()) }
+                verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
+            }
+        }
+
+        `when`("ReservationIntent 기반 결제에서 PG 승인 요청이 유효하지 않으면") {
+            then("Payment와 intent를 실패 처리하고 hold를 해제한다") {
+                val message = confirmIntentMessage()
+                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                every { paymentRepository.findById("pay-intent-1") } returns confirmRequestedIntentPayment()
+                every { reservationIntentRepository.findById("intent-1") } returns reservationIntent()
+                every { paymentGateway.confirm(any(), any(), any(), any()) } throws
+                    PaymentGatewayException.InvalidRequest("INVALID_REQUEST", "잘못된 결제 승인 요청입니다")
+
+                application.processPendingMessages(workerId = "worker-1")
+
+                verify { paymentRepository.save(match { it.status == PaymentStatus.FAILED }) }
+                verify { reservationIntentRepository.save(match { it.status == ReservationIntentStatus.PAYMENT_FAILED }) }
+                verify(exactly = 1) { inventoryHoldService.release("intent-1") }
+                verify(exactly = 0) { inventoryHoldService.consume(any()) }
+                verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.SKIPPED }) }
+            }
+        }
+
+        `when`("ReservationIntent 기반 결제에서 PG 승인 결과가 요청 값과 다르면") {
+            then("Payment와 intent를 실패 처리하고 hold를 해제한다") {
+                val message = confirmIntentMessage()
+                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                every { paymentRepository.findById("pay-intent-1") } returns confirmRequestedIntentPayment()
+                every { reservationIntentRepository.findById("intent-1") } returns reservationIntent()
+                every {
+                    paymentGateway.confirm(
+                        paymentKey = "toss_pk_123",
+                        orderId = message.orderId,
+                        amount = BigDecimal(200_000),
+                        idempotencyKey = message.idempotencyKey
+                    )
+                } returns PaymentConfirmResult(
+                    paymentKey = "toss_pk_123",
+                    orderId = "different-order-id",
+                    method = "카드",
+                    approvedAt = fixedInstant,
+                    totalAmount = BigDecimal(200_000)
+                )
+
+                application.processPendingMessages(workerId = "worker-1")
+
+                verify { paymentRepository.save(match { it.status == PaymentStatus.FAILED }) }
+                verify { reservationIntentRepository.save(match { it.status == ReservationIntentStatus.PAYMENT_FAILED }) }
+                verify(exactly = 1) { inventoryHoldService.release("intent-1") }
+                verify(exactly = 0) { inventoryHoldService.consume(any()) }
+                verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.SKIPPED }) }
+            }
+        }
+
+        `when`("ReservationIntent 기반 이미 처리된 결제 조회 결과가 DONE이 아니면") {
+            then("Payment와 intent를 실패 처리하고 hold를 해제한다") {
+                val message = confirmIntentMessage()
+                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                every { paymentRepository.findById("pay-intent-1") } returns confirmRequestedIntentPayment()
+                every { reservationIntentRepository.findById("intent-1") } returns reservationIntent()
+                every { paymentGateway.confirm(any(), any(), any(), any()) } throws
+                    PaymentGatewayException.AlreadyProcessed("toss_pk_123")
+                every { paymentGateway.inquire("toss_pk_123") } returns PaymentInquiryResult(
+                    paymentKey = "toss_pk_123",
+                    orderId = message.orderId,
+                    status = "ABORTED",
+                    totalAmount = BigDecimal(200_000)
+                )
+
+                application.processPendingMessages(workerId = "worker-1")
+
+                verify { paymentRepository.save(match { it.status == PaymentStatus.FAILED }) }
+                verify { reservationIntentRepository.save(match { it.status == ReservationIntentStatus.PAYMENT_FAILED }) }
+                verify(exactly = 1) { inventoryHoldService.release("intent-1") }
+                verify(exactly = 0) { inventoryHoldService.consume(any()) }
                 verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
             }
         }

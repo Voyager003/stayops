@@ -1,0 +1,390 @@
+package com.stayops.e2e.reservation
+
+import com.stayops.TestcontainersConfiguration
+import com.stayops.member.domain.model.Member
+import com.stayops.member.domain.model.MemberRole
+import com.stayops.member.domain.repository.MemberRepository
+import com.stayops.reservation.application.service.CustomerReservationApplication
+import com.stayops.channel.domain.model.Channel
+import com.stayops.channel.domain.repository.ChannelRepository
+import com.stayops.inventory.application.service.RoomInventoryApplication
+import com.stayops.inventory.domain.model.InventoryHoldStatus
+import com.stayops.inventory.domain.repository.InventoryHoldRepository
+import com.stayops.reservation.application.required.ReservationPaymentStatus
+import com.stayops.reservation.application.service.ReservationApplication
+import com.stayops.reservation.application.service.ReservationPaymentOutboxApplication
+import com.stayops.payment.domain.model.PaymentStatus
+import com.stayops.payment.domain.repository.PaymentRepository
+import com.stayops.payment.application.required.PaymentCancelResult
+import com.stayops.payment.application.required.PaymentConfirmResult
+import com.stayops.payment.application.required.PaymentGateway
+import com.stayops.property.domain.model.*
+import com.stayops.property.domain.repository.PropertyRepository
+import com.stayops.reservation.domain.model.ReservationIntentStatus
+import com.stayops.reservation.domain.model.ReservationStatus
+import com.stayops.reservation.domain.repository.ReservationIntentRepository
+import com.stayops.reservation.domain.repository.ReservationRepository
+import com.stayops.room.domain.model.Room
+import com.stayops.room.domain.model.RoomType
+import com.stayops.room.domain.repository.RoomRepository
+import com.stayops.room.domain.repository.RoomTypeRepository
+import com.stayops.shared.config.FixedTestClockConfig
+import com.stayops.shared.domain.Money
+import com.stayops.shared.domain.MutableClock
+import com.stayops.shared.exception.ConflictException
+import com.ninjasquad.springmockk.MockkBean
+import io.mockk.every
+import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
+import org.springframework.data.mongodb.core.MongoTemplate
+import java.math.BigDecimal
+import java.time.Clock
+import java.time.Instant
+import java.time.LocalDate
+
+@SpringBootTest
+@Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
+class CustomerReservationE2ETest @Autowired constructor(
+    private val customerReservationApplication: CustomerReservationApplication,
+    private val reservationApplication: ReservationApplication,
+    private val propertyRepository: PropertyRepository,
+    private val roomTypeRepository: RoomTypeRepository,
+    private val roomRepository: RoomRepository,
+    private val channelRepository: ChannelRepository,
+    private val inventoryApplication: RoomInventoryApplication,
+    private val memberRepository: MemberRepository,
+    private val reservationRepository: ReservationRepository,
+    private val reservationIntentRepository: ReservationIntentRepository,
+    private val inventoryHoldRepository: InventoryHoldRepository,
+    private val paymentRepository: PaymentRepository,
+    private val reservationPaymentOutboxApplication: ReservationPaymentOutboxApplication,
+    private val mongoTemplate: MongoTemplate,
+    private val clock: Clock,
+    @MockkBean private val paymentGateway: PaymentGateway
+) {
+
+    private lateinit var checkIn: LocalDate
+    private lateinit var checkOut: LocalDate
+
+    @BeforeEach
+    fun setUp() {
+        (clock as MutableClock).set(FixedTestClockConfig.DEFAULT_INSTANT)
+        checkIn = LocalDate.now(clock).plusDays(7)
+        checkOut = checkIn.plusDays(2)
+
+        // Clean all documents (preserve indexes)
+        mongoTemplate.collectionNames.forEach { name ->
+            mongoTemplate.getCollection(name).deleteMany(org.bson.Document())
+        }
+
+        // Setup test data
+        val property = propertyRepository.save(
+            Property.create(
+                id = "prop-e2e", ownerId = "owner-1", name = "E2E 호텔",
+                type = PropertyType.HOTEL,
+                address = Address.of("서울시 강남구", "서울", "서울", "06000", "KR"),
+                contactInfo = ContactInfo.of("02-1234-5678", "e2e@test.com"),
+                description = "E2E 테스트 호텔", timezone = "Asia/Seoul", currency = "KRW"
+            ).activate()
+        )
+
+        val roomType = roomTypeRepository.save(
+            RoomType.create(
+                id = "rt-e2e", propertyId = "prop-e2e", name = "스탠다드룸",
+                description = "기본 객실", maxOccupancy = 2,
+                basePrice = Money.won(100_000)
+            )
+        )
+
+        channelRepository.save(Channel.createDirect(id = "ch-e2e", propertyId = "prop-e2e"))
+
+        // Room 추가 → 재고 자동 생성
+        roomRepository.save(Room.create("room-e2e-1", "prop-e2e", "rt-e2e", "101", 1))
+        roomRepository.save(Room.create("room-e2e-2", "prop-e2e", "rt-e2e", "102", 1))
+        roomRepository.save(Room.create("room-e2e-3", "prop-e2e", "rt-e2e", "103", 1))
+        inventoryApplication.syncInventoryForRoomType("prop-e2e", "rt-e2e")
+
+        // 기본 마감 상태에서 예약 대상 날짜를 오픈
+        val processed = inventoryApplication.bulkBlock(
+            propertyId = "prop-e2e",
+            roomTypeId = "rt-e2e",
+            startDate = checkIn,
+            endDate = checkOut.minusDays(1),
+            daysOfWeek = null,
+            action = "UNBLOCK",
+            count = 3
+        )
+        assertThat(processed).isGreaterThan(0)
+
+        memberRepository.save(
+            Member.create(
+                id = "customer-e2e", email = "e2e@test.com",
+                passwordHash = "hashed", name = "E2E고객",
+                role = MemberRole.CUSTOMER
+            )
+        )
+    }
+
+    @Nested
+    inner class `전체_예매_플로우` {
+
+        @Test
+        fun `예약_intent_생성_결제_승인_예약_확정_취소_전체_흐름`() {
+            // 1. 예약 intent 생성
+            val intentResult = customerReservationApplication.createReservationIntent(
+                memberId = "customer-e2e",
+                propertyId = "prop-e2e",
+                roomTypeId = "rt-e2e",
+                checkIn = checkIn,
+                checkOut = checkOut,
+                numberOfGuests = 2,
+                guestName = "E2E고객",
+                guestPhone = "010-9999-9999",
+                guestEmail = "e2e@test.com"
+            )
+
+            assertThat(intentResult.intent.status).isEqualTo(ReservationIntentStatus.PAYMENT_WAITING)
+            assertThat(intentResult.payment.status).isEqualTo(ReservationPaymentStatus.PENDING)
+            assertThat(intentResult.payment.reservationId).isNull()
+            assertThat(intentResult.payment.reservationIntentId).isEqualTo(intentResult.intent.id)
+            assertThat(reservationRepository.findPageByMemberId("customer-e2e", 0, 20).content).isEmpty()
+            assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+                .isEqualTo(InventoryHoldStatus.HELD)
+
+            // 2. 결제 확인
+            every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
+                paymentKey = "toss_pk_e2e",
+                orderId = intentResult.payment.orderId,
+                method = "카드",
+                approvedAt = Instant.now(clock),
+                totalAmount = BigDecimal(200_000)
+            )
+
+            val requested = customerReservationApplication.confirmReservationIntentPayment(
+                memberId = "customer-e2e",
+                reservationIntentId = intentResult.intent.id,
+                paymentKey = "toss_pk_e2e",
+                orderId = intentResult.payment.orderId,
+                amount = BigDecimal(200_000)
+            )
+            assertThat(requested.intent.status).isEqualTo(ReservationIntentStatus.CONFIRM_REQUESTED)
+            assertThat(requested.payment.status).isEqualTo(ReservationPaymentStatus.CONFIRM_REQUESTED)
+
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
+
+            val reservedIntent = reservationIntentRepository.findById(intentResult.intent.id)!!
+            val reservationId = reservedIntent.reservationId!!
+            val paymentCompletedReservation = reservationRepository.findById(reservationId)!!
+            val confirmedPayment = paymentRepository.findByReservationIntentId(intentResult.intent.id)!!
+
+            assertThat(reservedIntent.status).isEqualTo(ReservationIntentStatus.RESERVED)
+            assertThat(paymentCompletedReservation.status).isEqualTo(ReservationStatus.PENDING)
+            assertThat(confirmedPayment.status).isEqualTo(PaymentStatus.APPROVED)
+            assertThat(confirmedPayment.paymentKey).isEqualTo("toss_pk_e2e")
+            assertThat(confirmedPayment.reservationId).isEqualTo(reservationId)
+            assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+                .isEqualTo(InventoryHoldStatus.CONSUMED)
+
+            // 3. 마이페이지 조회
+            val myReservations = customerReservationApplication.getMyReservations("customer-e2e")
+            assertThat(myReservations.content).hasSize(1)
+            assertThat(myReservations.content[0].reservation.id).isEqualTo(reservationId)
+            assertThat(myReservations.content[0].reservation.status).isEqualTo(ReservationStatus.PENDING)
+            assertThat(myReservations.content[0].payment?.status).isEqualTo(ReservationPaymentStatus.APPROVED)
+
+            // 4. PMS 확정
+            val confirmedReservation = reservationApplication.confirmReservation("prop-e2e", reservationId)
+            assertThat(confirmedReservation.status).isEqualTo(ReservationStatus.CONFIRMED)
+
+            // 5. 예약 취소 + 환불
+            every { paymentGateway.cancel("toss_pk_e2e", any(), any()) } returns PaymentCancelResult("toss_pk_e2e")
+
+            val cancelRequested = customerReservationApplication.cancelReservation(
+                memberId = "customer-e2e",
+                reservationId = reservationId
+            )
+
+            assertThat(cancelRequested.reservation.status).isEqualTo(ReservationStatus.CANCELLED)
+            assertThat(cancelRequested.payment.status).isEqualTo(ReservationPaymentStatus.CANCEL_REQUESTED)
+
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
+
+            val cancelledPayment = paymentRepository.findByReservationId(reservationId)!!
+            assertThat(cancelledPayment.status).isEqualTo(PaymentStatus.CANCELLED)
+        }
+    }
+
+    @Nested
+    inner class `중복_예약_방지` {
+
+        @Test
+        fun `확정된_예약과_동일_조건으로_예약_intent를_생성하면_ConflictException_발생`() {
+            val intentResult = customerReservationApplication.createReservationIntent(
+                memberId = "customer-e2e",
+                propertyId = "prop-e2e",
+                roomTypeId = "rt-e2e",
+                checkIn = checkIn,
+                checkOut = checkOut,
+                numberOfGuests = 2,
+                guestName = "E2E고객",
+                guestPhone = "010-9999-9999",
+                guestEmail = "e2e@test.com"
+            )
+            every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
+                paymentKey = "toss_pk_duplicate",
+                orderId = intentResult.payment.orderId,
+                method = "카드",
+                approvedAt = Instant.now(clock),
+                totalAmount = BigDecimal(200_000)
+            )
+            customerReservationApplication.confirmReservationIntentPayment(
+                memberId = "customer-e2e",
+                reservationIntentId = intentResult.intent.id,
+                paymentKey = "toss_pk_duplicate",
+                orderId = intentResult.payment.orderId,
+                amount = BigDecimal(200_000)
+            )
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
+
+            assertThatThrownBy {
+                customerReservationApplication.createReservationIntent(
+                    memberId = "customer-e2e",
+                    propertyId = "prop-e2e",
+                    roomTypeId = "rt-e2e",
+                    checkIn = checkIn,
+                    checkOut = checkOut,
+                    numberOfGuests = 2,
+                    guestName = "E2E고객",
+                    guestPhone = "010-9999-9999",
+                    guestEmail = "e2e@test.com"
+                )
+            }.isInstanceOf(ConflictException::class.java)
+                .hasMessageContaining("이미 동일 조건의 예약이 존재합니다")
+        }
+    }
+
+    @Nested
+    inner class `결제_확인_멱등성` {
+
+        @Test
+        fun `결제가_이미_완료된_예약_intent에_confirmPayment를_다시_호출하면_기존_결과_반환`() {
+            val intentResult = customerReservationApplication.createReservationIntent(
+                memberId = "customer-e2e",
+                propertyId = "prop-e2e",
+                roomTypeId = "rt-e2e",
+                checkIn = checkIn,
+                checkOut = checkOut,
+                numberOfGuests = 2,
+                guestName = "E2E고객",
+                guestPhone = "010-7777-7777",
+                guestEmail = null
+            )
+
+            // 2. 첫 번째 결제 확인
+            every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
+                paymentKey = "toss_pk_idempotent",
+                orderId = intentResult.payment.orderId,
+                method = "카드",
+                approvedAt = Instant.now(clock),
+                totalAmount = BigDecimal(200_000)
+            )
+
+            val firstResult = customerReservationApplication.confirmReservationIntentPayment(
+                memberId = "customer-e2e",
+                reservationIntentId = intentResult.intent.id,
+                paymentKey = "toss_pk_idempotent",
+                orderId = intentResult.payment.orderId,
+                amount = BigDecimal(200_000)
+            )
+
+            assertThat(firstResult.intent.status).isEqualTo(ReservationIntentStatus.CONFIRM_REQUESTED)
+            assertThat(firstResult.payment.status).isEqualTo(ReservationPaymentStatus.CONFIRM_REQUESTED)
+
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
+
+            // 3. 두 번째 결제 확인 — Toss 호출 없이 기존 결과 반환
+            val secondResult = customerReservationApplication.confirmReservationIntentPayment(
+                memberId = "customer-e2e",
+                reservationIntentId = intentResult.intent.id,
+                paymentKey = "toss_pk_idempotent",
+                orderId = intentResult.payment.orderId,
+                amount = BigDecimal(200_000)
+            )
+
+            assertThat(secondResult.intent.status).isEqualTo(ReservationIntentStatus.RESERVED)
+            assertThat(secondResult.payment.status).isEqualTo(ReservationPaymentStatus.APPROVED)
+        }
+    }
+
+    @Nested
+    inner class `재고_정합성` {
+
+        @Test
+        fun `예약_intent_생성_시_hold로_재고를_점유하고_결제_승인_worker_처리_후_예약_재고로_전환된다`() {
+            // 예약 전 재고 확인
+            val beforeInventory = inventoryApplication.getAvailability(
+                "prop-e2e", "rt-e2e", checkIn, checkIn.plusDays(1)
+            )
+            val initialAvailable = beforeInventory[0].availableCount
+
+            // 예약 intent 생성 (hold 재고 점유)
+            val intentResult = customerReservationApplication.createReservationIntent(
+                memberId = "customer-e2e",
+                propertyId = "prop-e2e",
+                roomTypeId = "rt-e2e",
+                checkIn = checkIn,
+                checkOut = checkOut,
+                numberOfGuests = 2,
+                guestName = "E2E고객",
+                guestPhone = "010-8888-8888",
+                guestEmail = null
+            )
+
+            val afterIntent = inventoryApplication.getAvailability(
+                "prop-e2e", "rt-e2e", checkIn, checkIn.plusDays(1)
+            )
+            assertThat(afterIntent[0].availableCount).isEqualTo(initialAvailable - 1)
+            assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+                .isEqualTo(InventoryHoldStatus.HELD)
+
+            // 결제 확인
+            every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
+                paymentKey = "toss_pk_inv", orderId = intentResult.payment.orderId,
+                method = "카드", approvedAt = Instant.now(clock),
+                totalAmount = BigDecimal(200_000)
+            )
+            customerReservationApplication.confirmReservationIntentPayment(
+                memberId = "customer-e2e",
+                reservationIntentId = intentResult.intent.id,
+                paymentKey = "toss_pk_inv",
+                orderId = intentResult.payment.orderId,
+                amount = BigDecimal(200_000)
+            )
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
+
+            val afterConfirm = inventoryApplication.getAvailability(
+                "prop-e2e", "rt-e2e", checkIn, checkIn.plusDays(1)
+            )
+            assertThat(afterConfirm[0].availableCount).isEqualTo(initialAvailable - 1)
+            assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+                .isEqualTo(InventoryHoldStatus.CONSUMED)
+            val reservationId = reservationIntentRepository.findById(intentResult.intent.id)!!.reservationId!!
+
+            // 취소 (재고 복원)
+            every { paymentGateway.cancel("toss_pk_inv", any(), any()) } returns PaymentCancelResult("toss_pk_inv")
+            customerReservationApplication.cancelReservation("customer-e2e", reservationId)
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "e2e-worker")
+
+            val afterCancel = inventoryApplication.getAvailability(
+                "prop-e2e", "rt-e2e", checkIn, checkIn.plusDays(1)
+            )
+            assertThat(afterCancel[0].availableCount).isEqualTo(initialAvailable)
+        }
+    }
+}

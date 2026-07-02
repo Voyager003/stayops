@@ -76,6 +76,31 @@ class ReservationPaymentApplicationTest : BehaviorSpec({
             }
         }
 
+        `when`("예약 intent에 대한 PENDING 결제를 생성하면") {
+            then("reservationId 없이 intent 기준 Payment를 생성한다") {
+                val result = adapter.createPendingPaymentForReservationIntent(
+                    paymentId = "pay-1",
+                    reservationIntentId = "intent-1",
+                    memberId = "member-1",
+                    amount = Money.won(200_000)
+                )
+
+                result.reservationId shouldBe null
+                result.reservationIntentId shouldBe "intent-1"
+                result.status shouldBe ReservationPaymentStatus.PENDING
+                verify {
+                    paymentRepository.save(match {
+                        it.id == "pay-1" &&
+                            it.reservationId == null &&
+                            it.reservationIntentId == "intent-1" &&
+                            it.memberId == "member-1" &&
+                            it.amount == Money.won(200_000) &&
+                            it.status == PaymentStatus.PENDING
+                    })
+                }
+            }
+        }
+
         `when`("외부 채널에서 이미 승인된 결제를 생성하면") {
             then("PG Outbox 없이 APPROVED Payment를 저장한다") {
                 val result = adapter.createApprovedExternalPayment(

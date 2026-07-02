@@ -40,6 +40,21 @@ class ReservationPaymentApplication(
             )
         ).toSnapshot()
 
+    override fun createPendingPaymentForReservationIntent(
+        paymentId: String,
+        reservationIntentId: String,
+        memberId: String,
+        amount: Money
+    ): ReservationPaymentSnapshot =
+        paymentRepository.save(
+            Payment.createForReservationIntent(
+                id = paymentId,
+                reservationIntentId = reservationIntentId,
+                memberId = memberId,
+                amount = amount
+            )
+        ).toSnapshot()
+
     override fun createApprovedExternalPayment(
         reservationId: String,
         memberId: String,
@@ -62,6 +77,9 @@ class ReservationPaymentApplication(
 
     override fun findByReservationId(reservationId: String): ReservationPaymentSnapshot? =
         paymentRepository.findByReservationId(reservationId)?.toSnapshot()
+
+    override fun findByReservationIntentId(reservationIntentId: String): ReservationPaymentSnapshot? =
+        paymentRepository.findByReservationIntentId(reservationIntentId)?.toSnapshot()
 
     override fun findByReservationIds(reservationIds: List<String>): List<ReservationPaymentSnapshot> =
         paymentRepository.findByReservationIds(reservationIds).map { it.toSnapshot() }
@@ -97,6 +115,46 @@ class ReservationPaymentApplication(
                     id = idGenerator.generate(),
                     paymentId = savedPayment.id,
                     reservationId = reservationId,
+                    memberId = memberId,
+                    paymentKey = paymentKey,
+                    orderId = savedPayment.orderId,
+                    amount = savedPayment.amount,
+                    now = clock.instant()
+                )
+            )
+        }
+
+        return savedPayment.toSnapshot()
+    }
+
+    override fun requestConfirmForReservationIntent(
+        reservationIntentId: String,
+        memberId: String,
+        paymentKey: String,
+        orderId: String,
+        amount: BigDecimal
+    ): ReservationPaymentSnapshot {
+        val payment = findPaymentByReservationIntentId(reservationIntentId)
+        validatePaymentOwner(payment, memberId)
+        validateConfirmRequest(payment, orderId, amount)
+
+        val requestedPayment = payment.requestConfirm(paymentKey)
+        val savedPayment = if (requestedPayment === payment) {
+            payment
+        } else {
+            paymentRepository.save(requestedPayment)
+        }
+
+        val existingOutbox = paymentOutboxRepository.findByPaymentIdAndType(
+            savedPayment.id,
+            PaymentOutboxType.CONFIRM_PAYMENT
+        )
+        if (existingOutbox == null) {
+            paymentOutboxRepository.save(
+                PaymentOutboxMessage.createConfirmForReservationIntent(
+                    id = idGenerator.generate(),
+                    paymentId = savedPayment.id,
+                    reservationIntentId = reservationIntentId,
                     memberId = memberId,
                     paymentKey = paymentKey,
                     orderId = savedPayment.orderId,
@@ -155,6 +213,10 @@ class ReservationPaymentApplication(
         paymentRepository.findByReservationId(reservationId)
             ?: throw NotFoundException("PAYMENT_NOT_FOUND", "결제 정보를 찾을 수 없습니다: $reservationId")
 
+    private fun findPaymentByReservationIntentId(reservationIntentId: String): Payment =
+        paymentRepository.findByReservationIntentId(reservationIntentId)
+            ?: throw NotFoundException("PAYMENT_NOT_FOUND", "결제 정보를 찾을 수 없습니다: $reservationIntentId")
+
     private fun validatePaymentOwner(payment: Payment, memberId: String) {
         if (payment.memberId != memberId) {
             throw BusinessException("PAYMENT_OWNER_MISMATCH", "예약자와 결제 소유자가 일치하지 않습니다")
@@ -185,6 +247,7 @@ class ReservationPaymentApplication(
         ReservationPaymentSnapshot(
             id = id,
             reservationId = reservationId,
+            reservationIntentId = reservationIntentId,
             memberId = memberId,
             orderId = orderId,
             amount = amount,

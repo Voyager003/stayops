@@ -3,12 +3,12 @@ package com.stayops.property.api
 import com.stayops.TestcontainersConfiguration
 import com.stayops.property.api.dto.CreatePropertyRequest
 import com.stayops.property.api.dto.UpdatePropertyRequest
-import com.stayops.property.infrastructure.persistence.dao.PropertyMongoDao
-import com.stayops.channel.infrastructure.persistence.dao.ChannelMongoDao
+import com.stayops.property.infrastructure.persistence.mongo.dao.PropertyMongoDao
+import com.stayops.channel.infrastructure.persistence.mongo.dao.ChannelMongoDao
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
-import com.stayops.member.infrastructure.persistence.MemberDocument
-import com.stayops.member.infrastructure.persistence.dao.MemberMongoDao
+import com.stayops.member.infrastructure.persistence.mongo.dao.MemberMongoDao
+import com.stayops.member.infrastructure.persistence.mongo.document.MemberDocument
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested

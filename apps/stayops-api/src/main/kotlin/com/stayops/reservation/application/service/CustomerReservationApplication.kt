@@ -9,13 +9,13 @@ import java.time.LocalDate
 
 @Service
 class CustomerReservationApplication(
-    private val creationApplication: CustomerReservationCreationApplication,
+    private val intentCreationApplication: CustomerReservationIntentCreationApplication,
+    private val intentPaymentApplication: CustomerReservationIntentPaymentApplication,
     private val queryApplication: CustomerReservationQueryApplication,
-    private val paymentApplication: CustomerReservationPaymentApplication,
     private val cancellationApplication: CustomerReservationCancellationApplication
 ) {
 
-    fun createReservation(
+    fun createReservationIntent(
         memberId: String,
         propertyId: String,
         roomTypeId: String,
@@ -25,8 +25,8 @@ class CustomerReservationApplication(
         guestName: String,
         guestPhone: String,
         guestEmail: String?
-    ): CustomerReservationResult =
-        creationApplication.createReservation(
+    ): CustomerReservationIntentResult =
+        intentCreationApplication.createReservationIntent(
             memberId = memberId,
             propertyId = propertyId,
             roomTypeId = roomTypeId,
@@ -44,19 +44,28 @@ class CustomerReservationApplication(
     fun getMyReservation(memberId: String, reservationId: String): CustomerReservationReadResult =
         queryApplication.getMyReservation(memberId, reservationId)
 
-    fun confirmPayment(
+    fun confirmReservationIntentPayment(
         memberId: String,
-        reservationId: String,
+        reservationIntentId: String,
         paymentKey: String,
         orderId: String,
         amount: BigDecimal
-    ): CustomerReservationResult =
-        paymentApplication.confirmPayment(
+    ): CustomerReservationIntentResult =
+        intentPaymentApplication.confirmPayment(
             memberId = memberId,
-            reservationId = reservationId,
+            reservationIntentId = reservationIntentId,
             paymentKey = paymentKey,
             orderId = orderId,
             amount = amount
+        )
+
+    fun getReservationIntentPaymentStatus(
+        memberId: String,
+        reservationIntentId: String
+    ): CustomerReservationIntentResult =
+        intentPaymentApplication.getPaymentStatus(
+            memberId = memberId,
+            reservationIntentId = reservationIntentId
         )
 
     fun cancelReservation(memberId: String, reservationId: String): CustomerReservationResult =

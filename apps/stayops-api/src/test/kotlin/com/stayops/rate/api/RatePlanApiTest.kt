@@ -4,7 +4,7 @@ import com.stayops.TestcontainersConfiguration
 import com.stayops.rate.api.dto.CreateRatePlanRequest
 import com.stayops.rate.api.dto.DayOfWeekRuleRequest
 import com.stayops.rate.domain.model.RatePlanType
-import com.stayops.rate.infrastructure.persistence.dao.RatePlanMongoDao
+import com.stayops.rate.infrastructure.persistence.mongo.dao.RatePlanMongoDao
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
 import org.junit.jupiter.api.AfterEach

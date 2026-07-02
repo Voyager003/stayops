@@ -42,7 +42,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Start MongoDB and Redis
-        run: docker compose up -d mongodb mongo-init redis && sleep 5
+        run: docker compose -f docker-compose.yml -f docker-compose.mongo.yml up -d mongodb mongo-init redis && sleep 5
 
       - name: Download dependencies
         run: ./gradlew :apps:stayops-api:dependencies :apps:mock-ota:dependencies --no-daemon

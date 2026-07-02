@@ -1,6 +1,6 @@
-package com.stayops.room.infrastructure.persistence
+package com.stayops.room.infrastructure.persistence.mongo
 
-import com.stayops.room.infrastructure.persistence.dao.RoomTypeMongoDao
+import com.stayops.room.infrastructure.persistence.mongo.dao.RoomTypeMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomTypeRepository

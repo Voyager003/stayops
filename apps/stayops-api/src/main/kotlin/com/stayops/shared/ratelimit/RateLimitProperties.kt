@@ -16,11 +16,18 @@ data class RateLimitProperties(
             RateLimitRuleProperties("auth-signup", "POST", "/api/v1/auth/signup", 5, 600, RateLimitIdentityType.IP),
             RateLimitRuleProperties("customer-auth-login", "POST", "/api/v1/customer/auth/login", 10, 60, RateLimitIdentityType.IP),
             RateLimitRuleProperties("customer-auth-signup", "POST", "/api/v1/customer/auth/signup", 5, 600, RateLimitIdentityType.IP),
-            RateLimitRuleProperties("customer-reservation-create", "POST", "/api/v1/customer/reservations", 5, 60, RateLimitIdentityType.MEMBER),
+            RateLimitRuleProperties(
+                "customer-reservation-intent-create",
+                "POST",
+                "/api/v1/customer/reservation-intents",
+                5,
+                60,
+                RateLimitIdentityType.MEMBER
+            ),
             RateLimitRuleProperties(
                 "customer-reservation-payment-confirm",
                 "POST",
-                "/api/v1/customer/reservations/{reservationId}/confirm-payment",
+                "/api/v1/customer/reservation-intents/{reservationIntentId}/confirm-payment",
                 10,
                 60,
                 RateLimitIdentityType.MEMBER

@@ -1,6 +1,6 @@
-package com.stayops.channel.infrastructure.persistence
+package com.stayops.channel.infrastructure.persistence.mongo
 
-import com.stayops.channel.infrastructure.persistence.dao.ChannelMongoDao
+import com.stayops.channel.infrastructure.persistence.mongo.dao.ChannelMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.model.ChannelStatus

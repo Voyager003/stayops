@@ -376,5 +376,42 @@ class ReservationSearchApplicationTest : BehaviorSpec({
                 result[1].rateQuote shouldBe Money.won(360_000)
             }
         }
+
+        `when`("숙박 기간 중 하루라도 재고가 없거나 누락되면") {
+            every { propertyRepository.findById("prop-1") } returns activeProperty()
+            every { roomTypeRepository.findByPropertyId("prop-1") } returns listOf(deluxe, suite)
+            every {
+                inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(
+                    "prop-1", "rt-1", checkIn, checkOut.minusDays(1)
+                )
+            } returns listOf(
+                inventory("prop-1", "rt-1", checkIn, totalCount = 1, reservedCount = 0)
+            )
+            every {
+                inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(
+                    "prop-1", "rt-2", checkIn, checkOut.minusDays(1)
+                )
+            } returns listOf(
+                inventory("prop-1", "rt-2", checkIn, totalCount = 1, reservedCount = 0),
+                inventory("prop-1", "rt-2", checkIn.plusDays(1), totalCount = 1, reservedCount = 1)
+            )
+            every {
+                ratePlanRepository.findByPropertyIdAndRoomTypeIdAndStatus(
+                    "prop-1", "rt-1", RatePlanStatus.ACTIVE
+                )
+            } returns emptyList()
+            every {
+                ratePlanRepository.findByPropertyIdAndRoomTypeIdAndStatus(
+                    "prop-1", "rt-2", RatePlanStatus.ACTIVE
+                )
+            } returns emptyList()
+
+            val result = service.getReservationOffers("prop-1", checkIn, checkOut, 2)
+
+            then("해당 객실 타입의 가용 수량은 0으로 반환된다") {
+                result shouldHaveSize 2
+                result.map { it.availableCount } shouldContainExactly listOf(0, 0)
+            }
+        }
     }
 })

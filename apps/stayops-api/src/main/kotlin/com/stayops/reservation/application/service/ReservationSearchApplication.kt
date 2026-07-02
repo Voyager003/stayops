@@ -84,7 +84,10 @@ class ReservationSearchApplication(
                 roomType.id,
                 RatePlanStatus.ACTIVE
             )
-            val availableCount = inventories.minOfOrNull { it.availableCount } ?: 0
+            val inventoriesByDate = inventories.associateBy { it.date }
+            val availableCount = dateRange.allDates()
+                .map { date -> inventoriesByDate[date]?.availableCount ?: 0 }
+                .minOrNull() ?: 0
             ReservationOffer(
                 roomType = roomType,
                 availableCount = availableCount,

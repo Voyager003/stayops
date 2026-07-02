@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: stayops
+      POSTGRES_USER: stayops
+      POSTGRES_PASSWORD: stayops
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stayops -d stayops"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    environment:
+      SPRING_PROFILES_ACTIVE: local,rdb
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/stayops
+      SPRING_DATASOURCE_USERNAME: stayops
+      SPRING_DATASOURCE_PASSWORD: stayops
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+volumes:
+  postgres_data:

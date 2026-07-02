@@ -8,13 +8,17 @@ import com.stayops.reservation.application.service.CustomerReservationApplicatio
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.inventory.application.service.RoomInventoryApplication
+import com.stayops.payment.application.required.PaymentConfirmResult
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentRepository
 import com.stayops.payment.application.required.PaymentGateway
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.reservation.application.required.ReservationPaymentStatus
+import com.stayops.reservation.application.service.ReservationPaymentOutboxApplication
+import com.stayops.reservation.domain.model.ReservationIntentStatus
 import com.stayops.reservation.domain.model.ReservationStatus
+import com.stayops.reservation.domain.repository.ReservationIntentRepository
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.model.Room
 import com.stayops.room.domain.model.RoomType
@@ -24,6 +28,7 @@ import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money
 import com.stayops.shared.domain.MutableClock
 import com.ninjasquad.springmockk.MockkBean
+import io.mockk.every
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -32,7 +37,9 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.data.mongodb.core.MongoTemplate
+import java.math.BigDecimal
 import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
 
 /**
@@ -58,7 +65,9 @@ class CustomerReservationCancellationInventoryRestoreTest @Autowired constructor
     private val inventoryApplication: RoomInventoryApplication,
     private val memberRepository: MemberRepository,
     private val reservationRepository: ReservationRepository,
+    private val reservationIntentRepository: ReservationIntentRepository,
     private val paymentRepository: PaymentRepository,
+    private val reservationPaymentOutboxApplication: ReservationPaymentOutboxApplication,
     private val mongoTemplate: MongoTemplate,
     private val clock: Clock,
     @MockkBean private val paymentGateway: PaymentGateway
@@ -145,18 +154,18 @@ class CustomerReservationCancellationInventoryRestoreTest @Autowired constructor
         inventoryApplication.getAvailability(propertyId, roomTypeId, date, date)[0].reservedCount
 
     @Nested
-    inner class `3박 PENDING 예약 취소 시` {
+    inner class `3박 확정 예약 취소 시` {
 
         @Test
-        fun `재고가 차감되지 않아 취소해도 재고는 변하지 않고 인접 날짜도 영향받지 않는다`() {
+        fun `예약 재고를 복원하고 인접 날짜는 영향받지 않는다`() {
             // Given: 4일 모두 가용 1
             assertThat(availableCount(night1)).isEqualTo(1)
             assertThat(availableCount(night2)).isEqualTo(1)
             assertThat(availableCount(night3)).isEqualTo(1)
             assertThat(availableCount(night4)).isEqualTo(1)
 
-            // When: 3박 예약 생성 (5/1~5/4 = night1, night2, night3)
-            val reservationResult = customerReservationApplication.createReservation(
+            // When: 3박 예약 intent 생성 (5/1~5/4 = night1, night2, night3)
+            val intentResult = customerReservationApplication.createReservationIntent(
                 memberId = memberId,
                 propertyId = propertyId,
                 roomTypeId = roomTypeId,
@@ -167,37 +176,60 @@ class CustomerReservationCancellationInventoryRestoreTest @Autowired constructor
                 guestPhone = "010-1234-5678",
                 guestEmail = "cancel@test.com"
             )
-            assertThat(reservationResult.reservation.status).isEqualTo(ReservationStatus.PENDING)
+            assertThat(intentResult.intent.status).isEqualTo(ReservationIntentStatus.PAYMENT_WAITING)
 
-            // 예약 생성만으로는 재고를 선점하지 않음
+            // intent 생성 시에는 hold로만 점유한다.
             assertThat(reservedCount(night1)).isEqualTo(0)
             assertThat(reservedCount(night2)).isEqualTo(0)
             assertThat(reservedCount(night3)).isEqualTo(0)
-            assertThat(availableCount(night1)).isEqualTo(1)
-            assertThat(availableCount(night2)).isEqualTo(1)
-            assertThat(availableCount(night3)).isEqualTo(1)
+            assertThat(availableCount(night1)).isEqualTo(0)
+            assertThat(availableCount(night2)).isEqualTo(0)
+            assertThat(availableCount(night3)).isEqualTo(0)
             assertThat(availableCount(night4))
                 .withFailMessage("인접 날짜 night4가 영향받음")
                 .isEqualTo(1)
 
-            // When: 예약 취소
-            val cancelled = customerReservationApplication.cancelReservation(memberId, reservationResult.reservation.id)
+            every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
+                paymentKey = "toss_pk_cancel",
+                orderId = intentResult.payment.orderId,
+                method = "카드",
+                approvedAt = Instant.now(clock),
+                totalAmount = BigDecimal(300_000)
+            )
+            customerReservationApplication.confirmReservationIntentPayment(
+                memberId = memberId,
+                reservationIntentId = intentResult.intent.id,
+                paymentKey = "toss_pk_cancel",
+                orderId = intentResult.payment.orderId,
+                amount = BigDecimal(300_000)
+            )
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "cancel-test-worker")
+
+            val reservedIntent = reservationIntentRepository.findById(intentResult.intent.id)!!
+            val reservationId = reservedIntent.reservationId!!
+            assertThat(reservedIntent.status).isEqualTo(ReservationIntentStatus.RESERVED)
+            assertThat(reservedCount(night1)).isEqualTo(1)
+            assertThat(reservedCount(night2)).isEqualTo(1)
+            assertThat(reservedCount(night3)).isEqualTo(1)
+
+            // When: 확정 예약 취소
+            val cancelled = customerReservationApplication.cancelReservation(memberId, reservationId)
 
             // Then: Reservation 상태 = CANCELLED
             assertThat(cancelled.reservation.status).isEqualTo(ReservationStatus.CANCELLED)
 
-            // Then: Payment 상태 = FAILED (PENDING 취소이므로 Toss 환불 없이 fail 처리)
-            assertThat(cancelled.payment.status).isEqualTo(ReservationPaymentStatus.FAILED)
+            // Then: Payment 상태 = CANCEL_REQUESTED (승인 결제 취소 outbox 요청)
+            assertThat(cancelled.payment.status).isEqualTo(ReservationPaymentStatus.CANCEL_REQUESTED)
 
-            // Then: PENDING 예약은 재고를 차감하지 않았으므로 취소 후에도 그대로 유지됨
+            // Then: 확정 예약 취소로 3박 재고가 모두 복원됨
             assertThat(reservedCount(night1))
-                .withFailMessage("night1 재고가 변경됨. reservedCount=%d", reservedCount(night1))
+                .withFailMessage("night1 재고가 복원되지 않음. reservedCount=%d", reservedCount(night1))
                 .isEqualTo(0)
             assertThat(reservedCount(night2))
-                .withFailMessage("night2 재고가 변경됨. reservedCount=%d", reservedCount(night2))
+                .withFailMessage("night2 재고가 복원되지 않음. reservedCount=%d", reservedCount(night2))
                 .isEqualTo(0)
             assertThat(reservedCount(night3))
-                .withFailMessage("night3 재고가 변경됨. reservedCount=%d", reservedCount(night3))
+                .withFailMessage("night3 재고가 복원되지 않음. reservedCount=%d", reservedCount(night3))
                 .isEqualTo(0)
             assertThat(availableCount(night1)).isEqualTo(1)
             assertThat(availableCount(night2)).isEqualTo(1)
@@ -214,10 +246,10 @@ class CustomerReservationCancellationInventoryRestoreTest @Autowired constructor
             assertThat(all).hasSize(1)
             assertThat(all[0].status).isEqualTo(ReservationStatus.CANCELLED)
 
-            // Then: Payment도 1건만 존재 (FAILED)
+            // Then: Payment도 1건만 존재 (CANCEL_REQUESTED)
             val payments = paymentRepository.findByMemberId(memberId)
             assertThat(payments).hasSize(1)
-            assertThat(payments[0].status).isEqualTo(PaymentStatus.FAILED)
+            assertThat(payments[0].status).isEqualTo(PaymentStatus.CANCEL_REQUESTED)
         }
     }
 }

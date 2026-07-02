@@ -16,7 +16,8 @@ class RoomInventoryTest : BehaviorSpec({
     fun newInventory(
         totalCount: Int = 5,
         reservedCount: Int = 0,
-        blockedCount: Int = 0
+        blockedCount: Int = 0,
+        heldCount: Int = 0
     ) = RoomInventory.reconstitute(
         id = "inv-1",
         propertyId = "prop-1",
@@ -25,6 +26,7 @@ class RoomInventoryTest : BehaviorSpec({
         totalCount = totalCount,
         reservedCount = reservedCount,
         blockedCount = blockedCount,
+        heldCount = heldCount,
         version = 0,
         createdAt = fixedInstant,
         updatedAt = fixedInstant
@@ -42,6 +44,7 @@ class RoomInventoryTest : BehaviorSpec({
             then("reservedCount는 0이고 blockedCount는 totalCount와 같다 (기본 마감)") {
                 inventory.reservedCount shouldBe 0
                 inventory.blockedCount shouldBe 5
+                inventory.heldCount shouldBe 0
                 inventory.availableCount shouldBe 0
             }
             then("version이 null로 초기화된다") {
@@ -58,10 +61,10 @@ class RoomInventoryTest : BehaviorSpec({
     }
 
     given("availableCount 계산 시") {
-        `when`("total=5, reserved=2, blocked=1이면") {
-            val inventory = newInventory(totalCount = 5, reservedCount = 2, blockedCount = 1)
-            then("availableCount는 2이다") {
-                inventory.availableCount shouldBe 2
+        `when`("total=5, reserved=2, blocked=1, held=1이면") {
+            val inventory = newInventory(totalCount = 5, reservedCount = 2, blockedCount = 1, heldCount = 1)
+            then("availableCount는 1이다") {
+                inventory.availableCount shouldBe 1
             }
         }
     }
@@ -87,6 +90,7 @@ class RoomInventoryTest : BehaviorSpec({
                 totalCount = first.totalCount,
                 reservedCount = first.reservedCount,
                 blockedCount = first.blockedCount,
+                heldCount = first.heldCount,
                 version = first.version,
                 createdAt = first.createdAt,
                 updatedAt = first.updatedAt
@@ -148,6 +152,64 @@ class RoomInventoryTest : BehaviorSpec({
             then("예외가 발생한다") {
                 shouldThrow<IllegalArgumentException> {
                     inventory.release()
+                }
+            }
+        }
+    }
+
+    given("hold() 호출 시") {
+        `when`("가용 객실이 있으면") {
+            val inventory = newInventory(totalCount = 3, reservedCount = 1, blockedCount = 0)
+            val held = inventory.hold()
+            then("heldCount가 1 증가하고 availableCount가 감소한다") {
+                held.heldCount shouldBe 1
+                held.availableCount shouldBe 1
+            }
+        }
+        `when`("가용 객실이 0이면") {
+            val inventory = newInventory(totalCount = 2, reservedCount = 1, blockedCount = 0, heldCount = 1)
+            then("예외가 발생한다") {
+                shouldThrow<IllegalArgumentException> {
+                    inventory.hold()
+                }
+            }
+        }
+    }
+
+    given("releaseHold() 호출 시") {
+        `when`("점유된 객실이 있으면") {
+            val inventory = newInventory(totalCount = 3, reservedCount = 0, blockedCount = 0, heldCount = 2)
+            val released = inventory.releaseHold()
+            then("heldCount가 1 감소한다") {
+                released.heldCount shouldBe 1
+                released.availableCount shouldBe 2
+            }
+        }
+        `when`("점유된 객실이 없으면") {
+            val inventory = newInventory(totalCount = 3, reservedCount = 0, blockedCount = 0, heldCount = 0)
+            then("예외가 발생한다") {
+                shouldThrow<IllegalArgumentException> {
+                    inventory.releaseHold()
+                }
+            }
+        }
+    }
+
+    given("consumeHold() 호출 시") {
+        `when`("점유된 객실이 있으면") {
+            val inventory = newInventory(totalCount = 3, reservedCount = 0, blockedCount = 0, heldCount = 1)
+            val consumed = inventory.consumeHold()
+            then("heldCount가 감소하고 reservedCount가 증가한다") {
+                consumed.heldCount shouldBe 0
+                consumed.reservedCount shouldBe 1
+                consumed.availableCount shouldBe 2
+            }
+        }
+        `when`("점유된 객실이 없으면") {
+            val inventory = newInventory(totalCount = 3, reservedCount = 0, blockedCount = 0, heldCount = 0)
+            then("예외가 발생한다") {
+                shouldThrow<IllegalArgumentException> {
+                    inventory.consumeHold()
                 }
             }
         }

@@ -128,6 +128,84 @@ variable "mongo_root_volume_size_gb" {
   default     = 50
 }
 
+variable "postgres_database_name" {
+  description = "Initial PostgreSQL database name for the StayOps RDB profile."
+  type        = string
+  default     = "stayops"
+}
+
+variable "postgres_master_username" {
+  description = "PostgreSQL master username. The password is managed by RDS Secrets Manager integration."
+  type        = string
+  default     = "stayops"
+}
+
+variable "postgres_engine_version" {
+  description = "Optional PostgreSQL engine version. Leave null to let AWS choose the provider default for the selected engine."
+  type        = string
+  default     = null
+}
+
+variable "postgres_instance_class" {
+  description = "RDS PostgreSQL instance class."
+  type        = string
+  default     = "db.t4g.micro"
+}
+
+variable "postgres_allocated_storage_gb" {
+  description = "Initial PostgreSQL storage size in GiB."
+  type        = number
+  default     = 20
+}
+
+variable "postgres_max_allocated_storage_gb" {
+  description = "Maximum PostgreSQL autoscaled storage size in GiB."
+  type        = number
+  default     = 100
+}
+
+variable "postgres_multi_az" {
+  description = "Whether PostgreSQL should run as a Multi-AZ RDS instance."
+  type        = bool
+  default     = false
+}
+
+variable "postgres_backup_retention_days" {
+  description = "PostgreSQL automated backup retention in days."
+  type        = number
+  default     = 7
+}
+
+variable "postgres_backup_window" {
+  description = "Preferred PostgreSQL backup window in UTC."
+  type        = string
+  default     = "18:00-19:00"
+}
+
+variable "postgres_maintenance_window" {
+  description = "Preferred PostgreSQL maintenance window in UTC."
+  type        = string
+  default     = "sun:19:00-sun:20:00"
+}
+
+variable "postgres_deletion_protection" {
+  description = "Whether PostgreSQL deletion protection is enabled."
+  type        = bool
+  default     = false
+}
+
+variable "postgres_skip_final_snapshot" {
+  description = "Whether PostgreSQL final snapshot should be skipped on destroy."
+  type        = bool
+  default     = true
+}
+
+variable "postgres_performance_insights_enabled" {
+  description = "Whether PostgreSQL Performance Insights is enabled."
+  type        = bool
+  default     = false
+}
+
 variable "acm_certificate_arn" {
   description = "ACM certificate ARN for the public API HTTPS listener."
   type        = string

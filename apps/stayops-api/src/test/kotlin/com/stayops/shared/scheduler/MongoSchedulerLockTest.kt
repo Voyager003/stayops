@@ -1,6 +1,7 @@
 package com.stayops.shared.scheduler
 
 import com.stayops.TestcontainersConfiguration
+import com.stayops.shared.infrastructure.persistence.mongo.SchedulerLockDocument
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test

@@ -4,7 +4,8 @@ deployment_topology = "minimal"
 environment         = "minimal"
 
 availability_zones = [
-  "ap-northeast-2a"
+  "ap-northeast-2a",
+  "ap-northeast-2c"
 ]
 
 vpc_cidr = "10.10.0.0/16"
@@ -14,7 +15,8 @@ public_subnet_cidrs = [
 ]
 
 private_subnet_cidrs = [
-  "10.10.10.0/24"
+  "10.10.10.0/24",
+  "10.10.20.0/24"
 ]
 
 ami_id = "ami-replace-with-runtime-ami"
@@ -24,6 +26,17 @@ minimal_mongo_instance_type = "t3.small"
 
 root_volume_size_gb       = 30
 mongo_root_volume_size_gb = 50
+
+postgres_database_name                = "stayops"
+postgres_master_username              = "stayops"
+postgres_instance_class               = "db.t4g.micro"
+postgres_allocated_storage_gb         = 20
+postgres_max_allocated_storage_gb     = 50
+postgres_multi_az                     = false
+postgres_backup_retention_days        = 1
+postgres_deletion_protection          = false
+postgres_skip_final_snapshot          = true
+postgres_performance_insights_enabled = false
 
 # Optional. Defaults to stayops-minimal-artifacts-<account-id>.
 # artifact_bucket_name = "stayops-minimal-artifacts-123456789012"

@@ -1,6 +1,6 @@
-package com.stayops.property.infrastructure.persistence
+package com.stayops.property.infrastructure.persistence.mongo
 
-import com.stayops.property.infrastructure.persistence.dao.PropertyMongoDao
+import com.stayops.property.infrastructure.persistence.mongo.dao.PropertyMongoDao
 import com.stayops.TestcontainersConfiguration
 import com.stayops.property.domain.model.Address
 import com.stayops.property.domain.model.ContactInfo

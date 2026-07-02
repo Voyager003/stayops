@@ -1,0 +1,76 @@
+package com.stayops.reservation.api.customer
+
+import com.stayops.member.application.service.MemberAccessApplication
+import com.stayops.member.domain.model.Member
+import com.stayops.reservation.api.customer.dto.CustomerReservationIntentResponse
+import com.stayops.reservation.api.customer.dto.CreateReservationIntentRequest
+import com.stayops.reservation.api.customer.dto.PaymentConfirmRequest
+import com.stayops.reservation.application.service.CustomerReservationApplication
+import jakarta.validation.Valid
+import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RestController
+
+@RestController
+@RequestMapping("/api/v1/customer/reservation-intents")
+class CustomerReservationIntentApi(
+    private val customerReservationApplication: CustomerReservationApplication,
+    private val memberAccessApplication: MemberAccessApplication
+) {
+
+    @PostMapping
+    fun createReservationIntent(
+        @Valid @RequestBody request: CreateReservationIntentRequest,
+        @AuthenticationPrincipal member: Member?
+    ): ResponseEntity<CustomerReservationIntentResponse> {
+        val customer = memberAccessApplication.requireCustomer(member)
+        val result = customerReservationApplication.createReservationIntent(
+            memberId = customer.id,
+            propertyId = request.propertyId,
+            roomTypeId = request.roomTypeId,
+            checkIn = request.checkIn,
+            checkOut = request.checkOut,
+            numberOfGuests = request.numberOfGuests,
+            guestName = request.guestName,
+            guestPhone = request.guestPhone,
+            guestEmail = request.guestEmail
+        )
+        return ResponseEntity.status(HttpStatus.CREATED).body(CustomerReservationIntentResponse.from(result))
+    }
+
+    @PostMapping("/{reservationIntentId}/confirm-payment")
+    fun confirmPayment(
+        @PathVariable reservationIntentId: String,
+        @Valid @RequestBody request: PaymentConfirmRequest,
+        @AuthenticationPrincipal member: Member?
+    ): ResponseEntity<CustomerReservationIntentResponse> {
+        val customer = memberAccessApplication.requireCustomer(member)
+        val result = customerReservationApplication.confirmReservationIntentPayment(
+            memberId = customer.id,
+            reservationIntentId = reservationIntentId,
+            paymentKey = request.paymentKey,
+            orderId = request.orderId,
+            amount = request.amount
+        )
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(CustomerReservationIntentResponse.from(result))
+    }
+
+    @GetMapping("/{reservationIntentId}")
+    fun getReservationIntent(
+        @PathVariable reservationIntentId: String,
+        @AuthenticationPrincipal member: Member?
+    ): ResponseEntity<CustomerReservationIntentResponse> {
+        val customer = memberAccessApplication.requireCustomer(member)
+        val result = customerReservationApplication.getReservationIntentPaymentStatus(
+            memberId = customer.id,
+            reservationIntentId = reservationIntentId
+        )
+        return ResponseEntity.ok(CustomerReservationIntentResponse.from(result))
+    }
+}

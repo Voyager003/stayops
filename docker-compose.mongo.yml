@@ -1,0 +1,42 @@
+services:
+  mongodb:
+    image: mongo:8
+    ports:
+      - "27017:27017"
+    command: ["--replSet", "rs0"]
+    volumes:
+      - mongodb_data:/data/db
+
+  mongo-init:
+    image: mongo:8
+    depends_on:
+      - mongodb
+    restart: "no"
+    entrypoint: >
+      mongosh --host mongodb --eval '
+        try {
+          rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "mongodb:27017" }] });
+        } catch(e) {
+          if (e.codeName !== "AlreadyInitialized") throw e;
+          const cfg = rs.conf();
+          if (cfg.members[0].host !== "mongodb:27017") {
+            cfg.members[0].host = "mongodb:27017";
+            rs.reconfig(cfg, { force: true });
+          }
+        }
+      '
+
+  app:
+    environment:
+      SPRING_PROFILES_ACTIVE: local,mongo
+      SPRING_MONGODB_URI: mongodb://mongodb:27017/stayops?replicaSet=rs0
+    depends_on:
+      mongodb:
+        condition: service_started
+      mongo-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+
+volumes:
+  mongodb_data:
