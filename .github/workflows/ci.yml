@@ -36,11 +36,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /tmp/docker-cache
-          key: docker-${{ runner.os }}-${{ hashFiles('docker-compose.yml') }}
+          key: docker-${{ runner.os }}-${{ hashFiles('docker-compose.yml', 'docker-compose.mongo.yml') }}
           restore-keys: docker-${{ runner.os }}-
 
       - name: Start MongoDB and Redis
-        run: docker compose up -d mongodb mongo-init redis && sleep 5
+        run: docker compose -f docker-compose.yml -f docker-compose.mongo.yml up -d mongodb mongo-init redis && sleep 5
 
       - name: Download dependencies
         run: ./gradlew :apps:stayops-api:dependencies :apps:mock-ota:dependencies --no-daemon
