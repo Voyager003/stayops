@@ -18,18 +18,17 @@
 
 ## a. 프로젝트 설명
  
-`stayops`는 숙박 도메인에서 생길 수 있는 예약 및 결제, 재고 동기화 같은 문제를 직접 설계하고 검증한 서버입니다.
+`stayops`는 숙박 도메인에서 발생할 수 있는 숙소 예약 및 결제, 재고 동기화같은 문제를 설계하고 검증한 서버 프로젝트입니다.
 
 ### 용어 설명
 
 ![https://www.hotelstory.com/svc/cms](docs/img/05.png)
 
-- `PMS(Property Management System)` 는 예약, 체크인/체크아웃, 객실 관리, 결제 및 매출 정산과 같은 작업을 통합 관리하는 시스템입니다.
+- `PMS(Property Management System)`는 예약, 체크인/체크아웃, 객실 관리, 결제 및 매출 정산과 같은 작업을 통합 관리하는 시스템입니다.
 
 - `CMS(Channel Management System), 채널매니저`는 PMS와 여러 OTA 사이에서 객실 재고, 요금, 예약 정보를 동기화하는 시스템입니다. 여러 채널에서 같은 객실을 동시에 판매할 때 오버부킹을 방지하는 역할을 합니다.
 
 - `OTA(Online Travel Agency)` 는 Booking.com, Agoda, Expedia와 같이 온라인을 통해 숙박, 항공권 등 여행 상품을 중개하고 판매하는 플랫폼을 의미합니다.
-
 
 ### 실제 PMS/CMS 시스템 동작 방식
 
@@ -60,31 +59,30 @@ loadtest/          # k6 부하 테스트와 테스트 데이터 seed script
 
 `stayops-api`와 `mock-ota`는 서로 다른 서버에서 실행됩니다. 실제 운영 환경의 외부 OTA를 직접 연동할 수 없는 제약을 Mock OTA 서버로 분리해 재현했습니다.
 
-## b. 빌드 및 실행법
+## b. 빌드 및 실행
+
+같은 비즈니스 로직을 서로 다른 DB로 구현하도록 하여 프로필을 구분했습니다.
 
 ### MongoDB 프로필 실행
 
 ```bash
+# 필요한 의존성 (MongoDB, Redis, Mock-OTA Server)
 docker compose -f docker-compose.yml -f docker-compose.mongo.yml up -d mongodb mongo-init redis mock-ota-mongo mock-ota
 SPRING_PROFILES_ACTIVE=local,mongo ./gradlew :apps:stayops-api:bootRun
+
+# Docker에 App까지 띄우기
+MOCK_OTA_PMS_WEBHOOK_URL='http://app:8080/api/v1/properties/{propertyId}/channels/webhook/{channelCode}' \
+docker compose -f docker-compose.yml -f docker-compose.mongo.yml up -d app
 ```
 
-### RDB 프로필 실행
+### RDB(PostgreSQL) 프로필 실행
 
 ```bash
+# 필요한 의존성 (Postgres, Redis, Mock-OTA Server)
 docker compose -f docker-compose.yml -f docker-compose.rdb.yml up -d postgres redis mock-ota-mongo mock-ota
 SPRING_PROFILES_ACTIVE=local,rdb ./gradlew :apps:stayops-api:bootRun
-```
 
-`mongodb`는 StayOps app이 `mongo` 프로필에서 사용하는 DB이고, `mock-ota-mongo`는 Mock OTA 서버 전용
-MongoDB입니다. 따라서 RDB 프로필에서도 `mock-ota-mongo`는 함께 실행됩니다.
-
-### Docker로 애플리케이션까지 실행
-
-```bash
-MOCK_OTA_PMS_WEBHOOK_URL='http://app:8080/api/v1/properties/{propertyId}/channels/webhook/{channelCode}' \
-  docker compose -f docker-compose.yml -f docker-compose.mongo.yml up -d app
-
+# Docker에 App까지 띄우기
 MOCK_OTA_PMS_WEBHOOK_URL='http://app:8080/api/v1/properties/{propertyId}/channels/webhook/{channelCode}' \
   docker compose -f docker-compose.yml -f docker-compose.rdb.yml up -d app
 ```
@@ -107,6 +105,8 @@ MOCK_OTA_PMS_WEBHOOK_URL='http://app:8080/api/v1/properties/{propertyId}/channel
 |  | Spring Boot Starter WebMVC | 4.0.3 |
 |  | Spring Boot Starter Security | 4.0.3 |
 |  | Spring Boot Starter Data MongoDB | 4.0.3 |
+|  | Spring Boot Starter jOOQ | 4.0.3 |
+|  | Spring Boot Starter Flyway | 4.0.3 |
 |  | Spring Boot Starter Data Redis | 4.0.3 |
 |  | Spring Boot Starter Session Data Redis | 4.0.3 |
 |  | Spring Boot Starter Validation | 4.0.3 |
@@ -114,6 +114,10 @@ MOCK_OTA_PMS_WEBHOOK_URL='http://app:8080/api/v1/properties/{propertyId}/channel
 | Server | Embedded Tomcat | 11.0.18 |
 | Database | MongoDB | 8 |
 |  | MongoDB Java Driver | 5.6.3 |
+|  | PostgreSQL | 17-alpine |
+|  | PostgreSQL JDBC Driver | Spring Boot managed |
+| SQL Mapping / Migration | jOOQ | Spring Boot managed |
+|  | Flyway | Spring Boot managed |
 | Cache / Session | Redis | 7-alpine |
 | External Java Library  | Logback | 1.5.32 |
 | Monitoring | Micrometer | 1.16.3 |
@@ -140,16 +144,22 @@ MOCK_OTA_PMS_WEBHOOK_URL='http://app:8080/api/v1/properties/{propertyId}/channel
 
 `Minimal`은 서비스를 '저비용으로 유지하기 위한 최소 구성'으로 단일 인스턴스로 구성되어 가용성을 보장하지 않습니다.
 
-프로젝트의 전반적인 설명은 `Production` 기준으로 합니다.
+프로젝트의 전반적인 설명은 MongoDB의 `Production` 기준으로 합니다.
 
 ### Production
 
 ![](docs/img/04.png)
  
-## b. 데이터 모델
+## b. 데이터 모델링
+
+### MongoDB
 
 ![](docs/img/02.png)
 ![](docs/img/03.png)
+
+### PostgresSQL
+
+![](docs/img/06.png)
 
 ---
 
@@ -195,40 +205,77 @@ Scale-out 의사 결정 및 개선 과정을 [블로그](https://www.romedev.kr/
 
 예약은 투숙 기간과 예약 생명주기를, 결제는 외부 PG 승인과 결제 상태 전이, 재고는 날짜별 객실 점유와 복원, 채널은 OTA 연동과 동기화 작업을 담당하도록 경계를 나눴습니다.
 
-도메인의 논리적 개념을 코드의 계층과 경계로 분리함으로써, 고객 직접 예약과 OTA 예약처럼 서로 다른 예약 흐름을 같은 시스템 안에서 다루면서도 예약·결제·재고·채널의 책임을 명확하게 유지할 수 있도록 설계할 수 있었습니다.
+도메인의 논리적 개념을 코드의 계층과 경계로 분리함으로써, 고객 직접 예약과 OTA 예약처럼 서로 다른 예약 흐름을 같은 시스템 안에서 다루면서도 예약·결제·재고·채널의 책임을 명확하게 유지할 수 있도록 설계했습니다.
 
 ```mermaid
 stateDiagram-v2
+    state "객실/일정 선택" as BookingDraft
+    state "Intent: PAYMENT_WAITING / Payment: PENDING / Hold: HELD" as IntentPaymentWaiting
+    state "Intent: CONFIRM_REQUESTED / Payment: CONFIRM_REQUESTED" as IntentConfirmRequested
+    state "PaymentOutbox: CONFIRM_PAYMENT 처리" as PaymentOutboxProcessing
+    state "PG 승인 성공" as CustomerPaymentApproved
+    state "PG 승인 실패" as CustomerPaymentFailed
+    state "Outbox 재시도 대기" as PaymentRetryWaiting
+    state "Hold: CONSUMED" as HoldConsumed
+    state "Reservation: PENDING" as ReservationPending
+    state "Reservation: CONFIRMED" as ReservationConfirmed
+    state "Intent: EXPIRED" as IntentExpired
+    state "Hold: RELEASED (만료)" as HoldReleasedByExpiry
+    state "Hold: RELEASED / Payment: FAILED / Intent: PAYMENT_FAILED" as HoldReleasedByFailure
+    state "OTA Webhook 수신" as OtaWebhookReceived
+    state "OTA Reservation: CONFIRMED" as OtaReservationConfirmed
+    state "OTA 취소 Webhook 수신" as OtaCancellationReceived
+    state "외부 승인 결제 기록" as ExternalPaymentApproved
+    state "Reservation: CANCELLED" as ReservationCancelled
+    state "Reservation: CHECKED_IN" as CheckedIn
+    state "Reservation: CHECKED_OUT" as CheckedOut
+    state "Reservation: NO_SHOW" as NoShow
+
     [*] --> BookingDraft: 객실/일정 선택
 
-    BookingDraft --> ReservationPending: 예약 생성 및 결제 요청
-    ReservationPending --> PaymentConfirmRequested: 결제 승인 요청 저장
-    PaymentConfirmRequested --> PaymentApproved: PG 승인 완료
-    PaymentConfirmRequested --> PaymentFailed: PG 승인 실패
+    BookingDraft --> IntentPaymentWaiting: intent/payment/hold 생성
+    IntentPaymentWaiting --> IntentConfirmRequested: 결제 성공 redirect 후 승인 요청 저장
+    IntentPaymentWaiting --> IntentExpired: 결제 제한 시간 만료
+    IntentExpired --> HoldReleasedByExpiry: 임시 재고 복구
 
-    PaymentApproved --> ReservationConfirmed: PMS 예약 확정
-    PaymentFailed --> ReservationCancelled: 예약 취소
+    IntentConfirmRequested --> PaymentOutboxProcessing: PaymentOutbox.CONFIRM_PAYMENT
+    PaymentOutboxProcessing --> CustomerPaymentApproved: PG 승인 성공
+    PaymentOutboxProcessing --> CustomerPaymentFailed: PG 승인 실패/금액 불일치
+    PaymentOutboxProcessing --> PaymentRetryWaiting: PG 일시 오류
+    PaymentRetryWaiting --> PaymentOutboxProcessing: 재처리
 
-    ReservationConfirmed --> CheckedIn: 체크인
+    CustomerPaymentApproved --> HoldConsumed: heldCount를 reservedCount로 전환
+    HoldConsumed --> ReservationPending: PMS 확인 대기 예약 생성
+    ReservationPending --> ReservationConfirmed: 숙소 운영자 예약 확정
+    CustomerPaymentFailed --> HoldReleasedByFailure: 결제 실패 보상 처리
+
+    ReservationConfirmed --> CheckedIn: 체크인 및 객실 배정
     CheckedIn --> CheckedOut: 체크아웃
+    ReservationPending --> ReservationCancelled: PMS 확정 전 취소
     ReservationConfirmed --> ReservationCancelled: 고객/운영자 취소
     ReservationConfirmed --> NoShow: 노쇼 처리
 
-    [*] --> OtaConfirmedReservation: OTA 예약 Webhook 수신
-    OtaConfirmedReservation --> ReservationConfirmed: 외부 확정 예약 저장
-    OtaConfirmedReservation --> ExternalPaymentApproved: 승인된 외부 결제 기록
+    [*] --> OtaWebhookReceived: OTA 예약 Webhook 수신
+    OtaWebhookReceived --> OtaReservationConfirmed: 외부 확정 예약 저장
+    OtaWebhookReceived --> OtaCancellationReceived: OTA 취소 Webhook 수신
+    OtaReservationConfirmed --> ExternalPaymentApproved: 승인된 외부 결제 기록
+    OtaCancellationReceived --> ReservationCancelled: 예약 취소 및 재고 복원
 
+    HoldReleasedByExpiry --> [*]
+    HoldReleasedByFailure --> [*]
     ReservationCancelled --> [*]
     CheckedOut --> [*]
     NoShow --> [*]
 ```
 
-직접 예약과 OTA 예약의 흐름을 분리해, 예약이 언제 재고를 점유하는지, 결제 상태가 언제 변경되는지, 외부 채널 예약을 언제 확정으로 볼 것인지를 명확하게 다룰 수 있도록 설계했습니다.
+고객 직접 예약은 최종 예약을 바로 만들지 않고 `ReservationIntent`를 먼저 생성합니다. 이 시점에 결제 대기 상태의 `Payment`와 임시 재고 점유인 `InventoryHold`가 함께 만들어지며, 결제 승인 성공 후에만 hold를 실제 예약 재고로 소비하고 `Reservation.PENDING`을 생성합니다. 이후 숙소 운영자가 확인하면 `Reservation.CONFIRMED`가 됩니다.
 
-도메인 경계에 대한 맥락을 [도메인 기능 카탈로그](./docs/context/domain-model/02-domain-model-function-catalog.md), [도메인 진단 기록](./docs/context/domain-model/03-domain-diagnosis.md), [결제 Outbox 설계](./docs/context/domain-model/blog-payment-outbox-refactoring.md)에 문서로 담았습니다.
+결제 실패나 intent 만료 시에는 최종 예약을 만들지 않고 hold를 release해 재고를 다시 판매 가능 상태로 복구합니다. OTA 예약은 외부 채널에서 이미 예약과 결제가 확정된 이벤트로 수신되므로 `ReservationIntent`와 `InventoryHold`를 거치지 않고, Webhook을 통해 내부 `Reservation.CONFIRMED`와 승인된 외부 결제를 기록합니다.
+
+도메인 경계에 대한 맥락을 [도메인 기능 카탈로그](./docs/context/domain-model/02-domain-model-function-catalog.md), [도메인 문서](./docs/context/domain-model/04-ubiquitous-language.md)에 문서로 담았습니다.
 
 ---
 
 # D. 문서 업데이트 내역
 
-last updated: 2026-06-09
+last updated: 2026-07-02
