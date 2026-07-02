@@ -68,11 +68,11 @@ loadtest/          # k6 부하 테스트와 테스트 데이터 seed script
 ```bash
 # 필요한 의존성 (MongoDB, Redis, Mock-OTA Server)
 docker compose -f docker-compose.yml -f docker-compose.mongo.yml up -d mongodb mongo-init redis mock-ota-mongo mock-ota
+set -a && source .env.local && set +a
 SPRING_PROFILES_ACTIVE=local,mongo ./gradlew :apps:stayops-api:bootRun
 
 # Docker에 App까지 띄우기
-MOCK_OTA_PMS_WEBHOOK_URL='http://app:8080/api/v1/properties/{propertyId}/channels/webhook/{channelCode}' \
-docker compose -f docker-compose.yml -f docker-compose.mongo.yml up -d app
+docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.mongo.yml up -d app
 ```
 
 ### RDB(PostgreSQL) 프로필 실행
@@ -80,12 +80,16 @@ docker compose -f docker-compose.yml -f docker-compose.mongo.yml up -d app
 ```bash
 # 필요한 의존성 (Postgres, Redis, Mock-OTA Server)
 docker compose -f docker-compose.yml -f docker-compose.rdb.yml up -d postgres redis mock-ota-mongo mock-ota
+set -a && source .env.local && set +a
 SPRING_PROFILES_ACTIVE=local,rdb ./gradlew :apps:stayops-api:bootRun
 
 # Docker에 App까지 띄우기
-MOCK_OTA_PMS_WEBHOOK_URL='http://app:8080/api/v1/properties/{propertyId}/channels/webhook/{channelCode}' \
-  docker compose -f docker-compose.yml -f docker-compose.rdb.yml up -d app
+docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.rdb.yml up -d app
 ```
+
+결제까지 로컬에서 확인하려면 `.env.local.example`을 `.env.local`로 복사한 뒤 `TOSS_SECRET_KEY`를 로컬 값으로 설정합니다.
+
+실제 키는 커밋하지 않으며, 클라이언트 결제까지 확인하는 경우 `stayops-client`에도 Toss client key 설정이 필요합니다.
 
 ### 빌드 및 테스트
 

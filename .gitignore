@@ -45,6 +45,7 @@ out/
 
 ### Environment ###
 .env
+.env.local
 **/deploy.env
 **/.htpasswd
 **/mongo-keyfile

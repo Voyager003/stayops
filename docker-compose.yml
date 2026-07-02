@@ -22,6 +22,8 @@ services:
     environment:
       SPRING_DATA_REDIS_HOST: redis
       MOCK_OTA_ENDPOINT: http://mock-ota:8081
+      TOSS_SECRET_KEY: ${TOSS_SECRET_KEY:-}
+      TOSS_BASE_URL: ${TOSS_BASE_URL:-https://api.tosspayments.com/v1/payments}
     depends_on:
       - redis
       - mock-ota
