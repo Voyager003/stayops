@@ -17,6 +17,8 @@ class HttpChannelInventorySnapshotReader(
 
     override fun fetchInventory(
         apiEndpoint: String,
+        propertyId: String,
+        channelCode: String,
         roomTypeId: String,
         startDate: LocalDate,
         endDate: LocalDate
@@ -24,8 +26,8 @@ class HttpChannelInventorySnapshotReader(
         val items = try {
             restClient.get()
                 .uri(
-                    "$apiEndpoint/api/v1/ari/inventory?roomTypeId={roomTypeId}&startDate={startDate}&endDate={endDate}",
-                    roomTypeId, startDate.toString(), endDate.toString()
+                    "$apiEndpoint/api/v1/ari/inventory?propertyId={propertyId}&channelCode={channelCode}&roomTypeId={roomTypeId}&startDate={startDate}&endDate={endDate}",
+                    propertyId, channelCode, roomTypeId, startDate.toString(), endDate.toString()
                 )
                 .retrieve()
                 .body(object : ParameterizedTypeReference<List<OtaInventoryDto>>() {})
@@ -41,6 +43,8 @@ class HttpChannelInventorySnapshotReader(
     }
 
     private data class OtaInventoryDto(
+        val propertyId: String,
+        val channelCode: String,
         val roomTypeId: String,
         val date: String,
         val availableCount: Int

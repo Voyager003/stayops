@@ -5,6 +5,7 @@ import io.kotest.matchers.shouldBe
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.springframework.web.client.RestClient
+import java.time.LocalDate
 
 class HttpMockOtaBookingSimulatorTest : BehaviorSpec({
 
@@ -58,6 +59,42 @@ class HttpMockOtaBookingSimulatorTest : BehaviorSpec({
                 request.body.readUtf8() shouldBe """{"propertyId":"prop-1","channelCode":"AGODA"}"""
                 result.bookingId shouldBe "booking-1"
                 result.guestName shouldBe "김민수"
+            }
+        }
+
+        `when`("PMS가 특정 재고를 지정해 예약 시뮬레이션을 요청하면") {
+            then("inventory-booking API로 서버 간 요청을 보낸다") {
+                server.enqueue(
+                    MockResponse()
+                        .setResponseCode(200)
+                        .setHeader("Content-Type", "application/json")
+                        .setBody(
+                            """
+                            {
+                              "status": "sent",
+                              "bookingId": "booking-1",
+                              "roomTypeId": "rt-1",
+                              "date": "2026-05-01",
+                              "guestName": "김민수"
+                            }
+                            """.trimIndent()
+                        )
+                )
+
+                val result = sut.simulateInventoryBooking(
+                    endpoint = server.url("").toString().trimEnd('/'),
+                    propertyId = "prop-1",
+                    channelCode = "AGODA",
+                    roomTypeCode = "rt-1",
+                    date = LocalDate.of(2026, 5, 1)
+                )
+
+                val request = server.takeRequest()
+                request.method shouldBe "POST"
+                request.path shouldBe "/api/v1/simulate/inventory-booking"
+                request.getHeader("Authorization") shouldBe "Basic bW9jay11c2VyOm1vY2stcGFzc3dvcmQ="
+                request.body.readUtf8() shouldBe """{"propertyId":"prop-1","channelCode":"AGODA","roomTypeCode":"rt-1","date":"2026-05-01"}"""
+                result.bookingId shouldBe "booking-1"
             }
         }
     }

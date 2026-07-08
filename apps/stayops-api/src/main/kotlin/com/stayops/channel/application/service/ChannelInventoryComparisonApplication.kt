@@ -34,7 +34,14 @@ class ChannelInventoryComparisonApplication(
                 message = "OTA 채널만 재고를 조회할 수 있습니다"
             )
 
-        val otaSnapshots = inventorySnapshotReader.fetchInventory(apiEndpoint, roomTypeId, startDate, endDate)
+        val otaSnapshots = inventorySnapshotReader.fetchInventory(
+            apiEndpoint,
+            propertyId,
+            channel.code,
+            roomTypeId,
+            startDate,
+            endDate
+        )
         val otaByDate = otaSnapshots.associateBy { it.date.toString() }
 
         val pmsInventories = roomInventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(

@@ -1,7 +1,16 @@
 package com.stayops.channel.application.required
 
+import java.time.LocalDate
+
 interface MockOtaBookingSimulator {
     fun simulateRandomBooking(endpoint: String, propertyId: String, channelCode: String): MockOtaRandomBookingResult
+    fun simulateInventoryBooking(
+        endpoint: String,
+        propertyId: String,
+        channelCode: String,
+        roomTypeCode: String,
+        date: LocalDate
+    ): MockOtaRandomBookingResult
 }
 
 data class MockOtaRandomBookingResult(

@@ -76,6 +76,8 @@ class ChannelSyncApplication(
                 val result = publisher.pushAvailability(
                     endpoint = channel.connectionInfo!!.apiEndpoint,
                     apiKey = null,
+                    propertyId = processing.propertyId,
+                    channelCode = processing.channelCode,
                     externalRoomTypeCode = roomTypeCode,
                     payload = processing.payload,
                     idempotencyKey = processing.idempotencyKey

@@ -50,16 +50,34 @@ class AriReceiverApi(
             return ResponseEntity.ok(mapOf("status" to "duplicate", "idempotencyKey" to key))
         }
 
-        val roomTypeId = payload["roomTypeCode"]?.toString() ?: ""
-        val date = payload["date"]?.toString() ?: ""
-        val availableCount = (payload["availableCount"] as? Number)?.toInt() ?: 0
+        val propertyId = payload.requiredString("propertyId")
+            ?: return ResponseEntity.badRequest().body(mapOf("error" to "propertyId is required"))
+        val channelCode = payload.requiredString("channelCode")
+            ?: return ResponseEntity.badRequest().body(mapOf("error" to "channelCode is required"))
+        val roomTypeId = payload.requiredString("roomTypeCode")
+            ?: return ResponseEntity.badRequest().body(mapOf("error" to "roomTypeCode is required"))
+        val date = payload.requiredString("date")
+            ?: return ResponseEntity.badRequest().body(mapOf("error" to "date is required"))
+        val availableCount = (payload["availableCount"] as? Number)?.toInt()
+            ?: return ResponseEntity.badRequest().body(mapOf("error" to "availableCount is required"))
 
-        val existing = otaInventoryDao.findByRoomTypeIdAndDate(roomTypeId, date)
+        val existing = otaInventoryDao.findByPropertyIdAndChannelCodeAndRoomTypeIdAndDate(
+            propertyId,
+            channelCode,
+            roomTypeId,
+            date
+        )
         if (existing != null) {
             otaInventoryDao.save(existing.copy(availableCount = availableCount, updatedAt = Instant.now()))
         } else {
             otaInventoryDao.save(
-                OtaInventory(roomTypeId = roomTypeId, date = date, availableCount = availableCount)
+                OtaInventory(
+                    propertyId = propertyId,
+                    channelCode = channelCode,
+                    roomTypeId = roomTypeId,
+                    date = date,
+                    availableCount = availableCount
+                )
             )
         }
 
@@ -71,11 +89,19 @@ class AriReceiverApi(
 
     @GetMapping("/inventory")
     fun getInventory(
+        @RequestParam propertyId: String,
+        @RequestParam channelCode: String,
         @RequestParam roomTypeId: String,
         @RequestParam startDate: String,
         @RequestParam endDate: String
     ): List<OtaInventory> {
-        return otaInventoryDao.findByRoomTypeIdAndDateRange(roomTypeId, startDate, endDate)
+        return otaInventoryDao.findByPropertyIdAndChannelCodeAndRoomTypeIdAndDateRange(
+            propertyId,
+            channelCode,
+            roomTypeId,
+            startDate,
+            endDate
+        )
     }
 
     @PostMapping("/clear")
@@ -83,4 +109,7 @@ class AriReceiverApi(
         otaInventoryDao.deleteAll()
         processedIdempotencyKeys.clear()
     }
+
+    private fun Map<String, Any>.requiredString(key: String): String? =
+        this[key]?.toString()?.takeIf { it.isNotBlank() }
 }

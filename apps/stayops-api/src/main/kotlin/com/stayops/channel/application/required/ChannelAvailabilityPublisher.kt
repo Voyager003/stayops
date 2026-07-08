@@ -4,6 +4,8 @@ interface ChannelAvailabilityPublisher {
     fun pushAvailability(
         endpoint: String,
         apiKey: String?,
+        propertyId: String,
+        channelCode: String,
         externalRoomTypeCode: String,
         payload: Map<String, Any>,
         idempotencyKey: String

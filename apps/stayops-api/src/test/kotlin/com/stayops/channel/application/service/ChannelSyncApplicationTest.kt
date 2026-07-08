@@ -85,7 +85,7 @@ class ChannelSyncApplicationTest : BehaviorSpec({
                 every { syncTaskRepository.save(any()) } answers { firstArg() }
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel()
                 every { publisherProvider.getPublisher("AGODA") } returns availabilityPublisher
-                every { availabilityPublisher.pushAvailability(any(), any(), any(), any(), any()) } returns SyncResult(success = true)
+                every { availabilityPublisher.pushAvailability(any(), any(), any(), any(), any(), any(), any()) } returns SyncResult(success = true)
 
                 sut.processPendingTasks()
 
@@ -96,6 +96,8 @@ class ChannelSyncApplicationTest : BehaviorSpec({
                     availabilityPublisher.pushAvailability(
                         endpoint = "https://mock-ota:8081/api/v1/ari/availability",
                         apiKey = null,
+                        propertyId = "prop-1",
+                        channelCode = "AGODA",
                         externalRoomTypeCode = "rt-1",
                         payload = any(),
                         idempotencyKey = any()
@@ -137,7 +139,7 @@ class ChannelSyncApplicationTest : BehaviorSpec({
                 }
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel()
                 every { publisherProvider.getPublisher("AGODA") } returns availabilityPublisher
-                every { availabilityPublisher.pushAvailability(any(), any(), any(), any(), any()) } returns SyncResult(success = true)
+                every { availabilityPublisher.pushAvailability(any(), any(), any(), any(), any(), any(), any()) } returns SyncResult(success = true)
 
                 sut.processPendingTasks()
 
@@ -158,7 +160,7 @@ class ChannelSyncApplicationTest : BehaviorSpec({
                 every { syncTaskRepository.save(any()) } answers { firstArg() }
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "AGODA") } returns otaChannel()
                 every { publisherProvider.getPublisher("AGODA") } returns availabilityPublisher
-                every { availabilityPublisher.pushAvailability(any(), any(), any(), any(), any()) } returns
+                every { availabilityPublisher.pushAvailability(any(), any(), any(), any(), any(), any(), any()) } returns
                         SyncResult(success = false, errorMessage = "Connection timeout")
 
                 sut.processPendingTasks()
@@ -189,13 +191,13 @@ class ChannelSyncApplicationTest : BehaviorSpec({
                 every { channelRepository.findByPropertyIdAndCode("prop-1", "BOOKING") } returns otaChannel("BOOKING")
                 every { publisherProvider.getPublisher("AGODA") } returns availabilityPublisher
                 every { publisherProvider.getPublisher("BOOKING") } returns availabilityPublisher
-                every { availabilityPublisher.pushAvailability(any(), any(), any(), any(), any()) } returns SyncResult(success = true)
+                every { availabilityPublisher.pushAvailability(any(), any(), any(), any(), any(), any(), any()) } returns SyncResult(success = true)
 
                 sut.processPendingTasks()
 
                 // task2는 정상 처리됨
                 verify(exactly = 2) {
-                    availabilityPublisher.pushAvailability(any(), any(), any(), any(), any())
+                    availabilityPublisher.pushAvailability(any(), any(), any(), any(), any(), any(), any())
                 }
             }
         }

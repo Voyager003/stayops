@@ -26,11 +26,15 @@ class HttpChannelAvailabilityPublisher(
     override fun pushAvailability(
         endpoint: String,
         apiKey: String?,
+        propertyId: String,
+        channelCode: String,
         externalRoomTypeCode: String,
         payload: Map<String, Any>,
         idempotencyKey: String
     ): SyncResult {
         val body = payload.toMutableMap()
+        body["propertyId"] = propertyId
+        body["channelCode"] = channelCode
         body["roomTypeCode"] = externalRoomTypeCode
 
         return try {

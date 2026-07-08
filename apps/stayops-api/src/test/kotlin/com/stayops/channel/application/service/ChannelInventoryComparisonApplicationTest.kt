@@ -62,7 +62,7 @@ class ChannelInventoryComparisonApplicationTest : BehaviorSpec({
                 clearAllMocks()
                 every { channelRepository.findById("ch-1") } returns otaChannel()
                 every {
-                    inventorySnapshotReader.fetchInventory("https://mock-ota/ari", "rt-1", startDate, endDate)
+                    inventorySnapshotReader.fetchInventory("https://mock-ota/ari", "prop-1", "AGODA", "rt-1", startDate, endDate)
                 } returns listOf(
                     ExternalInventorySnapshot("rt-1", startDate, 5),
                     ExternalInventorySnapshot("rt-1", endDate, 5)
@@ -92,7 +92,7 @@ class ChannelInventoryComparisonApplicationTest : BehaviorSpec({
                 clearAllMocks()
                 every { channelRepository.findById("ch-1") } returns otaChannel()
                 every {
-                    inventorySnapshotReader.fetchInventory("https://mock-ota/ari", "rt-1", startDate, endDate)
+                    inventorySnapshotReader.fetchInventory("https://mock-ota/ari", "prop-1", "AGODA", "rt-1", startDate, endDate)
                 } returns listOf(ExternalInventorySnapshot("rt-1", startDate, 3))
                 every {
                     roomInventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(

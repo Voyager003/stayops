@@ -12,6 +12,8 @@ import java.time.LocalDate
 interface ChannelInventorySnapshotReader {
     fun fetchInventory(
         apiEndpoint: String,
+        propertyId: String,
+        channelCode: String,
         roomTypeId: String,
         startDate: LocalDate,
         endDate: LocalDate
