@@ -196,6 +196,33 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         now = fixedInstant
     )
 
+    fun finalAttemptCancelMessage(): PaymentOutboxMessage {
+        val message = cancelMessage()
+        return PaymentOutboxMessage.reconstitute(
+            id = message.id,
+            paymentId = message.paymentId,
+            reservationId = message.reservationId,
+            reservationIntentId = message.reservationIntentId,
+            memberId = message.memberId,
+            type = message.type,
+            paymentKey = message.paymentKey,
+            orderId = message.orderId,
+            amount = message.amount,
+            cancelReason = message.cancelReason,
+            idempotencyKey = message.idempotencyKey,
+            status = PaymentOutboxStatus.PENDING,
+            retryCount = 2,
+            maxRetries = 3,
+            nextRetryAt = null,
+            lockedBy = null,
+            lockedUntil = null,
+            lastError = "이전 PG 취소 실패",
+            version = message.version,
+            createdAt = message.createdAt,
+            updatedAt = fixedInstant
+        )
+    }
+
     fun claim(message: PaymentOutboxMessage) {
         val processing = message.startProcessing(
             workerId = "worker-1",
@@ -741,6 +768,80 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
                 verify(exactly = 0) { paymentRepository.save(match { it.status == PaymentStatus.CANCELLED }) }
                 verify(exactly = 0) { paymentRepository.save(match { it.status == PaymentStatus.CANCEL_FAILED }) }
                 verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.PENDING && it.retryCount == 1 }) }
+            }
+        }
+
+        `when`("PG 취소 응답이 불명확하면") {
+            then("Payment는 CANCEL_REQUESTED로 유지하고 Outbox를 재시도 대기로 되돌린다") {
+                val message = cancelMessage()
+                claim(message)
+                every { paymentRepository.findById("pay-1") } returns cancelRequestedPayment()
+                every { reservationRepository.findById("rsv-1") } returns pendingReservation().confirm().cancel()
+                every { paymentGateway.cancel(any(), any(), any()) } throws
+                    PaymentGatewayException.UnknownError("UNKNOWN_ERROR", "PG 취소 응답 유실")
+
+                application.processPendingMessages(workerId = "worker-1")
+
+                verify(exactly = 0) { paymentRepository.save(any()) }
+                verify {
+                    outboxRepository.save(match {
+                        it.status == PaymentOutboxStatus.PENDING &&
+                            it.retryCount == 1
+                    })
+                }
+            }
+        }
+
+        `when`("PG 취소가 최종 거절되면") {
+            then("Payment를 CANCEL_FAILED로 변경하고 Outbox를 건너뛴다") {
+                val message = cancelMessage()
+                claim(message)
+                every { paymentRepository.findById("pay-1") } returns cancelRequestedPayment()
+                every { reservationRepository.findById("rsv-1") } returns pendingReservation().confirm().cancel()
+                every { paymentGateway.cancel(any(), any(), any()) } throws
+                    PaymentGatewayException.PaymentDeclined("CANCEL_DECLINED", "PG 취소 거절")
+
+                application.processPendingMessages(workerId = "worker-1")
+
+                verify { paymentRepository.save(match { it.status == PaymentStatus.CANCEL_FAILED }) }
+                verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.SKIPPED }) }
+            }
+        }
+
+        `when`("PG 취소 요청이 유효하지 않으면") {
+            then("Payment를 CANCEL_FAILED로 변경하고 Outbox를 건너뛴다") {
+                val message = cancelMessage()
+                claim(message)
+                every { paymentRepository.findById("pay-1") } returns cancelRequestedPayment()
+                every { reservationRepository.findById("rsv-1") } returns pendingReservation().confirm().cancel()
+                every { paymentGateway.cancel(any(), any(), any()) } throws
+                    PaymentGatewayException.InvalidRequest("INVALID_REQUEST", "잘못된 PG 취소 요청")
+
+                application.processPendingMessages(workerId = "worker-1")
+
+                verify { paymentRepository.save(match { it.status == PaymentStatus.CANCEL_FAILED }) }
+                verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.SKIPPED }) }
+            }
+        }
+
+        `when`("PG 취소 일시 장애가 최대 재시도에 도달하면") {
+            then("Payment와 Outbox를 최종 실패 처리한다") {
+                val message = finalAttemptCancelMessage()
+                claim(message)
+                every { paymentRepository.findById("pay-1") } returns cancelRequestedPayment()
+                every { reservationRepository.findById("rsv-1") } returns pendingReservation().confirm().cancel()
+                every { paymentGateway.cancel(any(), any(), any()) } throws
+                    PaymentGatewayException.ProviderError("PROVIDER_ERROR", "PG 취소 장애 지속")
+
+                application.processPendingMessages(workerId = "worker-1")
+
+                verify { paymentRepository.save(match { it.status == PaymentStatus.CANCEL_FAILED }) }
+                verify {
+                    outboxRepository.save(match {
+                        it.status == PaymentOutboxStatus.FAILED &&
+                            it.retryCount == 3
+                    })
+                }
             }
         }
 
