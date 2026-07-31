@@ -13,7 +13,9 @@ import com.stayops.payment.domain.model.Payment
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentRepository
 import com.stayops.shared.domain.Money
+import com.stayops.shared.exception.ConflictException
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -72,6 +74,24 @@ class RdbPaymentRepositoryTest @Autowired constructor(
             assertThat(found.paymentKey).isEqualTo("payment-key-1")
             assertThat(found.method).isEqualTo("CARD")
             assertThat(found.approvedAt).isEqualTo(Instant.parse("2026-07-01T01:00:00Z"))
+        }
+
+        @Test
+        fun `먼저 저장된 Payment와 같은 버전의 stale 변경은 거부한다`() {
+            insertReservation("res-1")
+            paymentRepository.save(newPayment())
+            val firstSnapshot = paymentRepository.findById("pay-1")!!
+            val staleSnapshot = paymentRepository.findById("pay-1")!!
+
+            val updated = paymentRepository.save(firstSnapshot.requestCancel())
+
+            assertThat(updated.version).isEqualTo(1L)
+            assertThatThrownBy {
+                paymentRepository.save(staleSnapshot.failCancel("stale update"))
+            }.isInstanceOf(ConflictException::class.java)
+                .hasMessageContaining("Payment 버전 충돌")
+            assertThat(paymentRepository.findById("pay-1")!!.status)
+                .isEqualTo(PaymentStatus.CANCEL_REQUESTED)
         }
     }
 
