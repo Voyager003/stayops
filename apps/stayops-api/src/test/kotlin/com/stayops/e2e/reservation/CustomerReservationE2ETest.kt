@@ -445,6 +445,62 @@ class CustomerReservationE2ETest @Autowired constructor(
         }
 
         @Test
+        fun `hold_소비_후_intent_저장이_충돌하면_TX3의_내부_저장과_hold_소비를_모두_롤백한다`() {
+            val intentResult = customerReservationApplication.createReservationIntent(
+                memberId = "customer-e2e",
+                propertyId = "prop-e2e",
+                roomTypeId = "rt-e2e",
+                checkIn = checkIn,
+                checkOut = checkOut,
+                numberOfGuests = 2,
+                guestName = "TX3후반고객",
+                guestPhone = "010-3333-3334",
+                guestEmail = "tx3-late@test.com"
+            )
+            customerReservationApplication.confirmReservationIntentPayment(
+                memberId = "customer-e2e",
+                reservationIntentId = intentResult.intent.id,
+                paymentKey = "toss_pk_mongo_tx3_late_rollback",
+                orderId = intentResult.payment.orderId,
+                amount = intentResult.payment.amount.amount
+            )
+            assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+                .isEqualTo(InventoryHoldStatus.HELD)
+            every { paymentGateway.confirm(any(), any(), any(), any()) } answers {
+                val concurrentIntent = reservationIntentRepository.findById(intentResult.intent.id)!!
+                reservationIntentRepository.save(
+                    concurrentIntent.failPayment("동시 상태 변경", Instant.now(clock))
+                )
+                PaymentConfirmResult(
+                    paymentKey = "toss_pk_mongo_tx3_late_rollback",
+                    orderId = intentResult.payment.orderId,
+                    method = "카드",
+                    approvedAt = Instant.now(clock),
+                    totalAmount = intentResult.payment.amount.amount
+                )
+            }
+
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "mongo-tx3-late-rollback-worker")
+
+            val intent = reservationIntentRepository.findById(intentResult.intent.id)!!
+            val payment = paymentRepository.findByReservationIntentId(intentResult.intent.id)!!
+            val outbox = paymentOutboxRepository.findByPaymentIdAndType(
+                intentResult.payment.id,
+                PaymentOutboxType.CONFIRM_PAYMENT
+            )!!
+
+            assertThat(intent.status).isEqualTo(ReservationIntentStatus.PAYMENT_FAILED)
+            assertThat(intent.reservationId).isNull()
+            assertThat(payment.status).isEqualTo(PaymentStatus.CONFIRM_REQUESTED)
+            assertThat(payment.reservationId).isNull()
+            assertThat(outbox.status).isEqualTo(PaymentOutboxStatus.PENDING)
+            assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+                .isEqualTo(InventoryHoldStatus.HELD)
+            assertThat(reservationRepository.findPageByMemberId("customer-e2e", 0, 20).content).isEmpty()
+            assertThat(mongoTemplate.getCollection("guests").countDocuments()).isZero()
+        }
+
+        @Test
         fun `내부_예약_확정이_3회_실패하면_결제_취소를_요청하고_PG_취소_성공_후_완료한다`() {
             val mutableClock = clock as MutableClock
             val intentResult = customerReservationApplication.createReservationIntent(
