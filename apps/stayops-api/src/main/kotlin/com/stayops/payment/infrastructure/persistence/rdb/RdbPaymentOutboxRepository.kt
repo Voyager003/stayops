@@ -8,6 +8,7 @@ import com.stayops.payment.domain.model.PaymentOutboxType
 import com.stayops.payment.domain.repository.PaymentOutboxRepository
 import com.stayops.shared.config.RdbPersistence
 import com.stayops.shared.domain.Money
+import com.stayops.shared.exception.ConflictException
 import org.jooq.Condition
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
@@ -23,7 +24,7 @@ class RdbPaymentOutboxRepository(
 ) : PaymentOutboxRepository {
 
     override fun save(message: PaymentOutboxMessage): PaymentOutboxMessage {
-        dsl.insertInto(PAYMENT_OUTBOX_MESSAGES)
+        val affectedRows = dsl.insertInto(PAYMENT_OUTBOX_MESSAGES)
             .set(PAYMENT_OUTBOX_MESSAGES.ID, message.id)
             .set(PAYMENT_OUTBOX_MESSAGES.PAYMENT_ID, message.paymentId)
             .set(PAYMENT_OUTBOX_MESSAGES.RESERVATION_ID, message.reservationId)
@@ -66,10 +67,17 @@ class RdbPaymentOutboxRepository(
             .set(PAYMENT_OUTBOX_MESSAGES.LOCKED_BY, message.lockedBy)
             .set(PAYMENT_OUTBOX_MESSAGES.LOCKED_UNTIL, message.lockedUntil?.toOffsetDateTime())
             .set(PAYMENT_OUTBOX_MESSAGES.LAST_ERROR, message.lastError)
-            .set(PAYMENT_OUTBOX_MESSAGES.VERSION, message.version)
-            .set(PAYMENT_OUTBOX_MESSAGES.CREATED_AT, message.createdAt.toOffsetDateTime())
+            .set(PAYMENT_OUTBOX_MESSAGES.VERSION, PAYMENT_OUTBOX_MESSAGES.VERSION.plus(1L))
             .set(PAYMENT_OUTBOX_MESSAGES.UPDATED_AT, message.updatedAt.toOffsetDateTime())
+            .where(PAYMENT_OUTBOX_MESSAGES.VERSION.eq(message.version))
             .execute()
+
+        if (affectedRows == 0) {
+            throw ConflictException(
+                code = "PAYMENT_OUTBOX_CONFLICT",
+                message = "PaymentOutbox 버전 충돌이 발생했습니다: ${message.id}"
+            )
+        }
 
         return findById(message.id) ?: message
     }
