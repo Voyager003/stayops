@@ -6,6 +6,10 @@ import com.stayops.inventory.domain.repository.InventoryHoldRepository
 import com.stayops.inventory.infrastructure.persistence.mongo.dao.InventoryHoldMongoDao
 import com.stayops.inventory.infrastructure.persistence.mongo.document.InventoryHoldDocument
 import com.stayops.shared.config.MongoPersistence
+import jakarta.annotation.PostConstruct
+import org.springframework.data.domain.Sort
+import org.springframework.data.mongodb.core.MongoTemplate
+import org.springframework.data.mongodb.core.index.Index
 import org.springframework.stereotype.Repository
 import java.time.Instant
 import java.time.LocalDate
@@ -13,8 +17,15 @@ import java.time.LocalDate
 @MongoPersistence
 @Repository
 class MongoInventoryHoldRepository(
-    private val mongo: InventoryHoldMongoDao
+    private val mongo: InventoryHoldMongoDao,
+    private val mongoTemplate: MongoTemplate
 ) : InventoryHoldRepository {
+
+    @PostConstruct
+    fun createIndexes() {
+        mongoTemplate.indexOps(InventoryHoldDocument::class.java)
+            .createIndex(Index().on("reservationIntentId", Sort.Direction.ASC).unique())
+    }
 
     override fun save(hold: InventoryHold): InventoryHold =
         mongo.save(InventoryHoldDocument.from(hold)).toDomain()

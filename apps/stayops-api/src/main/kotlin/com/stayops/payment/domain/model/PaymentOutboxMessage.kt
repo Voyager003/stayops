@@ -278,6 +278,50 @@ class PaymentOutboxMessage private constructor(
             )
         }
 
+        fun createCancelForReservationIntent(
+            id: String,
+            paymentId: String,
+            reservationIntentId: String,
+            memberId: String,
+            paymentKey: String,
+            orderId: String,
+            amount: Money,
+            cancelReason: String,
+            now: Instant = Instant.now()
+        ): PaymentOutboxMessage {
+            require(id.isNotBlank()) { "id는 필수입니다" }
+            require(paymentId.isNotBlank()) { "paymentId는 필수입니다" }
+            require(reservationIntentId.isNotBlank()) { "reservationIntentId는 필수입니다" }
+            require(memberId.isNotBlank()) { "memberId는 필수입니다" }
+            require(paymentKey.isNotBlank()) { "paymentKey는 필수입니다" }
+            require(orderId.isNotBlank()) { "orderId는 필수입니다" }
+            require(cancelReason.isNotBlank()) { "cancelReason은 필수입니다" }
+
+            return PaymentOutboxMessage(
+                id = id,
+                paymentId = paymentId,
+                reservationId = null,
+                reservationIntentId = reservationIntentId,
+                memberId = memberId,
+                type = PaymentOutboxType.CANCEL_PAYMENT,
+                paymentKey = paymentKey,
+                orderId = orderId,
+                amount = amount,
+                cancelReason = cancelReason,
+                idempotencyKey = "payment-cancel:$paymentId:$orderId",
+                status = PaymentOutboxStatus.PENDING,
+                retryCount = 0,
+                maxRetries = DEFAULT_MAX_RETRIES,
+                nextRetryAt = null,
+                lockedBy = null,
+                lockedUntil = null,
+                lastError = null,
+                version = 0L,
+                createdAt = now,
+                updatedAt = now
+            )
+        }
+
         fun reconstitute(
             id: String,
             paymentId: String,

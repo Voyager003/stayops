@@ -33,6 +33,9 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 @SpringJUnitConfig(classes = [RdbPaymentOutboxPersistenceTest.TestApplication::class])
 @ActiveProfiles("rdb")
@@ -90,6 +93,76 @@ class RdbPaymentOutboxPersistenceTest @Autowired constructor(
             assertThat(found.amount).isEqualTo(Money.of(BigDecimal("220000.00")))
             assertThat(ready.map { it.id }).containsExactly("outbox-1")
         }
+
+        @Test
+        fun `처리 가능한 Outbox를 claim하면 lease 동안 다른 worker가 가져갈 수 없다`() {
+            insertPayment()
+            val now = Instant.parse("2026-07-01T00:00:00Z")
+            paymentOutboxRepository.save(confirmMessage("outbox-claim", now))
+
+            val claimed = paymentOutboxRepository.claimReadyForProcessing(
+                workerId = "worker-1",
+                now = now,
+                lockedUntil = now.plusSeconds(60)
+            )
+            val duplicateClaim = paymentOutboxRepository.claimReadyForProcessing(
+                workerId = "worker-2",
+                now = now.plusSeconds(30),
+                lockedUntil = now.plusSeconds(90)
+            )
+
+            assertThat(claimed!!.status.name).isEqualTo("IN_PROGRESS")
+            assertThat(claimed.lockedBy).isEqualTo("worker-1")
+            assertThat(claimed.lockedUntil).isEqualTo(now.plusSeconds(60))
+            assertThat(duplicateClaim).isNull()
+        }
+
+        @Test
+        fun `lease가 만료된 Outbox는 다른 worker가 회수할 수 있다`() {
+            insertPayment()
+            val now = Instant.parse("2026-07-01T00:00:00Z")
+            paymentOutboxRepository.save(confirmMessage("outbox-expired", now))
+            paymentOutboxRepository.claimReadyForProcessing("worker-1", now, now.plusSeconds(60))
+
+            val reclaimed = paymentOutboxRepository.claimReadyForProcessing(
+                workerId = "worker-2",
+                now = now.plusSeconds(61),
+                lockedUntil = now.plusSeconds(121)
+            )
+
+            assertThat(reclaimed!!.id).isEqualTo("outbox-expired")
+            assertThat(reclaimed.lockedBy).isEqualTo("worker-2")
+        }
+
+        @Test
+        fun `두 worker가 동시에 claim해도 한 worker만 같은 Outbox를 획득한다`() {
+            insertPayment()
+            val now = Instant.parse("2026-07-01T00:00:00Z")
+            paymentOutboxRepository.save(confirmMessage("outbox-concurrent", now))
+            val executor = Executors.newFixedThreadPool(2)
+            val ready = CountDownLatch(2)
+            val start = CountDownLatch(1)
+
+            val futures = (1..2).map { worker ->
+                executor.submit<PaymentOutboxMessage?> {
+                    ready.countDown()
+                    start.await(5, TimeUnit.SECONDS)
+                    paymentOutboxRepository.claimReadyForProcessing(
+                        workerId = "worker-$worker",
+                        now = now,
+                        lockedUntil = now.plusSeconds(60)
+                    )
+                }
+            }
+
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue()
+            start.countDown()
+            val claimed = futures.mapNotNull { it.get(10, TimeUnit.SECONDS) }
+            executor.shutdownNow()
+
+            assertThat(claimed).hasSize(1)
+            assertThat(claimed.single().id).isEqualTo("outbox-concurrent")
+        }
     }
 
     @Nested
@@ -131,6 +204,18 @@ class RdbPaymentOutboxPersistenceTest @Autowired constructor(
             .set(PAYMENTS.UPDATED_AT, now)
             .execute()
     }
+
+    private fun confirmMessage(id: String, now: Instant): PaymentOutboxMessage =
+        PaymentOutboxMessage.createConfirm(
+            id = id,
+            paymentId = "pay-1",
+            reservationId = "res-1",
+            memberId = "member-1",
+            paymentKey = "payment-key-1",
+            orderId = "order-1",
+            amount = Money.of(220_000),
+            now = now
+        )
 
     private fun insertReservation() {
         insertMember("member-1")

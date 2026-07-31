@@ -6,6 +6,7 @@ import com.stayops.inventory.domain.model.InventoryHoldStatus
 import com.stayops.inventory.domain.repository.InventoryHoldRepository
 import com.stayops.inventory.infrastructure.persistence.mongo.dao.InventoryHoldMongoDao
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -53,9 +54,26 @@ class MongoInventoryHoldRepositoryTest @Autowired constructor(
         @Test
         fun `겹치는 날짜의 만료되지 않은 hold만 반환한다`() {
             repository.save(newHold(id = "hold-active"))
-            repository.save(newHold(id = "hold-expired", expiresAt = now.minusSeconds(1)))
-            repository.save(newHold(id = "hold-other-date", dates = listOf(LocalDate.of(2026, 5, 10))))
-            repository.save(newHold(id = "hold-released").release(now.minusSeconds(1)))
+            repository.save(
+                newHold(
+                    id = "hold-expired",
+                    reservationIntentId = "intent-expired",
+                    expiresAt = now.minusSeconds(1)
+                )
+            )
+            repository.save(
+                newHold(
+                    id = "hold-other-date",
+                    reservationIntentId = "intent-other-date",
+                    dates = listOf(LocalDate.of(2026, 5, 10))
+                )
+            )
+            repository.save(
+                newHold(
+                    id = "hold-released",
+                    reservationIntentId = "intent-released"
+                ).release(now.minusSeconds(1))
+            )
 
             val result = repository.findActiveByPropertyIdAndRoomTypeIdAndDates(
                 propertyId = "prop-1",
@@ -76,16 +94,26 @@ class MongoInventoryHoldRepositoryTest @Autowired constructor(
             assertThat(found).isNotNull
             assertThat(found!!.id).isEqualTo("hold-1")
         }
+
+        @Test
+        fun `같은 reservationIntentId로 hold를 두 번 저장할 수 없다`() {
+            repository.save(newHold(id = "hold-first"))
+
+            assertThatThrownBy {
+                repository.save(newHold(id = "hold-duplicate"))
+            }.isInstanceOf(org.springframework.dao.DuplicateKeyException::class.java)
+        }
     }
 
     private fun newHold(
         id: String = "hold-1",
+        reservationIntentId: String = "intent-1",
         dates: List<LocalDate> = this.dates,
         expiresAt: Instant = now.plusSeconds(900)
     ): InventoryHold =
         InventoryHold.create(
             id = id,
-            reservationIntentId = "intent-1",
+            reservationIntentId = reservationIntentId,
             propertyId = "prop-1",
             roomTypeId = "rt-1",
             dates = dates,

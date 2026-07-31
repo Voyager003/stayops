@@ -78,10 +78,30 @@ class RdbInventoryHoldRepositoryTest @Autowired constructor(
         @Test
         fun `겹치는 날짜의 만료되지 않은 hold만 반환한다`() {
             insertDependencies()
+            insertReservationIntent("intent-expired", "hold-expired")
+            insertReservationIntent("intent-other-date", "hold-other-date")
+            insertReservationIntent("intent-released", "hold-released")
             repository.save(newHold(id = "hold-active"))
-            repository.save(newHold(id = "hold-expired", expiresAt = now.minusSeconds(1)))
-            repository.save(newHold(id = "hold-other-date", dates = listOf(LocalDate.of(2026, 5, 10))))
-            repository.save(newHold(id = "hold-released").release(now.minusSeconds(1)))
+            repository.save(
+                newHold(
+                    id = "hold-expired",
+                    reservationIntentId = "intent-expired",
+                    expiresAt = now.minusSeconds(1)
+                )
+            )
+            repository.save(
+                newHold(
+                    id = "hold-other-date",
+                    reservationIntentId = "intent-other-date",
+                    dates = listOf(LocalDate.of(2026, 5, 10))
+                )
+            )
+            repository.save(
+                newHold(
+                    id = "hold-released",
+                    reservationIntentId = "intent-released"
+                ).release(now.minusSeconds(1))
+            )
 
             val result = repository.findActiveByPropertyIdAndRoomTypeIdAndDates(
                 propertyId = "prop-1",
@@ -96,12 +116,13 @@ class RdbInventoryHoldRepositoryTest @Autowired constructor(
 
     private fun newHold(
         id: String = "hold-1",
+        reservationIntentId: String = "intent-1",
         dates: List<LocalDate> = this.dates,
         expiresAt: Instant = now.plusSeconds(900)
     ): InventoryHold =
         InventoryHold.create(
             id = id,
-            reservationIntentId = "intent-1",
+            reservationIntentId = reservationIntentId,
             propertyId = "prop-1",
             roomTypeId = "rt-1",
             dates = dates,
@@ -155,8 +176,13 @@ class RdbInventoryHoldRepositoryTest @Autowired constructor(
             .set(ROOM_TYPES.CREATED_AT, timestamp)
             .set(ROOM_TYPES.UPDATED_AT, timestamp)
             .execute()
+        insertReservationIntent("intent-1", "hold-1")
+    }
+
+    private fun insertReservationIntent(intentId: String, holdId: String) {
+        val timestamp = OffsetDateTime.ofInstant(now, ZoneOffset.UTC)
         dsl.insertInto(RESERVATION_INTENTS)
-            .set(RESERVATION_INTENTS.ID, "intent-1")
+            .set(RESERVATION_INTENTS.ID, intentId)
             .set(RESERVATION_INTENTS.MEMBER_ID, "member-1")
             .set(RESERVATION_INTENTS.PROPERTY_ID, "prop-1")
             .set(RESERVATION_INTENTS.ROOM_TYPE_ID, "rt-1")
@@ -174,8 +200,8 @@ class RdbInventoryHoldRepositoryTest @Autowired constructor(
             .set(RESERVATION_INTENTS.TOTAL_AMOUNT, BigDecimal("200000.00"))
             .set(RESERVATION_INTENTS.COMMISSION_AMOUNT, BigDecimal.ZERO)
             .set(RESERVATION_INTENTS.NET_AMOUNT, BigDecimal("200000.00"))
-            .set(RESERVATION_INTENTS.PAYMENT_ID, "payment-1")
-            .set(RESERVATION_INTENTS.HOLD_ID, "hold-1")
+            .set(RESERVATION_INTENTS.PAYMENT_ID, "payment-$intentId")
+            .set(RESERVATION_INTENTS.HOLD_ID, holdId)
             .set(RESERVATION_INTENTS.STATUS, "PAYMENT_WAITING")
             .set(RESERVATION_INTENTS.EXPIRES_AT, timestamp.plusMinutes(15))
             .set(RESERVATION_INTENTS.VERSION, 0L)

@@ -96,6 +96,27 @@ class PaymentOutboxMessageTest : BehaviorSpec({
                 }
             }
         }
+
+        `when`("예약 생성 전에 승인된 intent 결제를 취소하면") {
+            val message = PaymentOutboxMessage.createCancelForReservationIntent(
+                id = "outbox-intent-cancel",
+                paymentId = "pay-intent-1",
+                reservationIntentId = "intent-1",
+                memberId = "member-1",
+                paymentKey = "toss_pk_123",
+                orderId = "STAYOPS-intent-1-123",
+                amount = Money.won(200_000),
+                cancelReason = "내부 예약 확정 실패",
+                now = now
+            )
+
+            then("예약 ID 없이 intent ID와 취소 멱등성 키를 가진다") {
+                message.type shouldBe PaymentOutboxType.CANCEL_PAYMENT
+                message.reservationId shouldBe null
+                message.reservationIntentId shouldBe "intent-1"
+                message.idempotencyKey shouldBe "payment-cancel:pay-intent-1:STAYOPS-intent-1-123"
+            }
+        }
     }
 
     given("PaymentOutboxMessage 동일성 비교 시") {
