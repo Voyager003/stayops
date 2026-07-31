@@ -7,6 +7,7 @@ import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentRepository
 import com.stayops.shared.config.RdbPersistence
 import com.stayops.shared.domain.Money
+import com.stayops.shared.exception.ConflictException
 import org.jooq.Condition
 import org.jooq.DSLContext
 import org.springframework.stereotype.Repository
@@ -21,7 +22,7 @@ class RdbPaymentRepository(
 ) : PaymentRepository {
 
     override fun save(payment: Payment): Payment {
-        dsl.insertInto(PAYMENTS)
+        val affectedRows = dsl.insertInto(PAYMENTS)
             .set(PAYMENTS.ID, payment.id)
             .set(PAYMENTS.RESERVATION_ID, payment.reservationId)
             .set(PAYMENTS.RESERVATION_INTENT_ID, payment.reservationIntentId)
@@ -50,10 +51,17 @@ class RdbPaymentRepository(
             .set(PAYMENTS.METHOD, payment.method)
             .set(PAYMENTS.FAIL_REASON, payment.failReason)
             .set(PAYMENTS.APPROVED_AT, payment.approvedAt?.toOffsetDateTime())
-            .set(PAYMENTS.VERSION, payment.version)
-            .set(PAYMENTS.CREATED_AT, payment.createdAt.toOffsetDateTime())
+            .set(PAYMENTS.VERSION, PAYMENTS.VERSION.plus(1L))
             .set(PAYMENTS.UPDATED_AT, payment.updatedAt.toOffsetDateTime())
+            .where(PAYMENTS.VERSION.eq(payment.version))
             .execute()
+
+        if (affectedRows == 0) {
+            throw ConflictException(
+                code = "PAYMENT_CONFLICT",
+                message = "Payment 버전 충돌이 발생했습니다: ${payment.id}"
+            )
+        }
 
         return findById(payment.id) ?: payment
     }
