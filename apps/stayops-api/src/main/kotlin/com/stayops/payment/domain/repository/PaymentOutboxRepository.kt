@@ -8,5 +8,6 @@ interface PaymentOutboxRepository {
     fun save(message: PaymentOutboxMessage): PaymentOutboxMessage
     fun findById(id: String): PaymentOutboxMessage?
     fun findByPaymentIdAndType(paymentId: String, type: PaymentOutboxType): PaymentOutboxMessage?
+    fun claimReadyForProcessing(workerId: String, now: Instant, lockedUntil: Instant): PaymentOutboxMessage?
     fun findReadyForProcessing(now: Instant): List<PaymentOutboxMessage>
 }

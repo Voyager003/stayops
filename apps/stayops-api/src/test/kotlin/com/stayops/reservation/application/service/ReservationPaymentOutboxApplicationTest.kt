@@ -16,6 +16,7 @@ import com.stayops.payment.application.required.PaymentConfirmResult
 import com.stayops.payment.application.required.PaymentGateway
 import com.stayops.payment.application.required.PaymentGatewayException
 import com.stayops.payment.application.required.PaymentInquiryResult
+import com.stayops.payment.application.service.PaymentOutboxTransactionBoundary
 import com.stayops.reservation.domain.event.ReservationCreated
 import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.Reservation
@@ -72,7 +73,8 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         paymentGateway = paymentGateway,
         eventPublisher = eventPublisher,
         clock = clock,
-        idGenerator = idGenerator
+        idGenerator = idGenerator,
+        transactionBoundary = PaymentOutboxTransactionBoundary()
     )
 
     val checkIn = LocalDate.of(2026, 5, 1)
@@ -155,6 +157,33 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         now = fixedInstant
     )
 
+    fun finalAttemptConfirmIntentMessage(): PaymentOutboxMessage {
+        val message = confirmIntentMessage()
+        return PaymentOutboxMessage.reconstitute(
+            id = message.id,
+            paymentId = message.paymentId,
+            reservationId = message.reservationId,
+            reservationIntentId = message.reservationIntentId,
+            memberId = message.memberId,
+            type = message.type,
+            paymentKey = message.paymentKey,
+            orderId = message.orderId,
+            amount = message.amount,
+            cancelReason = message.cancelReason,
+            idempotencyKey = message.idempotencyKey,
+            status = PaymentOutboxStatus.PENDING,
+            retryCount = 2,
+            maxRetries = 3,
+            nextRetryAt = null,
+            lockedBy = null,
+            lockedUntil = null,
+            lastError = "이전 내부 확정 실패",
+            version = message.version,
+            createdAt = message.createdAt,
+            updatedAt = fixedInstant
+        )
+    }
+
     fun cancelMessage() = PaymentOutboxMessage.createCancel(
         id = "outbox-2",
         paymentId = "pay-1",
@@ -166,6 +195,21 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         cancelReason = "고객 요청에 의한 취소",
         now = fixedInstant
     )
+
+    fun claim(message: PaymentOutboxMessage) {
+        val processing = message.startProcessing(
+            workerId = "worker-1",
+            lockedUntil = fixedInstant.plusSeconds(60),
+            now = fixedInstant
+        )
+        every {
+            outboxRepository.claimReadyForProcessing(
+                workerId = "worker-1",
+                now = fixedInstant,
+                lockedUntil = fixedInstant.plusSeconds(60)
+            )
+        } returnsMany listOf(processing, null)
+    }
 
     beforeTest {
         clearAllMocks()
@@ -185,7 +229,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         `when`("PG 승인에 성공하면") {
             then("Payment 승인과 재고 차감 후 Reservation은 PENDING으로 유지하고 Outbox를 완료한다") {
                 val message = confirmMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-1") } returns confirmRequestedPayment()
                 every { reservationRepository.findById("rsv-1") } returns pendingReservation()
                 every {
@@ -222,7 +266,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         `when`("ReservationIntent 기반 결제의 PG 승인에 성공하면") {
             then("hold를 소비하고 PENDING Reservation을 생성한 뒤 intent를 RESERVED로 변경한다") {
                 val message = confirmIntentMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-intent-1") } returns confirmRequestedIntentPayment()
                 every { reservationIntentRepository.findById("intent-1") } returns reservationIntent()
                 every { guestRepository.findByPropertyIdAndPhone("prop-1", "010-1111-2222") } returns null
@@ -266,10 +310,60 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
             }
         }
 
+        `when`("PG 승인은 성공했지만 마지막 내부 예약 확정도 실패하면") {
+            then("confirm Outbox를 실패 처리하고 intent 결제 취소 Outbox를 생성한다") {
+                val message = finalAttemptConfirmIntentMessage()
+                claim(message)
+                every { paymentRepository.findById("pay-intent-1") } returns confirmRequestedIntentPayment()
+                every { reservationIntentRepository.findById("intent-1") } returns reservationIntent()
+                every { guestRepository.findByPropertyIdAndPhone("prop-1", "010-1111-2222") } returns null
+                every {
+                    paymentGateway.confirm(
+                        paymentKey = "toss_pk_123",
+                        orderId = message.orderId,
+                        amount = BigDecimal(200_000),
+                        idempotencyKey = message.idempotencyKey
+                    )
+                } returns PaymentConfirmResult(
+                    paymentKey = "toss_pk_123",
+                    orderId = message.orderId,
+                    method = "카드",
+                    approvedAt = fixedInstant,
+                    totalAmount = BigDecimal(200_000)
+                )
+                every { reservationRepository.save(any()) } throws IllegalStateException("예약 저장 장애")
+
+                application.processPendingMessages(workerId = "worker-1")
+
+                verify {
+                    outboxRepository.save(match {
+                        it.id == message.id &&
+                            it.status == PaymentOutboxStatus.FAILED &&
+                            it.retryCount == 3
+                    })
+                }
+                verify {
+                    paymentRepository.save(match {
+                        it.status == PaymentStatus.CANCEL_REQUESTED &&
+                            it.paymentKey == "toss_pk_123"
+                    })
+                }
+                verify { reservationIntentRepository.save(match { it.status == ReservationIntentStatus.PAYMENT_FAILED }) }
+                verify(exactly = 1) { inventoryHoldService.release("intent-1") }
+                verify {
+                    outboxRepository.save(match {
+                        it.type == PaymentOutboxType.CANCEL_PAYMENT &&
+                            it.reservationId == null &&
+                            it.reservationIntentId == "intent-1"
+                    })
+                }
+            }
+        }
+
         `when`("ReservationIntent 기반 결제에서 PG가 결제를 최종 거절하면") {
             then("Payment와 intent를 실패 처리하고 hold를 해제한다") {
                 val message = confirmIntentMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-intent-1") } returns confirmRequestedIntentPayment()
                 every { reservationIntentRepository.findById("intent-1") } returns reservationIntent()
                 every { paymentGateway.confirm(any(), any(), any(), any()) } throws
@@ -288,7 +382,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         `when`("ReservationIntent 기반 결제에서 PG 승인 요청이 유효하지 않으면") {
             then("Payment와 intent를 실패 처리하고 hold를 해제한다") {
                 val message = confirmIntentMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-intent-1") } returns confirmRequestedIntentPayment()
                 every { reservationIntentRepository.findById("intent-1") } returns reservationIntent()
                 every { paymentGateway.confirm(any(), any(), any(), any()) } throws
@@ -307,7 +401,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         `when`("ReservationIntent 기반 결제에서 PG 승인 결과가 요청 값과 다르면") {
             then("Payment와 intent를 실패 처리하고 hold를 해제한다") {
                 val message = confirmIntentMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-intent-1") } returns confirmRequestedIntentPayment()
                 every { reservationIntentRepository.findById("intent-1") } returns reservationIntent()
                 every {
@@ -338,7 +432,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         `when`("ReservationIntent 기반 이미 처리된 결제 조회 결과가 DONE이 아니면") {
             then("Payment와 intent를 실패 처리하고 hold를 해제한다") {
                 val message = confirmIntentMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-intent-1") } returns confirmRequestedIntentPayment()
                 every { reservationIntentRepository.findById("intent-1") } returns reservationIntent()
                 every { paymentGateway.confirm(any(), any(), any(), any()) } throws
@@ -363,7 +457,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         `when`("PG가 이미 처리됐다고 응답하고 조회 결과 DONE이면") {
             then("외부 상태 조회 결과로 결제를 승인하고 Reservation은 PENDING으로 유지한다") {
                 val message = confirmMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-1") } returns confirmRequestedPayment()
                 every { reservationRepository.findById("rsv-1") } returns pendingReservation()
                 every { paymentGateway.confirm(any(), any(), any(), any()) } throws
@@ -388,7 +482,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         `when`("Payment는 이미 승인됐지만 Reservation이 아직 PENDING이면") {
             then("재고와 Reservation을 다시 변경하지 않고 Outbox만 완료한다") {
                 val message = confirmMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-1") } returns approvedPayment()
                 every { reservationRepository.findById("rsv-1") } returns pendingReservation()
 
@@ -405,7 +499,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         `when`("PG 승인 성공 후 재고가 부족하면") {
             then("Payment를 CANCEL_REQUESTED로 바꾸고 재고 부족 보상 취소 Outbox를 생성한다") {
                 val message = confirmMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-1") } returns confirmRequestedPayment()
                 every { reservationRepository.findById("rsv-1") } returns pendingReservation()
                 every {
@@ -445,7 +539,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         `when`("PG 승인 성공 후 일부 재고 차감 뒤 재고 변경 충돌이 발생하면") {
             then("이미 차감한 재고를 복원하고 Outbox를 재시도 대기로 되돌린다") {
                 val message = confirmMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-1") } returns confirmRequestedPayment()
                 every { reservationRepository.findById("rsv-1") } returns pendingReservation()
                 every {
@@ -484,7 +578,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         `when`("PG가 재시도 가능한 오류를 반환하면") {
             then("Payment와 Reservation은 유지하고 Outbox만 재시도 대기로 되돌린다") {
                 val message = confirmMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-1") } returns confirmRequestedPayment()
                 every { reservationRepository.findById("rsv-1") } returns pendingReservation()
                 every { paymentGateway.confirm(any(), any(), any(), any()) } throws
@@ -503,7 +597,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         `when`("PG가 재시도 가능한 오류를 반환하고 조회 결과가 DONE이 아니면") {
             then("Payment와 Reservation은 유지하고 Outbox만 재시도 대기로 되돌린다") {
                 val message = confirmMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-1") } returns confirmRequestedPayment()
                 every { reservationRepository.findById("rsv-1") } returns pendingReservation()
                 every { paymentGateway.confirm(any(), any(), any(), any()) } throws
@@ -526,7 +620,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         `when`("PG가 결제를 최종 거절하면") {
             then("Payment를 실패 처리하고 PENDING Reservation을 취소한다") {
                 val message = confirmMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-1") } returns confirmRequestedPayment()
                 every { reservationRepository.findById("rsv-1") } returns pendingReservation()
                 every { paymentGateway.confirm(any(), any(), any(), any()) } throws
@@ -543,7 +637,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         `when`("PG 승인 요청이 유효하지 않으면") {
             then("Payment를 실패 처리하고 PENDING Reservation을 취소한다") {
                 val message = confirmMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-1") } returns confirmRequestedPayment()
                 every { reservationRepository.findById("rsv-1") } returns pendingReservation()
                 every { paymentGateway.confirm(any(), any(), any(), any()) } throws
@@ -560,7 +654,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         `when`("이미 처리된 결제 조회 결과가 DONE이 아니면") {
             then("Payment를 실패 처리하고 PENDING Reservation을 취소한다") {
                 val message = confirmMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-1") } returns confirmRequestedPayment()
                 every { reservationRepository.findById("rsv-1") } returns pendingReservation()
                 every { paymentGateway.confirm(any(), any(), any(), any()) } throws
@@ -583,7 +677,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         `when`("예약이 이미 취소된 상태이면") {
             then("PG를 호출하지 않고 Outbox를 건너뛴다") {
                 val message = confirmMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-1") } returns confirmRequestedPayment().fail("고객 요청에 의한 취소")
                 every { reservationRepository.findById("rsv-1") } returns pendingReservation().cancelPending()
 
@@ -599,7 +693,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         `when`("PG 취소에 성공하면") {
             then("Payment 취소 후 Outbox를 완료한다") {
                 val message = cancelMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-1") } returns cancelRequestedPayment()
                 every { reservationRepository.findById("rsv-1") } returns pendingReservation().confirm().cancel()
                 every {
@@ -620,7 +714,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         `when`("PG가 이미 취소됐다고 응답하면") {
             then("Payment 취소 후 Outbox를 완료한다") {
                 val message = cancelMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-1") } returns cancelRequestedPayment()
                 every { reservationRepository.findById("rsv-1") } returns pendingReservation().confirm().cancel()
                 every { paymentGateway.cancel(any(), any(), any()) } throws
@@ -636,7 +730,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         `when`("PG 취소가 재시도 가능한 오류를 반환하면") {
             then("Payment는 CANCEL_REQUESTED로 유지하고 Outbox만 재시도 대기로 되돌린다") {
                 val message = cancelMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-1") } returns cancelRequestedPayment()
                 every { reservationRepository.findById("rsv-1") } returns pendingReservation().confirm().cancel()
                 every { paymentGateway.cancel(any(), any(), any()) } throws
@@ -653,7 +747,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         `when`("Payment가 이미 CANCELLED이면") {
             then("PG를 호출하지 않고 Outbox를 완료한다") {
                 val message = cancelMessage()
-                every { outboxRepository.findReadyForProcessing(fixedInstant) } returns listOf(message)
+                claim(message)
                 every { paymentRepository.findById("pay-1") } returns approvedPayment().cancel()
                 every { reservationRepository.findById("rsv-1") } returns pendingReservation().confirm().cancel()
 

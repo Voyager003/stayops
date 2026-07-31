@@ -104,18 +104,18 @@ class PersistenceNamingConventionTest {
             message = "RDB profile must manage PostgreSQL schema with Flyway migrations under db/migration"
         )
 
-        val indexDefinitions = Files.walk(migrationRoot).use { paths ->
+        val initialModelingIndexes = Files.walk(migrationRoot).use { paths ->
             paths
                 .filter { Files.isRegularFile(it) }
-                .filter { it.fileName.toString().endsWith(".sql") }
+                .filter { it.fileName.toString().startsWith("V1__") }
                 .filter { Files.readString(it).contains(Regex("""(?i)\bcreate\s+(unique\s+)?index\b""")) }
                 .map { migrationRoot.relativize(it).toString() }
                 .toList()
         }
 
         assertTrue(
-            actual = indexDefinitions.isEmpty(),
-            message = "Initial RDB modeling migrations must define tables, PKs, and FKs only. Defer indexes to query-pattern migrations: $indexDefinitions"
+            actual = initialModelingIndexes.isEmpty(),
+            message = "Initial RDB modeling migration must define tables, PKs, and FKs only. Defer indexes to query-pattern migrations: $initialModelingIndexes"
         )
     }
 
