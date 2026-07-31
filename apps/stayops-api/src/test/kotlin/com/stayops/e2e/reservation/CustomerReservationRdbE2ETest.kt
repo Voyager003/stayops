@@ -206,6 +206,52 @@ class CustomerReservationRdbE2ETest @Autowired constructor(
         }
 
         @Test
+        fun `hold 소비 후 intent 저장이 충돌하면 TX3의 내부 저장과 hold 소비를 모두 롤백한다`() {
+            val intentResult = createIntent(guestPhone = "010-3333-3334")
+            customerReservationApplication.confirmReservationIntentPayment(
+                memberId = CUSTOMER_ID,
+                reservationIntentId = intentResult.intent.id,
+                paymentKey = "toss_pk_rdb_tx3_late_rollback",
+                orderId = intentResult.payment.orderId,
+                amount = intentResult.payment.amount.amount
+            )
+            assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+                .isEqualTo(InventoryHoldStatus.HELD)
+            every { paymentGateway.confirm(any(), any(), any(), any()) } answers {
+                val concurrentIntent = reservationIntentRepository.findById(intentResult.intent.id)!!
+                reservationIntentRepository.save(
+                    concurrentIntent.failPayment("동시 상태 변경", Instant.now(clock))
+                )
+                PaymentConfirmResult(
+                    paymentKey = "toss_pk_rdb_tx3_late_rollback",
+                    orderId = intentResult.payment.orderId,
+                    method = "카드",
+                    approvedAt = Instant.now(clock),
+                    totalAmount = intentResult.payment.amount.amount
+                )
+            }
+
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "rdb-tx3-late-rollback-worker")
+
+            val intent = reservationIntentRepository.findById(intentResult.intent.id)!!
+            val payment = paymentRepository.findByReservationIntentId(intentResult.intent.id)!!
+            val outbox = paymentOutboxRepository.findByPaymentIdAndType(
+                intentResult.payment.id,
+                PaymentOutboxType.CONFIRM_PAYMENT
+            )!!
+
+            assertThat(intent.status).isEqualTo(ReservationIntentStatus.PAYMENT_FAILED)
+            assertThat(intent.reservationId).isNull()
+            assertThat(payment.status).isEqualTo(PaymentStatus.CONFIRM_REQUESTED)
+            assertThat(payment.reservationId).isNull()
+            assertThat(outbox.status).isEqualTo(PaymentOutboxStatus.PENDING)
+            assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+                .isEqualTo(InventoryHoldStatus.HELD)
+            assertThat(reservationRepository.findPageByMemberId(CUSTOMER_ID, 0, 20).content).isEmpty()
+            assertThat(dsl.fetchCount(GUESTS)).isZero()
+        }
+
+        @Test
         fun `PG 승인 결과 금액이 요청 금액과 다르면 최종 예약을 만들지 않고 intent와 hold를 실패 보상 처리한다`() {
             val intentResult = createIntent()
             val holdBeforeConfirm = inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!
