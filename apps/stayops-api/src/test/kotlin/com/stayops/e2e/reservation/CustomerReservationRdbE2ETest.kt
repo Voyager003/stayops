@@ -33,8 +33,10 @@ import com.stayops.jooq.generated.Tables.SYNC_TASKS
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
 import com.stayops.member.domain.repository.MemberRepository
+import com.stayops.payment.application.required.PaymentCancelResult
 import com.stayops.payment.application.required.PaymentConfirmResult
 import com.stayops.payment.application.required.PaymentGateway
+import com.stayops.payment.application.required.PaymentGatewayException
 import com.stayops.payment.domain.model.PaymentOutboxStatus
 import com.stayops.payment.domain.model.PaymentOutboxType
 import com.stayops.payment.domain.model.PaymentStatus
@@ -245,6 +247,69 @@ class CustomerReservationRdbE2ETest @Autowired constructor(
             assertThat(availability().availableCount).isEqualTo(1)
             assertThat(availability().heldCount).isEqualTo(0)
             assertThat(availability().reservedCount).isEqualTo(0)
+        }
+
+        @Test
+        fun `내부 예약 확정이 3회 실패하면 결제 취소를 요청하고 PG 취소 성공 후 완료한다`() {
+            val mutableClock = clock as MutableClock
+            val intentResult = createIntent(guestPhone = "010-4444-4444")
+            every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
+                paymentKey = "toss_pk_rdb_compensation",
+                orderId = intentResult.payment.orderId,
+                method = "카드",
+                approvedAt = Instant.now(clock),
+                totalAmount = intentResult.payment.amount.amount
+            )
+            every { paymentGateway.cancel(any(), any(), any()) } throws
+                PaymentGatewayException.ProviderError("PROVIDER_ERROR", "PG사 취소 일시 장애")
+            customerReservationApplication.confirmReservationIntentPayment(
+                memberId = CUSTOMER_ID,
+                reservationIntentId = intentResult.intent.id,
+                paymentKey = "toss_pk_rdb_compensation",
+                orderId = intentResult.payment.orderId,
+                amount = intentResult.payment.amount.amount
+            )
+            inventoryHoldService.release(intentResult.intent.id)
+
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "rdb-compensation-worker-1")
+            mutableClock.advance(Duration.ofSeconds(31))
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "rdb-compensation-worker-2")
+            mutableClock.advance(Duration.ofSeconds(61))
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "rdb-compensation-worker-3")
+
+            val confirmOutbox = paymentOutboxRepository.findByPaymentIdAndType(
+                intentResult.payment.id,
+                PaymentOutboxType.CONFIRM_PAYMENT
+            )!!
+            val cancelOutbox = paymentOutboxRepository.findByPaymentIdAndType(
+                intentResult.payment.id,
+                PaymentOutboxType.CANCEL_PAYMENT
+            )!!
+            val cancelRequestedPayment = paymentRepository.findByReservationIntentId(intentResult.intent.id)!!
+            val failedIntent = reservationIntentRepository.findById(intentResult.intent.id)!!
+
+            assertThat(confirmOutbox.status).isEqualTo(PaymentOutboxStatus.FAILED)
+            assertThat(confirmOutbox.retryCount).isEqualTo(3)
+            assertThat(cancelOutbox.status).isEqualTo(PaymentOutboxStatus.PENDING)
+            assertThat(cancelOutbox.retryCount).isEqualTo(1)
+            assertThat(cancelRequestedPayment.status).isEqualTo(PaymentStatus.CANCEL_REQUESTED)
+            assertThat(failedIntent.status).isEqualTo(ReservationIntentStatus.PAYMENT_FAILED)
+            assertThat(failedIntent.reservationId).isNull()
+            assertThat(reservationRepository.findPageByMemberId(CUSTOMER_ID, 0, 20).content).isEmpty()
+            assertThat(dsl.fetchCount(GUESTS)).isZero()
+
+            every { paymentGateway.cancel(any(), any(), any()) } returns
+                PaymentCancelResult("toss_pk_rdb_compensation")
+            mutableClock.advance(Duration.ofSeconds(31))
+
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "rdb-compensation-worker-4")
+
+            assertThat(paymentRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+                .isEqualTo(PaymentStatus.CANCELLED)
+            assertThat(paymentOutboxRepository.findById(cancelOutbox.id)!!.status)
+                .isEqualTo(PaymentOutboxStatus.COMPLETED)
+            verify(exactly = 3) { paymentGateway.confirm(any(), any(), any(), any()) }
+            verify(exactly = 2) { paymentGateway.cancel(any(), any(), any()) }
         }
     }
 

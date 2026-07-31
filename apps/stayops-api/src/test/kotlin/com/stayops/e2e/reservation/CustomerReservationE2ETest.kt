@@ -22,6 +22,7 @@ import com.stayops.payment.domain.repository.PaymentRepository
 import com.stayops.payment.application.required.PaymentCancelResult
 import com.stayops.payment.application.required.PaymentConfirmResult
 import com.stayops.payment.application.required.PaymentGateway
+import com.stayops.payment.application.required.PaymentGatewayException
 import com.stayops.property.domain.model.*
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.reservation.domain.model.ReservationIntentStatus
@@ -50,6 +51,7 @@ import org.springframework.context.annotation.Import
 import org.springframework.data.mongodb.core.MongoTemplate
 import java.math.BigDecimal
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 
@@ -437,6 +439,82 @@ class CustomerReservationE2ETest @Autowired constructor(
             assertThat(mongoTemplate.getCollection("guests").countDocuments()).isZero()
             assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
                 .isEqualTo(InventoryHoldStatus.RELEASED)
+        }
+
+        @Test
+        fun `내부_예약_확정이_3회_실패하면_결제_취소를_요청하고_PG_취소_성공_후_완료한다`() {
+            val mutableClock = clock as MutableClock
+            val intentResult = customerReservationApplication.createReservationIntent(
+                memberId = "customer-e2e",
+                propertyId = "prop-e2e",
+                roomTypeId = "rt-e2e",
+                checkIn = checkIn,
+                checkOut = checkOut,
+                numberOfGuests = 2,
+                guestName = "취소보상고객",
+                guestPhone = "010-4444-4444",
+                guestEmail = "compensation@test.com"
+            )
+            every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
+                paymentKey = "toss_pk_mongo_compensation",
+                orderId = intentResult.payment.orderId,
+                method = "카드",
+                approvedAt = Instant.now(clock),
+                totalAmount = intentResult.payment.amount.amount
+            )
+            every { paymentGateway.cancel(any(), any(), any()) } throws
+                PaymentGatewayException.ProviderError(
+                    "PROVIDER_ERROR",
+                    "PG사 취소 일시 장애"
+                )
+            customerReservationApplication.confirmReservationIntentPayment(
+                memberId = "customer-e2e",
+                reservationIntentId = intentResult.intent.id,
+                paymentKey = "toss_pk_mongo_compensation",
+                orderId = intentResult.payment.orderId,
+                amount = intentResult.payment.amount.amount
+            )
+            inventoryHoldService.release(intentResult.intent.id)
+
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "mongo-compensation-worker-1")
+            mutableClock.advance(Duration.ofSeconds(31))
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "mongo-compensation-worker-2")
+            mutableClock.advance(Duration.ofSeconds(61))
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "mongo-compensation-worker-3")
+
+            val confirmOutbox = paymentOutboxRepository.findByPaymentIdAndType(
+                intentResult.payment.id,
+                PaymentOutboxType.CONFIRM_PAYMENT
+            )!!
+            val cancelOutbox = paymentOutboxRepository.findByPaymentIdAndType(
+                intentResult.payment.id,
+                PaymentOutboxType.CANCEL_PAYMENT
+            )!!
+            val cancelRequestedPayment = paymentRepository.findByReservationIntentId(intentResult.intent.id)!!
+            val failedIntent = reservationIntentRepository.findById(intentResult.intent.id)!!
+
+            assertThat(confirmOutbox.status).isEqualTo(PaymentOutboxStatus.FAILED)
+            assertThat(confirmOutbox.retryCount).isEqualTo(3)
+            assertThat(cancelOutbox.status).isEqualTo(PaymentOutboxStatus.PENDING)
+            assertThat(cancelOutbox.retryCount).isEqualTo(1)
+            assertThat(cancelRequestedPayment.status).isEqualTo(PaymentStatus.CANCEL_REQUESTED)
+            assertThat(failedIntent.status).isEqualTo(ReservationIntentStatus.PAYMENT_FAILED)
+            assertThat(failedIntent.reservationId).isNull()
+            assertThat(reservationRepository.findPageByMemberId("customer-e2e", 0, 20).content).isEmpty()
+            assertThat(mongoTemplate.getCollection("guests").countDocuments()).isZero()
+
+            every { paymentGateway.cancel(any(), any(), any()) } returns
+                PaymentCancelResult("toss_pk_mongo_compensation")
+            mutableClock.advance(Duration.ofSeconds(31))
+
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "mongo-compensation-worker-4")
+
+            assertThat(paymentRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+                .isEqualTo(PaymentStatus.CANCELLED)
+            assertThat(paymentOutboxRepository.findById(cancelOutbox.id)!!.status)
+                .isEqualTo(PaymentOutboxStatus.COMPLETED)
+            verify(exactly = 3) { paymentGateway.confirm(any(), any(), any(), any()) }
+            verify(exactly = 2) { paymentGateway.cancel(any(), any(), any()) }
         }
     }
 
