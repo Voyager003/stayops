@@ -7,6 +7,7 @@ import com.stayops.member.domain.repository.MemberRepository
 import com.stayops.reservation.application.service.CustomerReservationApplication
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
+import com.stayops.inventory.application.provided.InventoryHoldService
 import com.stayops.inventory.application.service.RoomInventoryApplication
 import com.stayops.inventory.domain.model.InventoryHoldStatus
 import com.stayops.inventory.domain.repository.InventoryHoldRepository
@@ -14,6 +15,9 @@ import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.application.service.ReservationApplication
 import com.stayops.reservation.application.service.ReservationPaymentOutboxApplication
 import com.stayops.payment.domain.model.PaymentStatus
+import com.stayops.payment.domain.model.PaymentOutboxStatus
+import com.stayops.payment.domain.model.PaymentOutboxType
+import com.stayops.payment.domain.repository.PaymentOutboxRepository
 import com.stayops.payment.domain.repository.PaymentRepository
 import com.stayops.payment.application.required.PaymentCancelResult
 import com.stayops.payment.application.required.PaymentConfirmResult
@@ -34,6 +38,7 @@ import com.stayops.shared.domain.MutableClock
 import com.stayops.shared.exception.ConflictException
 import com.ninjasquad.springmockk.MockkBean
 import io.mockk.every
+import io.mockk.verify
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
@@ -62,7 +67,9 @@ class CustomerReservationE2ETest @Autowired constructor(
     private val reservationRepository: ReservationRepository,
     private val reservationIntentRepository: ReservationIntentRepository,
     private val inventoryHoldRepository: InventoryHoldRepository,
+    private val inventoryHoldService: InventoryHoldService,
     private val paymentRepository: PaymentRepository,
+    private val paymentOutboxRepository: PaymentOutboxRepository,
     private val reservationPaymentOutboxApplication: ReservationPaymentOutboxApplication,
     private val mongoTemplate: MongoTemplate,
     private val clock: Clock,
@@ -319,6 +326,117 @@ class CustomerReservationE2ETest @Autowired constructor(
 
             assertThat(secondResult.intent.status).isEqualTo(ReservationIntentStatus.RESERVED)
             assertThat(secondResult.payment.status).isEqualTo(ReservationPaymentStatus.APPROVED)
+        }
+
+        @Test
+        fun `완료된_confirm_outbox가_재전달되어도_PG와_예약을_중복_처리하지_않는다`() {
+            val intentResult = customerReservationApplication.createReservationIntent(
+                memberId = "customer-e2e",
+                propertyId = "prop-e2e",
+                roomTypeId = "rt-e2e",
+                checkIn = checkIn,
+                checkOut = checkOut,
+                numberOfGuests = 2,
+                guestName = "멱등고객",
+                guestPhone = "010-7777-7778",
+                guestEmail = "idempotent@test.com"
+            )
+            every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
+                paymentKey = "toss_pk_worker_idempotent",
+                orderId = intentResult.payment.orderId,
+                method = "카드",
+                approvedAt = Instant.now(clock),
+                totalAmount = intentResult.payment.amount.amount
+            )
+            customerReservationApplication.confirmReservationIntentPayment(
+                memberId = "customer-e2e",
+                reservationIntentId = intentResult.intent.id,
+                paymentKey = "toss_pk_worker_idempotent",
+                orderId = intentResult.payment.orderId,
+                amount = intentResult.payment.amount.amount
+            )
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "mongo-idempotency-worker-1")
+
+            val firstReservationId = reservationIntentRepository.findById(intentResult.intent.id)!!.reservationId!!
+            val outbox = paymentOutboxRepository.findByPaymentIdAndType(
+                intentResult.payment.id,
+                PaymentOutboxType.CONFIRM_PAYMENT
+            )!!
+            mongoTemplate.getCollection("payment_outbox_messages").updateOne(
+                org.bson.Document("_id", outbox.id),
+                org.bson.Document(
+                    "\$set",
+                    org.bson.Document("status", PaymentOutboxStatus.PENDING.name)
+                        .append("nextRetryAt", null)
+                        .append("lockedBy", null)
+                        .append("lockedUntil", null)
+                )
+            )
+
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "mongo-idempotency-worker-2")
+
+            val replayedIntent = reservationIntentRepository.findById(intentResult.intent.id)!!
+            val reservations = reservationRepository.findPageByMemberId("customer-e2e", 0, 20).content
+            assertThat(replayedIntent.reservationId).isEqualTo(firstReservationId)
+            assertThat(reservations).hasSize(1)
+            assertThat(reservations.single().id).isEqualTo(firstReservationId)
+            assertThat(paymentOutboxRepository.findById(outbox.id)!!.status)
+                .isEqualTo(PaymentOutboxStatus.COMPLETED)
+            verify(exactly = 1) { paymentGateway.confirm(any(), any(), any(), any()) }
+        }
+    }
+
+    @Nested
+    inner class `결제_승인_트랜잭션` {
+
+        @Test
+        fun `PG_승인_후_hold_소비에_실패하면_TX3의_내부_저장을_모두_롤백한다`() {
+            val intentResult = customerReservationApplication.createReservationIntent(
+                memberId = "customer-e2e",
+                propertyId = "prop-e2e",
+                roomTypeId = "rt-e2e",
+                checkIn = checkIn,
+                checkOut = checkOut,
+                numberOfGuests = 2,
+                guestName = "TX3고객",
+                guestPhone = "010-3333-3333",
+                guestEmail = "tx3@test.com"
+            )
+            every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
+                paymentKey = "toss_pk_mongo_tx3_rollback",
+                orderId = intentResult.payment.orderId,
+                method = "카드",
+                approvedAt = Instant.now(clock),
+                totalAmount = intentResult.payment.amount.amount
+            )
+
+            customerReservationApplication.confirmReservationIntentPayment(
+                memberId = "customer-e2e",
+                reservationIntentId = intentResult.intent.id,
+                paymentKey = "toss_pk_mongo_tx3_rollback",
+                orderId = intentResult.payment.orderId,
+                amount = intentResult.payment.amount.amount
+            )
+            inventoryHoldService.release(intentResult.intent.id)
+
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "mongo-tx3-rollback-worker")
+
+            val intent = reservationIntentRepository.findById(intentResult.intent.id)!!
+            val payment = paymentRepository.findByReservationIntentId(intentResult.intent.id)!!
+            val outbox = paymentOutboxRepository.findByPaymentIdAndType(
+                intentResult.payment.id,
+                PaymentOutboxType.CONFIRM_PAYMENT
+            )!!
+
+            assertThat(intent.status).isEqualTo(ReservationIntentStatus.CONFIRM_REQUESTED)
+            assertThat(intent.reservationId).isNull()
+            assertThat(payment.status).isEqualTo(PaymentStatus.CONFIRM_REQUESTED)
+            assertThat(payment.reservationId).isNull()
+            assertThat(outbox.status).isEqualTo(PaymentOutboxStatus.PENDING)
+            assertThat(reservationRepository.findPageByMemberId("customer-e2e", 0, 20).content).isEmpty()
+            assertThat(mongoTemplate.getCollection("guests").countDocuments()).isZero()
+            assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+                .isEqualTo(InventoryHoldStatus.RELEASED)
         }
     }
 
