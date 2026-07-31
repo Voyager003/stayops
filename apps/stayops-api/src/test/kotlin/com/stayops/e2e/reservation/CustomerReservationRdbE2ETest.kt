@@ -401,12 +401,12 @@ class CustomerReservationRdbE2ETest @Autowired constructor(
     inner class `재고 동시성` {
 
         @Test
-        fun `객실이 하나뿐인 날짜에 두 사용자가 동시에 intent를 만들면 하나만 성공하고 재고 수량은 초과되지 않는다`() {
+        fun `객실이 하나뿐인 날짜에 두 사용자가 동시에 결제하면 한 명만 hold와 최종 예약에 성공한다`() {
             val executor = Executors.newFixedThreadPool(2)
             val ready = CountDownLatch(2)
             val start = CountDownLatch(1)
             val done = CountDownLatch(2)
-            val successes = mutableListOf<String>()
+            val successes = mutableListOf<Pair<String, String>>()
             val failures = mutableListOf<Throwable>()
 
             listOf(CUSTOMER_ID, SECOND_CUSTOMER_ID).forEachIndexed { index, memberId ->
@@ -421,7 +421,7 @@ class CustomerReservationRdbE2ETest @Autowired constructor(
                             guestEmail = "concurrent$index@test.com"
                         )
                         synchronized(successes) {
-                            successes += result.intent.id
+                            successes += memberId to result.intent.id
                         }
                     } catch (e: Throwable) {
                         synchronized(failures) {
@@ -443,8 +443,39 @@ class CustomerReservationRdbE2ETest @Autowired constructor(
             assertThat(availability().availableCount).isEqualTo(0)
             assertThat(availability().heldCount).isEqualTo(1)
             assertThat(availability().reservedCount).isEqualTo(0)
-            assertThat(inventoryHoldRepository.findByReservationIntentId(successes.single())!!.status)
+            val (winnerMemberId, winnerIntentId) = successes.single()
+            assertThat(inventoryHoldRepository.findByReservationIntentId(winnerIntentId)!!.status)
                 .isEqualTo(InventoryHoldStatus.HELD)
+
+            val winnerPayment = paymentRepository.findByReservationIntentId(winnerIntentId)!!
+            every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
+                paymentKey = "toss_pk_rdb_concurrent",
+                orderId = winnerPayment.orderId,
+                method = "카드",
+                approvedAt = Instant.now(clock),
+                totalAmount = winnerPayment.amount.amount
+            )
+            customerReservationApplication.confirmReservationIntentPayment(
+                memberId = winnerMemberId,
+                reservationIntentId = winnerIntentId,
+                paymentKey = "toss_pk_rdb_concurrent",
+                orderId = winnerPayment.orderId,
+                amount = winnerPayment.amount.amount
+            )
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "rdb-concurrent-worker")
+
+            val reservedIntent = reservationIntentRepository.findById(winnerIntentId)!!
+            val reservations = reservationRepository.findPageByMemberId(winnerMemberId, 0, 20).content
+            assertThat(reservedIntent.status).isEqualTo(ReservationIntentStatus.RESERVED)
+            assertThat(reservations).hasSize(1)
+            assertThat(reservations.single().id).isEqualTo(reservedIntent.reservationId)
+            assertThat(paymentRepository.findByReservationIntentId(winnerIntentId)!!.status)
+                .isEqualTo(PaymentStatus.APPROVED)
+            assertThat(inventoryHoldRepository.findByReservationIntentId(winnerIntentId)!!.status)
+                .isEqualTo(InventoryHoldStatus.CONSUMED)
+            assertThat(availability().availableCount).isEqualTo(0)
+            assertThat(availability().heldCount).isEqualTo(0)
+            assertThat(availability().reservedCount).isEqualTo(1)
         }
     }
 

@@ -54,6 +54,9 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 @SpringBootTest
 @Import(TestcontainersConfiguration::class, FixedTestClockConfig::class)
@@ -581,6 +584,103 @@ class CustomerReservationE2ETest @Autowired constructor(
                 "prop-e2e", "rt-e2e", checkIn, checkIn.plusDays(1)
             )
             assertThat(afterCancel[0].availableCount).isEqualTo(initialAvailable)
+        }
+    }
+
+    @Nested
+    inner class `재고_동시성` {
+
+        @Test
+        fun `두_고객이_마지막_1실을_동시에_결제하면_한_명만_hold와_최종_예약에_성공한다`() {
+            memberRepository.save(
+                Member.create(
+                    id = "customer-e2e-2",
+                    email = "e2e-2@test.com",
+                    passwordHash = "hashed",
+                    name = "E2E고객2",
+                    role = MemberRole.CUSTOMER
+                )
+            )
+            inventoryApplication.bulkBlock(
+                propertyId = "prop-e2e",
+                roomTypeId = "rt-e2e",
+                startDate = checkIn,
+                endDate = checkOut.minusDays(1),
+                daysOfWeek = null,
+                action = "BLOCK",
+                count = 2
+            )
+            val executor = Executors.newFixedThreadPool(2)
+            val ready = CountDownLatch(2)
+            val start = CountDownLatch(1)
+            val done = CountDownLatch(2)
+            val successes = mutableListOf<Pair<String, String>>()
+            val failures = mutableListOf<Throwable>()
+
+            listOf("customer-e2e", "customer-e2e-2").forEachIndexed { index, memberId ->
+                executor.submit {
+                    try {
+                        ready.countDown()
+                        start.await(5, TimeUnit.SECONDS)
+                        val result = customerReservationApplication.createReservationIntent(
+                            memberId = memberId,
+                            propertyId = "prop-e2e",
+                            roomTypeId = "rt-e2e",
+                            checkIn = checkIn,
+                            checkOut = checkOut,
+                            numberOfGuests = 2,
+                            guestName = "동시고객$index",
+                            guestPhone = "010-5555-555$index",
+                            guestEmail = "concurrent$index@test.com"
+                        )
+                        synchronized(successes) {
+                            successes += memberId to result.intent.id
+                        }
+                    } catch (e: Throwable) {
+                        synchronized(failures) {
+                            failures += e
+                        }
+                    } finally {
+                        done.countDown()
+                    }
+                }
+            }
+
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue()
+            start.countDown()
+            assertThat(done.await(10, TimeUnit.SECONDS)).isTrue()
+            executor.shutdownNow()
+
+            assertThat(successes).hasSize(1)
+            assertThat(failures).hasSize(1)
+            val (winnerMemberId, winnerIntentId) = successes.single()
+            val winnerPayment = paymentRepository.findByReservationIntentId(winnerIntentId)!!
+            every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
+                paymentKey = "toss_pk_mongo_concurrent",
+                orderId = winnerPayment.orderId,
+                method = "카드",
+                approvedAt = Instant.now(clock),
+                totalAmount = winnerPayment.amount.amount
+            )
+
+            customerReservationApplication.confirmReservationIntentPayment(
+                memberId = winnerMemberId,
+                reservationIntentId = winnerIntentId,
+                paymentKey = "toss_pk_mongo_concurrent",
+                orderId = winnerPayment.orderId,
+                amount = winnerPayment.amount.amount
+            )
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "mongo-concurrent-worker")
+
+            val reservedIntent = reservationIntentRepository.findById(winnerIntentId)!!
+            val reservations = reservationRepository.findPageByMemberId(winnerMemberId, 0, 20).content
+            assertThat(reservedIntent.status).isEqualTo(ReservationIntentStatus.RESERVED)
+            assertThat(reservations).hasSize(1)
+            assertThat(reservations.single().id).isEqualTo(reservedIntent.reservationId)
+            assertThat(paymentRepository.findByReservationIntentId(winnerIntentId)!!.status)
+                .isEqualTo(PaymentStatus.APPROVED)
+            assertThat(inventoryHoldRepository.findByReservationIntentId(winnerIntentId)!!.status)
+                .isEqualTo(InventoryHoldStatus.CONSUMED)
         }
     }
 }
