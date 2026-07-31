@@ -4,6 +4,7 @@ import com.ninjasquad.springmockk.MockkBean
 import com.stayops.RdbTestcontainersConfiguration
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
+import com.stayops.inventory.application.provided.InventoryHoldService
 import com.stayops.inventory.application.service.RoomInventoryApplication
 import com.stayops.inventory.domain.model.InventoryHoldStatus
 import com.stayops.inventory.domain.repository.InventoryHoldRepository
@@ -35,6 +36,7 @@ import com.stayops.member.domain.repository.MemberRepository
 import com.stayops.payment.application.required.PaymentConfirmResult
 import com.stayops.payment.application.required.PaymentGateway
 import com.stayops.payment.domain.model.PaymentOutboxStatus
+import com.stayops.payment.domain.model.PaymentOutboxType
 import com.stayops.payment.domain.model.PaymentStatus
 import com.stayops.payment.domain.repository.PaymentOutboxRepository
 import com.stayops.payment.domain.repository.PaymentRepository
@@ -59,6 +61,7 @@ import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money
 import com.stayops.shared.domain.MutableClock
 import io.mockk.every
+import io.mockk.verify
 import org.assertj.core.api.Assertions.assertThat
 import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
@@ -95,6 +98,7 @@ class CustomerReservationRdbE2ETest @Autowired constructor(
     private val reservationRepository: ReservationRepository,
     private val reservationIntentRepository: ReservationIntentRepository,
     private val inventoryHoldRepository: InventoryHoldRepository,
+    private val inventoryHoldService: InventoryHoldService,
     private val paymentRepository: PaymentRepository,
     private val paymentOutboxRepository: PaymentOutboxRepository,
     private val dsl: DSLContext,
@@ -160,6 +164,46 @@ class CustomerReservationRdbE2ETest @Autowired constructor(
     inner class `결제 승인 보상 처리` {
 
         @Test
+        fun `PG 승인 후 hold 소비에 실패하면 TX3의 내부 저장을 모두 롤백한다`() {
+            val intentResult = createIntent()
+            every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
+                paymentKey = "toss_pk_tx3_rollback",
+                orderId = intentResult.payment.orderId,
+                method = "카드",
+                approvedAt = Instant.now(clock),
+                totalAmount = intentResult.payment.amount.amount
+            )
+
+            customerReservationApplication.confirmReservationIntentPayment(
+                memberId = CUSTOMER_ID,
+                reservationIntentId = intentResult.intent.id,
+                paymentKey = "toss_pk_tx3_rollback",
+                orderId = intentResult.payment.orderId,
+                amount = intentResult.payment.amount.amount
+            )
+            inventoryHoldService.release(intentResult.intent.id)
+
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "rdb-tx3-rollback-worker")
+
+            val intent = reservationIntentRepository.findById(intentResult.intent.id)!!
+            val payment = paymentRepository.findByReservationIntentId(intentResult.intent.id)!!
+            val outbox = paymentOutboxRepository.findByPaymentIdAndType(
+                intentResult.payment.id,
+                PaymentOutboxType.CONFIRM_PAYMENT
+            )!!
+
+            assertThat(intent.status).isEqualTo(ReservationIntentStatus.CONFIRM_REQUESTED)
+            assertThat(intent.reservationId).isNull()
+            assertThat(payment.status).isEqualTo(PaymentStatus.CONFIRM_REQUESTED)
+            assertThat(payment.reservationId).isNull()
+            assertThat(outbox.status).isEqualTo(PaymentOutboxStatus.PENDING)
+            assertThat(reservationRepository.findPageByMemberId(CUSTOMER_ID, 0, 20).content).isEmpty()
+            assertThat(dsl.fetchCount(GUESTS)).isZero()
+            assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
+                .isEqualTo(InventoryHoldStatus.RELEASED)
+        }
+
+        @Test
         fun `PG 승인 결과 금액이 요청 금액과 다르면 최종 예약을 만들지 않고 intent와 hold를 실패 보상 처리한다`() {
             val intentResult = createIntent()
             val holdBeforeConfirm = inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!
@@ -201,6 +245,54 @@ class CustomerReservationRdbE2ETest @Autowired constructor(
             assertThat(availability().availableCount).isEqualTo(1)
             assertThat(availability().heldCount).isEqualTo(0)
             assertThat(availability().reservedCount).isEqualTo(0)
+        }
+    }
+
+    @Nested
+    inner class `결제 승인 멱등성` {
+
+        @Test
+        fun `완료된 confirm Outbox가 재전달되어도 PG와 예약을 중복 처리하지 않는다`() {
+            val intentResult = createIntent(guestPhone = "010-7777-7777")
+            every { paymentGateway.confirm(any(), any(), any(), any()) } returns PaymentConfirmResult(
+                paymentKey = "toss_pk_rdb_worker_idempotent",
+                orderId = intentResult.payment.orderId,
+                method = "카드",
+                approvedAt = Instant.now(clock),
+                totalAmount = intentResult.payment.amount.amount
+            )
+            customerReservationApplication.confirmReservationIntentPayment(
+                memberId = CUSTOMER_ID,
+                reservationIntentId = intentResult.intent.id,
+                paymentKey = "toss_pk_rdb_worker_idempotent",
+                orderId = intentResult.payment.orderId,
+                amount = intentResult.payment.amount.amount
+            )
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "rdb-idempotency-worker-1")
+
+            val firstReservationId = reservationIntentRepository.findById(intentResult.intent.id)!!.reservationId!!
+            val outbox = paymentOutboxRepository.findByPaymentIdAndType(
+                intentResult.payment.id,
+                PaymentOutboxType.CONFIRM_PAYMENT
+            )!!
+            dsl.update(PAYMENT_OUTBOX_MESSAGES)
+                .set(PAYMENT_OUTBOX_MESSAGES.STATUS, PaymentOutboxStatus.PENDING.name)
+                .setNull(PAYMENT_OUTBOX_MESSAGES.NEXT_RETRY_AT)
+                .setNull(PAYMENT_OUTBOX_MESSAGES.LOCKED_BY)
+                .setNull(PAYMENT_OUTBOX_MESSAGES.LOCKED_UNTIL)
+                .where(PAYMENT_OUTBOX_MESSAGES.ID.eq(outbox.id))
+                .execute()
+
+            reservationPaymentOutboxApplication.processPendingMessages(workerId = "rdb-idempotency-worker-2")
+
+            val replayedIntent = reservationIntentRepository.findById(intentResult.intent.id)!!
+            val reservations = reservationRepository.findPageByMemberId(CUSTOMER_ID, 0, 20).content
+            assertThat(replayedIntent.reservationId).isEqualTo(firstReservationId)
+            assertThat(reservations).hasSize(1)
+            assertThat(reservations.single().id).isEqualTo(firstReservationId)
+            assertThat(paymentOutboxRepository.findById(outbox.id)!!.status)
+                .isEqualTo(PaymentOutboxStatus.COMPLETED)
+            verify(exactly = 1) { paymentGateway.confirm(any(), any(), any(), any()) }
         }
     }
 
