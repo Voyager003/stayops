@@ -12,12 +12,15 @@ import com.stayops.jooq.generated.Tables.ROOM_TYPES
 import com.stayops.member.domain.model.MemberRole
 import com.stayops.member.domain.model.MemberStatus
 import com.stayops.payment.domain.model.PaymentOutboxMessage
+import com.stayops.payment.domain.model.PaymentOutboxStatus
 import com.stayops.payment.domain.model.PaymentOutboxType
 import com.stayops.payment.domain.model.ProcessedPaymentWebhookEvent
 import com.stayops.payment.domain.repository.PaymentOutboxRepository
 import com.stayops.payment.domain.repository.ProcessedPaymentWebhookEventRepository
 import com.stayops.shared.domain.Money
+import com.stayops.shared.exception.ConflictException
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -162,6 +165,37 @@ class RdbPaymentOutboxPersistenceTest @Autowired constructor(
 
             assertThat(claimed).hasSize(1)
             assertThat(claimed.single().id).isEqualTo("outbox-concurrent")
+        }
+
+        @Test
+        fun `claim 이전 버전의 stale Outbox 저장은 worker lease를 덮어쓰지 못한다`() {
+            insertPayment()
+            val now = Instant.parse("2026-07-01T00:00:00Z")
+            paymentOutboxRepository.save(confirmMessage("outbox-stale", now))
+            val staleSnapshot = paymentOutboxRepository.findById("outbox-stale")!!
+
+            val claimed = paymentOutboxRepository.claimReadyForProcessing(
+                workerId = "worker-1",
+                now = now,
+                lockedUntil = now.plusSeconds(60)
+            )!!
+
+            assertThat(claimed.version).isEqualTo(1L)
+            assertThatThrownBy {
+                paymentOutboxRepository.save(
+                    staleSnapshot.startProcessing(
+                        workerId = "worker-2",
+                        lockedUntil = now.plusSeconds(90),
+                        now = now
+                    )
+                )
+            }.isInstanceOf(ConflictException::class.java)
+                .hasMessageContaining("PaymentOutbox 버전 충돌")
+
+            val found = paymentOutboxRepository.findById("outbox-stale")!!
+            assertThat(found.status).isEqualTo(PaymentOutboxStatus.IN_PROGRESS)
+            assertThat(found.lockedBy).isEqualTo("worker-1")
+            assertThat(found.version).isEqualTo(1L)
         }
     }
 
