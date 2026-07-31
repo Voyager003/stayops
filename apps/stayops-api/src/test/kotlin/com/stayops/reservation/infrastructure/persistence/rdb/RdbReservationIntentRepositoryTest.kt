@@ -15,7 +15,9 @@ import com.stayops.reservation.domain.model.ReservationPricing
 import com.stayops.reservation.domain.repository.ReservationIntentRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
+import com.stayops.shared.exception.ConflictException
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -75,6 +77,24 @@ class RdbReservationIntentRepositoryTest @Autowired constructor(
             assertThat(found.paymentId).isEqualTo("payment-1")
             assertThat(found.holdId).isEqualTo("hold-1")
             assertThat(found.status).isEqualTo(ReservationIntentStatus.PAYMENT_WAITING)
+        }
+
+        @Test
+        fun `먼저 저장된 ReservationIntent와 같은 버전의 stale 변경은 거부한다`() {
+            insertDependencies()
+            repository.save(newIntent())
+            val firstSnapshot = repository.findById("intent-1")!!
+            val staleSnapshot = repository.findById("intent-1")!!
+
+            val updated = repository.save(firstSnapshot.requestPaymentConfirmation(now))
+
+            assertThat(updated.version).isEqualTo(1L)
+            assertThatThrownBy {
+                repository.save(staleSnapshot.failPayment("stale update", now))
+            }.isInstanceOf(ConflictException::class.java)
+                .hasMessageContaining("ReservationIntent 버전 충돌")
+            assertThat(repository.findById("intent-1")!!.status)
+                .isEqualTo(ReservationIntentStatus.CONFIRM_REQUESTED)
         }
     }
 
