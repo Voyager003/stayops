@@ -7,7 +7,5 @@ import org.springframework.transaction.annotation.Transactional
 class PaymentOutboxTransactionBoundary {
 
     @Transactional
-    fun required(block: () -> Unit) {
-        block()
-    }
+    fun <T> required(block: () -> T): T = block()
 }

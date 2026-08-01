@@ -1,5 +1,8 @@
 package com.stayops.reservation.application.service
 
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import com.stayops.guest.domain.model.Guest
 import com.stayops.guest.domain.repository.GuestRepository
 import com.stayops.inventory.application.provided.InventoryHoldService
@@ -38,6 +41,7 @@ import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.verify
+import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import java.math.BigDecimal
 import java.time.Clock
@@ -76,6 +80,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         idGenerator = idGenerator,
         transactionBoundary = PaymentOutboxTransactionBoundary()
     )
+    val logAppender = attachPaymentOutboxLogAppender()
 
     val checkIn = LocalDate.of(2026, 5, 1)
     val checkOut = LocalDate.of(2026, 5, 3)
@@ -240,6 +245,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
 
     beforeTest {
         clearAllMocks()
+        logAppender.list.clear()
         every { outboxRepository.save(any()) } answers { firstArg() }
         every { paymentRepository.save(any()) } answers { firstArg() }
         every { reservationRepository.save(any()) } answers { firstArg() }
@@ -250,6 +256,11 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         every { inventoryReservationService.release(any(), any(), any()) } returns Unit
         every { inventoryHoldService.consume(any()) } returns Unit
         every { inventoryHoldService.release(any()) } returns Unit
+    }
+
+    afterSpec {
+        val logger = LoggerFactory.getLogger(ReservationPaymentOutboxApplication::class.java) as Logger
+        logger.detachAppender(logAppender)
     }
 
     given("결제 승인 Outbox 처리 시") {
@@ -334,6 +345,19 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
                 }
                 verify { eventPublisher.publishEvent(any<ReservationCreated>()) }
                 verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
+
+                val logs = logAppender.list.map(ILoggingEvent::getFormattedMessage)
+                logs.any {
+                    it.contains("event=payment_outbox_claimed") &&
+                        it.contains("reservationIntentId=intent-1") &&
+                        it.contains("paymentId=pay-intent-1") &&
+                        it.contains("outboxId=outbox-intent-1") &&
+                        it.contains("orderId=${message.orderId}") &&
+                        it.contains("workerId=worker-1")
+                } shouldBe true
+                logs.any { it.contains("event=payment_pg_confirm_started") } shouldBe true
+                logs.any { it.contains("event=payment_pg_confirm_succeeded") } shouldBe true
+                logs.any { it.contains("event=payment_reservation_finalized") } shouldBe true
             }
         }
 
@@ -384,6 +408,19 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
                             it.reservationIntentId == "intent-1"
                     })
                 }
+
+                val logs = logAppender.list.map(ILoggingEvent::getFormattedMessage)
+                logs.any {
+                    it.contains("event=payment_reservation_finalization_failed") &&
+                        it.contains("paymentId=pay-intent-1") &&
+                        it.contains("outboxId=outbox-intent-1")
+                } shouldBe true
+                logs.any { it.contains("event=payment_compensation_started") } shouldBe true
+                logs.any {
+                    it.contains("event=payment_cancel_outbox_created") &&
+                        it.contains("cancelOutboxId=generated-outbox-id")
+                } shouldBe true
+                logs.any { it.contains("event=payment_compensation_completed") } shouldBe true
             }
         }
 
@@ -618,6 +655,17 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
                 verify(exactly = 0) { paymentRepository.save(match { it.status == PaymentStatus.APPROVED }) }
                 verify(exactly = 0) { reservationRepository.save(match { it.status == ReservationStatus.CONFIRMED }) }
                 verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.PENDING && it.retryCount == 1 }) }
+
+                val logs = logAppender.list.map(ILoggingEvent::getFormattedMessage)
+                logs.any { it.contains("event=payment_pg_inquiry_started") } shouldBe true
+                logs.any { it.contains("event=payment_pg_inquiry_failed") } shouldBe true
+                logs.any {
+                    it.contains("event=payment_outbox_retry_scheduled") &&
+                        it.contains("paymentId=pay-1") &&
+                        it.contains("outboxId=outbox-1") &&
+                        it.contains("retryCount=1") &&
+                        it.contains("nextRetryAt=")
+                } shouldBe true
             }
         }
 
@@ -735,6 +783,16 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
 
                 verify { paymentRepository.save(match { it.status == PaymentStatus.CANCELLED }) }
                 verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
+
+                val logs = logAppender.list.map(ILoggingEvent::getFormattedMessage)
+                logs.any {
+                    it.contains("event=payment_pg_cancel_started") &&
+                        it.contains("paymentId=pay-1") &&
+                        it.contains("outboxId=outbox-2") &&
+                        it.contains("workerId=worker-1")
+                } shouldBe true
+                logs.any { it.contains("event=payment_pg_cancel_succeeded") } shouldBe true
+                logs.any { it.contains("event=payment_cancel_finalized") } shouldBe true
             }
         }
 
@@ -860,3 +918,11 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         }
     }
 })
+
+private fun attachPaymentOutboxLogAppender(): ListAppender<ILoggingEvent> {
+    val logger = LoggerFactory.getLogger(ReservationPaymentOutboxApplication::class.java) as Logger
+    val appender = ListAppender<ILoggingEvent>()
+    appender.start()
+    logger.addAppender(appender)
+    return appender
+}
