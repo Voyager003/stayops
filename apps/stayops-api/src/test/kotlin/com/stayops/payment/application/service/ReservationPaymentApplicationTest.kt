@@ -1,5 +1,8 @@
 package com.stayops.payment.application.service
 
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import com.stayops.payment.domain.model.Payment
 import com.stayops.payment.domain.model.PaymentOutboxStatus
 import com.stayops.payment.domain.model.PaymentOutboxType
@@ -17,6 +20,7 @@ import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import org.slf4j.LoggerFactory
 import java.math.BigDecimal
 import java.time.Clock
 import java.time.Instant
@@ -37,6 +41,7 @@ class ReservationPaymentApplicationTest : BehaviorSpec({
         idGenerator = idGenerator,
         clock = clock
     )
+    val logAppender = attachReservationPaymentLogAppender()
 
     fun pendingPayment() = Payment.create(
         id = "pay-1",
@@ -45,10 +50,23 @@ class ReservationPaymentApplicationTest : BehaviorSpec({
         amount = Money.won(200_000)
     )
 
+    fun pendingIntentPayment() = Payment.createForReservationIntent(
+        id = "pay-intent-1",
+        reservationIntentId = "intent-1",
+        memberId = "member-1",
+        amount = Money.won(200_000)
+    )
+
     beforeTest {
         clearAllMocks()
+        logAppender.list.clear()
         every { paymentRepository.save(any()) } answers { firstArg() }
         every { paymentOutboxRepository.save(any()) } answers { firstArg() }
+    }
+
+    afterSpec {
+        val logger = LoggerFactory.getLogger(ReservationPaymentApplication::class.java) as Logger
+        logger.detachAppender(logAppender)
     }
 
     given("예약 결제 Port adapter") {
@@ -179,6 +197,36 @@ class ReservationPaymentApplicationTest : BehaviorSpec({
             }
         }
 
+        `when`("예약 intent 결제 승인 요청을 접수하면") {
+            then("Payment와 confirm Outbox를 연결하는 추적 로그를 남긴다") {
+                val payment = pendingIntentPayment()
+                every { paymentRepository.findByReservationIntentId("intent-1") } returns payment
+                every {
+                    paymentOutboxRepository.findByPaymentIdAndType(
+                        "pay-intent-1",
+                        PaymentOutboxType.CONFIRM_PAYMENT
+                    )
+                } returns null
+
+                adapter.requestConfirmForReservationIntent(
+                    reservationIntentId = "intent-1",
+                    memberId = "member-1",
+                    paymentKey = "toss_pk_123",
+                    orderId = payment.orderId,
+                    amount = BigDecimal(200_000)
+                )
+
+                val logs = logAppender.list.map(ILoggingEvent::getFormattedMessage)
+                logs.any {
+                    it.contains("event=payment_confirm_requested") &&
+                        it.contains("reservationIntentId=intent-1") &&
+                        it.contains("paymentId=pay-intent-1") &&
+                        it.contains("outboxId=outbox-id") &&
+                        it.contains("orderId=${payment.orderId}")
+                } shouldBe true
+            }
+        }
+
         `when`("확정 예약의 결제 취소 요청을 접수하면") {
             then("Payment를 CANCEL_REQUESTED로 변경하고 cancel Outbox를 생성한다") {
                 val payment = pendingPayment().approve(
@@ -221,3 +269,11 @@ class ReservationPaymentApplicationTest : BehaviorSpec({
         }
     }
 })
+
+private fun attachReservationPaymentLogAppender(): ListAppender<ILoggingEvent> {
+    val logger = LoggerFactory.getLogger(ReservationPaymentApplication::class.java) as Logger
+    val appender = ListAppender<ILoggingEvent>()
+    appender.start()
+    logger.addAppender(appender)
+    return appender
+}
