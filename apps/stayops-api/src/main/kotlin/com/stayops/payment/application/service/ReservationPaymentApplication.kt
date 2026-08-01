@@ -166,7 +166,7 @@ class ReservationPaymentApplication(
         )
 
         log.info(
-            "event=payment_confirm_requested reservationIntentId={} reservationId=- " +
+            "[결제 승인 요청 접수] event=payment_confirm_requested reservationIntentId={} reservationId=- " +
                 "paymentId={} outboxId={} orderId={} workerId=- retryCount={} outboxType={}",
             reservationIntentId,
             savedPayment.id,

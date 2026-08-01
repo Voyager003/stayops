@@ -86,7 +86,7 @@ class CustomerReservationIntentPaymentApplication(
         )
 
         log.info(
-            "예약 intent 결제 승인 요청 접수: reservationIntentId={}, paymentId={}",
+            "[결제 승인 요청 처리 완료] reservationIntentId={}, paymentId={}",
             reservationIntentId,
             requestedPayment.id
         )

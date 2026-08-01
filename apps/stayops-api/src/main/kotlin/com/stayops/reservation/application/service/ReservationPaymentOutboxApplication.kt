@@ -70,12 +70,12 @@ class ReservationPaymentOutboxApplication(
                 now = now,
                 lockedUntil = now.plusSeconds(LEASE_SECONDS)
             ) ?: return
-            log.info("event=payment_outbox_claimed {}", processing.traceFields())
+            log.info("[결제 작업 선점] event=payment_outbox_claimed {}", processing.traceFields())
             try {
                 process(processing)
             } catch (e: ConfirmedPaymentFinalizationException) {
                 log.error(
-                    "event=payment_reservation_finalization_failed {} errorType={}",
+                    "[예약 확정 실패] event=payment_reservation_finalization_failed {} errorType={}",
                     processing.traceFields(),
                     e.finalizationCause.javaClass.simpleName,
                     e.finalizationCause
@@ -85,20 +85,20 @@ class ReservationPaymentOutboxApplication(
                 }
                 if (compensation.cancelOutboxCreated) {
                     log.warn(
-                        "event=payment_cancel_outbox_created {} cancelOutboxId={}",
+                        "[결제 취소 작업 생성] event=payment_cancel_outbox_created {} cancelOutboxId={}",
                         processing.traceFields(),
                         compensation.cancelOutboxId
                     )
                 }
                 if (compensation.compensationPerformed) {
                     log.warn(
-                        "event=payment_compensation_completed {} cancelOutboxId={}",
+                        "[결제 보상 완료] event=payment_compensation_completed {} cancelOutboxId={}",
                         processing.traceFields(),
                         compensation.cancelOutboxId ?: "-"
                     )
                 }
             } catch (e: Exception) {
-                log.error("PaymentOutbox 처리 실패: outboxId={}", processing.id, e)
+                log.error("[결제 작업 처리 실패] outboxId={}", processing.id, e)
                 transactionBoundary.required {
                     outboxRepository.save(failOutbox(processing, e.message ?: e.javaClass.simpleName))
                 }
@@ -266,7 +266,8 @@ class ReservationPaymentOutboxApplication(
             }
             if (reservationId != null) {
                 log.info(
-                    "event=payment_reservation_finalized {} reservationId={} paymentStatus=APPROVED",
+                    "[결제 및 예약 확정 완료] event=payment_reservation_finalized {} " +
+                        "reservationId={} paymentStatus=APPROVED",
                     message.traceFields(),
                     reservationId
                 )
@@ -277,7 +278,7 @@ class ReservationPaymentOutboxApplication(
     }
 
     private fun confirmAtGateway(message: PaymentOutboxMessage): PaymentConfirmResult {
-        log.info("event=payment_pg_confirm_started {}", message.traceFields())
+        log.info("[PG 결제 승인 요청] event=payment_pg_confirm_started {}", message.traceFields())
         return try {
             paymentGateway.confirm(
                 paymentKey = message.paymentKey,
@@ -285,11 +286,11 @@ class ReservationPaymentOutboxApplication(
                 amount = message.amount.amount,
                 idempotencyKey = message.idempotencyKey
             ).also {
-                log.info("event=payment_pg_confirm_succeeded {}", message.traceFields())
+                log.info("[PG 결제 승인 성공] event=payment_pg_confirm_succeeded {}", message.traceFields())
             }
         } catch (e: PaymentGatewayException) {
             log.warn(
-                "event=payment_pg_confirm_failed {} errorType={}",
+                "[PG 결제 승인 실패] event=payment_pg_confirm_failed {} errorType={}",
                 message.traceFields(),
                 e.javaClass.simpleName
             )
@@ -298,18 +299,18 @@ class ReservationPaymentOutboxApplication(
     }
 
     private fun inquireAtGateway(message: PaymentOutboxMessage): PaymentInquiryResult {
-        log.info("event=payment_pg_inquiry_started {}", message.traceFields())
+        log.info("[PG 결제 상태 조회 요청] event=payment_pg_inquiry_started {}", message.traceFields())
         return try {
             paymentGateway.inquire(message.paymentKey).also { result ->
                 log.info(
-                    "event=payment_pg_inquiry_succeeded {} externalStatus={}",
+                    "[PG 결제 상태 조회 성공] event=payment_pg_inquiry_succeeded {} externalStatus={}",
                     message.traceFields(),
                     result.status
                 )
             }
         } catch (e: PaymentGatewayException) {
             log.warn(
-                "event=payment_pg_inquiry_failed {} errorType={}",
+                "[PG 결제 상태 조회 실패] event=payment_pg_inquiry_failed {} errorType={}",
                 message.traceFields(),
                 e.javaClass.simpleName
             )
@@ -319,13 +320,14 @@ class ReservationPaymentOutboxApplication(
 
     private fun failOutbox(message: PaymentOutboxMessage, errorMessage: String): PaymentOutboxMessage {
         val failed = message.fail(errorMessage, clock.instant())
-        val event = if (failed.status == PaymentOutboxStatus.PENDING) {
-            "payment_outbox_retry_scheduled"
+        val (label, event) = if (failed.status == PaymentOutboxStatus.PENDING) {
+            "결제 작업 재시도 예약" to "payment_outbox_retry_scheduled"
         } else {
-            "payment_outbox_failed"
+            "결제 작업 최종 실패" to "payment_outbox_failed"
         }
         log.warn(
-            "event={} {} retryCount={} nextRetryAt={} errorType={}",
+            "[{}] event={} {} retryCount={} nextRetryAt={} errorType={}",
+            label,
             event,
             message.traceFields(),
             failed.retryCount,
@@ -449,7 +451,7 @@ class ReservationPaymentOutboxApplication(
                 return CompensationResult(null, cancelOutboxCreated = false, compensationPerformed = false)
             }
 
-        log.warn("event=payment_compensation_started {}", message.traceFields())
+        log.warn("[결제 보상 시작] event=payment_compensation_started {}", message.traceFields())
 
         val approvedPayment = if (payment.status == PaymentStatus.APPROVED) {
             payment
@@ -839,14 +841,18 @@ class ReservationPaymentOutboxApplication(
                 paymentRepository.save(payment.cancel())
                 outboxRepository.save(message.complete(clock.instant()))
             }
-            log.info("event=payment_cancel_finalized {} paymentStatus=CANCELLED", message.traceFields())
+            log.info(
+                "[결제 취소 완료] event=payment_cancel_finalized {} paymentStatus=CANCELLED",
+                message.traceFields()
+            )
         } catch (e: PaymentGatewayException.AlreadyProcessed) {
             transactionBoundary.required {
                 paymentRepository.save(payment.cancel())
                 outboxRepository.save(message.complete(clock.instant()))
             }
             log.info(
-                "event=payment_cancel_finalized {} paymentStatus=CANCELLED result=already_processed",
+                "[결제 취소 완료] event=payment_cancel_finalized {} " +
+                    "paymentStatus=CANCELLED result=already_processed",
                 message.traceFields()
             )
         } catch (e: PaymentGatewayException.ProviderError) {
@@ -867,17 +873,17 @@ class ReservationPaymentOutboxApplication(
     }
 
     private fun cancelAtGateway(message: PaymentOutboxMessage) {
-        log.info("event=payment_pg_cancel_started {}", message.traceFields())
+        log.info("[PG 결제 취소 요청] event=payment_pg_cancel_started {}", message.traceFields())
         try {
             paymentGateway.cancel(
                 paymentKey = message.paymentKey,
                 cancelReason = message.cancelReason ?: PaymentCancelReason.CUSTOMER_REQUEST.message,
                 idempotencyKey = message.idempotencyKey
             )
-            log.info("event=payment_pg_cancel_succeeded {}", message.traceFields())
+            log.info("[PG 결제 취소 성공] event=payment_pg_cancel_succeeded {}", message.traceFields())
         } catch (e: PaymentGatewayException) {
             log.warn(
-                "event=payment_pg_cancel_failed {} errorType={}",
+                "[PG 결제 취소 실패] event=payment_pg_cancel_failed {} errorType={}",
                 message.traceFields(),
                 e.javaClass.simpleName
             )
