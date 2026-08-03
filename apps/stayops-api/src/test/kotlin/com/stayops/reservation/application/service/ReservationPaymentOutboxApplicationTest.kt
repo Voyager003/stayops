@@ -556,6 +556,94 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
             }
         }
 
+        `when`("ReservationIntent 결제 승인 응답 유실 후 동일 Outbox를 재시도하면") {
+            then("동일한 멱등성 키로 PG 상태를 복구하고 Reservation을 한 번만 생성한다") {
+                val message = confirmIntentMessage()
+                val retriedMessages = mutableListOf<PaymentOutboxMessage>()
+                var confirmAttempt = 0
+                claim(message)
+                every { paymentRepository.findById("pay-intent-1") } returns confirmRequestedIntentPayment()
+                every { reservationIntentRepository.findById("intent-1") } returns reservationIntent()
+                every { guestRepository.findByPropertyIdAndPhone("prop-1", "010-1111-2222") } returns null
+                every {
+                    paymentGateway.confirm(
+                        paymentKey = "toss_pk_123",
+                        orderId = message.orderId,
+                        amount = BigDecimal(200_000),
+                        idempotencyKey = message.idempotencyKey
+                    )
+                } answers {
+                    confirmAttempt += 1
+                    if (confirmAttempt == 1) {
+                        throw PaymentGatewayException.UnknownError("UNKNOWN_ERROR", "PG 승인 응답 유실")
+                    }
+                    throw PaymentGatewayException.AlreadyProcessed("toss_pk_123")
+                }
+                every { paymentGateway.inquire("toss_pk_123") } returnsMany listOf(
+                    PaymentInquiryResult(
+                        paymentKey = "toss_pk_123",
+                        orderId = message.orderId,
+                        status = "IN_PROGRESS",
+                        totalAmount = BigDecimal(200_000)
+                    ),
+                    PaymentInquiryResult(
+                        paymentKey = "toss_pk_123",
+                        orderId = message.orderId,
+                        status = "DONE",
+                        totalAmount = BigDecimal(200_000)
+                    )
+                )
+                every {
+                    outboxRepository.save(match {
+                        it.id == message.id &&
+                            it.status == PaymentOutboxStatus.PENDING &&
+                            it.retryCount == 1
+                    })
+                } answers {
+                    firstArg<PaymentOutboxMessage>().also(retriedMessages::add)
+                }
+
+                application.processPendingMessages(workerId = "worker-1")
+
+                val retryProcessing = retriedMessages.single().startProcessing(
+                    workerId = "worker-1",
+                    lockedUntil = fixedInstant.plusSeconds(90),
+                    now = fixedInstant.plusSeconds(30)
+                )
+                every {
+                    outboxRepository.claimReadyForProcessing(
+                        workerId = "worker-1",
+                        now = fixedInstant,
+                        lockedUntil = fixedInstant.plusSeconds(60)
+                    )
+                } returnsMany listOf(retryProcessing, null)
+
+                application.processPendingMessages(workerId = "worker-1")
+
+                verify(exactly = 2) {
+                    paymentGateway.confirm(
+                        paymentKey = "toss_pk_123",
+                        orderId = message.orderId,
+                        amount = BigDecimal(200_000),
+                        idempotencyKey = message.idempotencyKey
+                    )
+                }
+                verify(exactly = 2) { paymentGateway.inquire("toss_pk_123") }
+                verify(exactly = 1) { inventoryHoldService.consume("intent-1") }
+                verify(exactly = 1) {
+                    reservationRepository.save(match { it.status == ReservationStatus.PENDING })
+                }
+                verify(exactly = 1) {
+                    paymentRepository.save(match { it.status == PaymentStatus.APPROVED })
+                }
+                verify(exactly = 1) {
+                    outboxRepository.save(match {
+                        it.id == message.id && it.status == PaymentOutboxStatus.COMPLETED
+                    })
+                }
+            }
+        }
+
         `when`("Payment는 이미 승인됐지만 Reservation이 아직 PENDING이면") {
             then("재고와 Reservation을 다시 변경하지 않고 Outbox만 완료한다") {
                 val message = confirmMessage()
@@ -858,6 +946,72 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
                     outboxRepository.save(match {
                         it.status == PaymentOutboxStatus.PENDING &&
                             it.retryCount == 1
+                    })
+                }
+            }
+        }
+
+        `when`("PG 취소 응답 유실 후 동일 Outbox를 재시도하면") {
+            then("동일한 멱등성 키로 취소를 재요청하고 Payment를 한 번만 취소한다") {
+                val message = cancelMessage()
+                val retriedMessages = mutableListOf<PaymentOutboxMessage>()
+                var cancelAttempt = 0
+                claim(message)
+                every { paymentRepository.findById("pay-1") } returns cancelRequestedPayment()
+                every { reservationRepository.findById("rsv-1") } returns pendingReservation().confirm().cancel()
+                every {
+                    paymentGateway.cancel(
+                        paymentKey = "toss_pk_123",
+                        cancelReason = "고객 요청에 의한 취소",
+                        idempotencyKey = message.idempotencyKey
+                    )
+                } answers {
+                    cancelAttempt += 1
+                    if (cancelAttempt == 1) {
+                        throw PaymentGatewayException.UnknownError("UNKNOWN_ERROR", "PG 취소 응답 유실")
+                    }
+                    throw PaymentGatewayException.AlreadyProcessed("toss_pk_123")
+                }
+                every {
+                    outboxRepository.save(match {
+                        it.id == message.id &&
+                            it.status == PaymentOutboxStatus.PENDING &&
+                            it.retryCount == 1
+                    })
+                } answers {
+                    firstArg<PaymentOutboxMessage>().also(retriedMessages::add)
+                }
+
+                application.processPendingMessages(workerId = "worker-1")
+
+                val retryProcessing = retriedMessages.single().startProcessing(
+                    workerId = "worker-1",
+                    lockedUntil = fixedInstant.plusSeconds(90),
+                    now = fixedInstant.plusSeconds(30)
+                )
+                every {
+                    outboxRepository.claimReadyForProcessing(
+                        workerId = "worker-1",
+                        now = fixedInstant,
+                        lockedUntil = fixedInstant.plusSeconds(60)
+                    )
+                } returnsMany listOf(retryProcessing, null)
+
+                application.processPendingMessages(workerId = "worker-1")
+
+                verify(exactly = 2) {
+                    paymentGateway.cancel(
+                        paymentKey = "toss_pk_123",
+                        cancelReason = "고객 요청에 의한 취소",
+                        idempotencyKey = message.idempotencyKey
+                    )
+                }
+                verify(exactly = 1) {
+                    paymentRepository.save(match { it.status == PaymentStatus.CANCELLED })
+                }
+                verify(exactly = 1) {
+                    outboxRepository.save(match {
+                        it.id == message.id && it.status == PaymentOutboxStatus.COMPLETED
                     })
                 }
             }
