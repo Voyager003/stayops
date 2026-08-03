@@ -100,16 +100,32 @@ data class CustomerReservationIntentCommand(
     val guestEmail: String?
 ) {
     fun fingerprint(): String {
-        val canonical = listOf(
+        return hashFields(
+            listOf(
+                propertyId,
+                roomTypeId,
+                checkIn.toString(),
+                checkOut.toString(),
+                numberOfGuests.toString(),
+                guestName,
+                guestPhone,
+                guestEmail.orEmpty()
+            )
+        )
+    }
+
+    fun activeBookingKey(): String = hashFields(
+        listOf(
+            memberId,
             propertyId,
             roomTypeId,
             checkIn.toString(),
-            checkOut.toString(),
-            numberOfGuests.toString(),
-            guestName,
-            guestPhone,
-            guestEmail.orEmpty()
-        ).joinToString(separator = "") { value -> "${value.length}:$value" }
+            checkOut.toString()
+        )
+    )
+
+    private fun hashFields(fields: List<String>): String {
+        val canonical = fields.joinToString(separator = "") { value -> "${value.length}:$value" }
         return MessageDigest.getInstance("SHA-256")
             .digest(canonical.toByteArray(Charsets.UTF_8))
             .joinToString("") { byte -> "%02x".format(byte) }

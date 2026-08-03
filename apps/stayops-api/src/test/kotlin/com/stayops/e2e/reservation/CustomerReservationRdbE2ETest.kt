@@ -8,6 +8,7 @@ import com.stayops.inventory.application.provided.InventoryHoldService
 import com.stayops.inventory.application.service.RoomInventoryApplication
 import com.stayops.inventory.domain.model.InventoryHoldStatus
 import com.stayops.inventory.domain.repository.InventoryHoldRepository
+import com.stayops.jooq.generated.Tables.ACTIVE_RESERVATION_ATTEMPTS
 import com.stayops.jooq.generated.Tables.CHANNELS
 import com.stayops.jooq.generated.Tables.CHANNEL_MAPPINGS
 import com.stayops.jooq.generated.Tables.CHANNEL_MAPPING_ENTRIES
@@ -64,9 +65,11 @@ import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.config.FixedTestClockConfig
 import com.stayops.shared.domain.Money
 import com.stayops.shared.domain.MutableClock
+import com.stayops.shared.exception.ConflictException
 import io.mockk.every
 import io.mockk.verify
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -163,6 +166,67 @@ class CustomerReservationRdbE2ETest @Autowired constructor(
                 executor.shutdownNow()
             }
         }
+
+        @Test
+        fun `서로 다른 키라도 동일 회원의 활성 예약 시도는 하나만 허용한다`() {
+            clearRdb()
+            createBookableProperty(totalRooms = 2)
+
+            createIntent(idempotencyKey = "booking-attempt-key-1")
+
+            assertThatThrownBy {
+                createIntent(idempotencyKey = "booking-attempt-key-2")
+            }.isInstanceOf(ConflictException::class.java)
+                .extracting("code")
+                .isEqualTo("DUPLICATE_ACTIVE_RESERVATION_ATTEMPT")
+            assertThat(dsl.fetchCount(RESERVATION_INTENTS)).isEqualTo(1)
+            assertThat(dsl.fetchCount(RESERVATION_INTENT_REQUESTS)).isEqualTo(1)
+            assertThat(dsl.fetchCount(ACTIVE_RESERVATION_ATTEMPTS)).isEqualTo(1)
+            assertThat(paymentRepository.findByMemberId(CUSTOMER_ID)).hasSize(1)
+            assertThat(availability().heldCount).isEqualTo(1)
+        }
+
+        @Test
+        fun `서로 다른 키의 동일 회원 동시 요청도 하나만 커밋한다`() {
+            clearRdb()
+            createBookableProperty(totalRooms = 2)
+            val executor = Executors.newFixedThreadPool(2)
+            val ready = CountDownLatch(2)
+            val start = CountDownLatch(1)
+            val successes = mutableListOf<CustomerReservationIntentResult>()
+            val failures = mutableListOf<Throwable>()
+            try {
+                (1..2).forEach { index ->
+                    executor.submit {
+                        try {
+                            ready.countDown()
+                            start.await(5, TimeUnit.SECONDS)
+                            val result = createIntent(idempotencyKey = "concurrent-booking-key-$index")
+                            synchronized(successes) { successes += result }
+                        } catch (exception: Throwable) {
+                            synchronized(failures) { failures += exception }
+                        }
+                    }
+                }
+                assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue()
+                start.countDown()
+                executor.shutdown()
+                assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue()
+
+                assertThat(successes).hasSize(1)
+                assertThat(failures).hasSize(1)
+                assertThat(failures.single()).isInstanceOf(ConflictException::class.java)
+                assertThat((failures.single() as ConflictException).code)
+                    .isEqualTo("DUPLICATE_ACTIVE_RESERVATION_ATTEMPT")
+                assertThat(dsl.fetchCount(RESERVATION_INTENTS)).isEqualTo(1)
+                assertThat(dsl.fetchCount(RESERVATION_INTENT_REQUESTS)).isEqualTo(1)
+                assertThat(dsl.fetchCount(ACTIVE_RESERVATION_ATTEMPTS)).isEqualTo(1)
+                assertThat(paymentRepository.findByMemberId(CUSTOMER_ID)).hasSize(1)
+                assertThat(availability().heldCount).isEqualTo(1)
+            } finally {
+                executor.shutdownNow()
+            }
+        }
     }
 
     @Nested
@@ -199,6 +263,7 @@ class CustomerReservationRdbE2ETest @Autowired constructor(
             assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
                 .isEqualTo(InventoryHoldStatus.CONSUMED)
             assertThat(availability().reservedCount).isEqualTo(1)
+            assertThat(dsl.fetchCount(ACTIVE_RESERVATION_ATTEMPTS)).isZero()
 
             val confirmed = reservationApplication.confirmReservation(PROPERTY_ID, reservation.id)
 
@@ -337,6 +402,14 @@ class CustomerReservationRdbE2ETest @Autowired constructor(
             assertThat(availability().availableCount).isEqualTo(1)
             assertThat(availability().heldCount).isEqualTo(0)
             assertThat(availability().reservedCount).isEqualTo(0)
+            assertThat(dsl.fetchCount(ACTIVE_RESERVATION_ATTEMPTS)).isZero()
+
+            val retry = createIntent(
+                idempotencyKey = "retry-after-payment-failure-key",
+                guestPhone = "010-9999-0002"
+            )
+            assertThat(retry.intent.status).isEqualTo(ReservationIntentStatus.PAYMENT_WAITING)
+            assertThat(dsl.fetchCount(ACTIVE_RESERVATION_ATTEMPTS)).isEqualTo(1)
         }
 
         @Test
@@ -387,6 +460,7 @@ class CustomerReservationRdbE2ETest @Autowired constructor(
             assertThat(failedIntent.reservationId).isNull()
             assertThat(reservationRepository.findPageByMemberId(CUSTOMER_ID, 0, 20).content).isEmpty()
             assertThat(dsl.fetchCount(GUESTS)).isZero()
+            assertThat(dsl.fetchCount(ACTIVE_RESERVATION_ATTEMPTS)).isZero()
 
             every { paymentGateway.cancel(any(), any(), any()) } returns
                 PaymentCancelResult("toss_pk_rdb_compensation")
@@ -693,6 +767,7 @@ class CustomerReservationRdbE2ETest @Autowired constructor(
         dsl.deleteFrom(PAYMENTS).execute()
         dsl.deleteFrom(INVENTORY_HOLD_DATES).execute()
         dsl.deleteFrom(INVENTORY_HOLDS).execute()
+        dsl.deleteFrom(ACTIVE_RESERVATION_ATTEMPTS).execute()
         dsl.deleteFrom(RESERVATION_INTENT_REQUESTS).execute()
         dsl.deleteFrom(RESERVATION_INTENTS).execute()
         dsl.deleteFrom(RESERVATIONS).execute()

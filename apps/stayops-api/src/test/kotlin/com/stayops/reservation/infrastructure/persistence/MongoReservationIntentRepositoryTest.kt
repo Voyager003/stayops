@@ -1,6 +1,8 @@
 package com.stayops.reservation.infrastructure.persistence.mongo
 
 import com.stayops.TestcontainersConfiguration
+import com.stayops.reservation.domain.model.ActiveReservationAttempt
+import com.stayops.reservation.domain.model.ActiveReservationAttemptAlreadyExistsException
 import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.ReservationChannel
 import com.stayops.reservation.domain.model.ReservationIntent
@@ -8,7 +10,9 @@ import com.stayops.reservation.domain.model.ReservationIntentStatus
 import com.stayops.reservation.domain.model.ReservationIntentRequest
 import com.stayops.reservation.domain.model.ReservationIntentRequestAlreadyExistsException
 import com.stayops.reservation.domain.model.ReservationPricing
+import com.stayops.reservation.domain.repository.ActiveReservationAttemptRepository
 import com.stayops.reservation.domain.repository.ReservationIntentRepository
+import com.stayops.reservation.infrastructure.persistence.mongo.dao.ActiveReservationAttemptMongoDao
 import com.stayops.reservation.domain.repository.ReservationIntentRequestRepository
 import com.stayops.reservation.infrastructure.persistence.mongo.dao.ReservationIntentRequestMongoDao
 import com.stayops.reservation.infrastructure.persistence.mongo.dao.ReservationIntentMongoDao
@@ -32,7 +36,9 @@ class MongoReservationIntentRepositoryTest @Autowired constructor(
     private val repository: ReservationIntentRepository,
     private val mongoDao: ReservationIntentMongoDao,
     private val requestRepository: ReservationIntentRequestRepository,
-    private val requestMongoDao: ReservationIntentRequestMongoDao
+    private val requestMongoDao: ReservationIntentRequestMongoDao,
+    private val activeReservationAttemptRepository: ActiveReservationAttemptRepository,
+    private val activeReservationAttemptMongoDao: ActiveReservationAttemptMongoDao
 ) {
 
     private val now = Instant.parse("2026-04-01T01:00:00Z")
@@ -41,8 +47,33 @@ class MongoReservationIntentRepositoryTest @Autowired constructor(
 
     @BeforeEach
     fun setUp() {
+        activeReservationAttemptMongoDao.deleteAll()
         requestMongoDao.deleteAll()
         mongoDao.deleteAll()
+    }
+
+    @Nested
+    inner class `활성 예약 시도 claim` {
+        @Test
+        fun `같은 booking key는 한 번만 저장하고 기존 intent 종료 후 다시 저장한다`() {
+            repository.save(newIntent(id = "intent-1"))
+            repository.save(newIntent(id = "intent-2"))
+            val first = activeAttempt("intent-1")
+            val second = activeAttempt("intent-2")
+
+            activeReservationAttemptRepository.save(first)
+
+            assertThatThrownBy { activeReservationAttemptRepository.save(second) }
+                .isInstanceOf(ActiveReservationAttemptAlreadyExistsException::class.java)
+            assertThat(activeReservationAttemptRepository.findByBookingKey(first.bookingKey)?.reservationIntentId)
+                .isEqualTo("intent-1")
+
+            activeReservationAttemptRepository.deleteByReservationIntentId("intent-1")
+            activeReservationAttemptRepository.save(second)
+
+            assertThat(activeReservationAttemptRepository.findByBookingKey(second.bookingKey)?.reservationIntentId)
+                .isEqualTo("intent-2")
+        }
     }
 
     @Nested
@@ -147,5 +178,14 @@ class MongoReservationIntentRepositoryTest @Autowired constructor(
             holdId = "hold-1",
             expiresAt = expiresAt,
             now = now.minusSeconds(10)
+        )
+
+    private fun activeAttempt(reservationIntentId: String): ActiveReservationAttempt =
+        ActiveReservationAttempt.create(
+            bookingKey = "b".repeat(64),
+            reservationIntentId = reservationIntentId,
+            memberId = "member-1",
+            expiresAt = now.plusSeconds(900),
+            createdAt = now
         )
 }

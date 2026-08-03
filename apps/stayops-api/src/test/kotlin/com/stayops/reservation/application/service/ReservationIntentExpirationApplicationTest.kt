@@ -6,6 +6,7 @@ import com.stayops.reservation.domain.model.ReservationChannel
 import com.stayops.reservation.domain.model.ReservationIntent
 import com.stayops.reservation.domain.model.ReservationIntentStatus
 import com.stayops.reservation.domain.model.ReservationPricing
+import com.stayops.reservation.domain.repository.ActiveReservationAttemptRepository
 import com.stayops.reservation.domain.repository.ReservationIntentRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
@@ -24,11 +25,13 @@ import java.time.ZoneOffset
 class ReservationIntentExpirationApplicationTest : BehaviorSpec({
 
     val reservationIntentRepository = mockk<ReservationIntentRepository>()
+    val activeReservationAttemptRepository = mockk<ActiveReservationAttemptRepository>()
     val inventoryHoldService = mockk<InventoryHoldService>()
     val fixedInstant = Instant.parse("2026-04-08T10:16:00Z")
     val clock = Clock.fixed(fixedInstant, ZoneOffset.UTC)
     val sut = ReservationIntentExpirationApplication(
         reservationIntentRepository = reservationIntentRepository,
+        activeReservationAttemptRepository = activeReservationAttemptRepository,
         inventoryHoldService = inventoryHoldService,
         clock = clock
     )
@@ -58,9 +61,13 @@ class ReservationIntentExpirationApplicationTest : BehaviorSpec({
         `when`("결제 대기 상태의 만료된 intent가 있으면") {
             val savedIntent = slot<ReservationIntent>()
             val releasedIntentIds = mutableListOf<String>()
+            val deletedAttemptIntentIds = mutableListOf<String>()
             every { reservationIntentRepository.findExpiredPaymentWaiting(fixedInstant, 100) } returns listOf(expiredIntent("intent-1"))
             every { reservationIntentRepository.save(capture(savedIntent)) } answers { firstArg() }
             every { inventoryHoldService.release(capture(releasedIntentIds)) } returns Unit
+            every {
+                activeReservationAttemptRepository.deleteByReservationIntentId(capture(deletedAttemptIntentIds))
+            } returns Unit
 
             val result = sut.expirePaymentWaitingIntents(limit = 100)
 
@@ -68,6 +75,7 @@ class ReservationIntentExpirationApplicationTest : BehaviorSpec({
                 result shouldBe 1
                 savedIntent.captured.status shouldBe ReservationIntentStatus.EXPIRED
                 releasedIntentIds shouldBe listOf("intent-1")
+                deletedAttemptIntentIds shouldBe listOf("intent-1")
             }
         }
     }
