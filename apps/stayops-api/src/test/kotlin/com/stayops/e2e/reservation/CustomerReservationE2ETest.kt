@@ -217,6 +217,93 @@ class CustomerReservationE2ETest @Autowired constructor(
                 executor.shutdownNow()
             }
         }
+
+        @Test
+        fun `서로_다른_키라도_동일_회원의_활성_예약_시도는_하나만_허용한다`() {
+            customerReservationApplication.createReservationIntent(
+                idempotencyKey = "booking-attempt-key-1",
+                memberId = "customer-e2e",
+                propertyId = "prop-e2e",
+                roomTypeId = "rt-e2e",
+                checkIn = checkIn,
+                checkOut = checkOut,
+                numberOfGuests = 2,
+                guestName = "E2E고객",
+                guestPhone = "010-9999-9999",
+                guestEmail = "e2e@test.com"
+            )
+
+            val exception = assertThatThrownBy {
+                customerReservationApplication.createReservationIntent(
+                    idempotencyKey = "booking-attempt-key-2",
+                    memberId = "customer-e2e",
+                    propertyId = "prop-e2e",
+                    roomTypeId = "rt-e2e",
+                    checkIn = checkIn,
+                    checkOut = checkOut,
+                    numberOfGuests = 2,
+                    guestName = "E2E고객",
+                    guestPhone = "010-9999-9999",
+                    guestEmail = "e2e@test.com"
+                )
+            }
+
+            exception.isInstanceOf(ConflictException::class.java)
+                .extracting("code")
+                .isEqualTo("DUPLICATE_ACTIVE_RESERVATION_ATTEMPT")
+            assertThat(paymentRepository.findByMemberId("customer-e2e")).hasSize(1)
+            assertThat(mongoTemplate.getCollection("reservation_intents").countDocuments()).isEqualTo(1)
+        }
+
+        @Test
+        fun `서로_다른_키의_동일_회원_동시_요청도_하나만_커밋한다`() {
+            val executor = Executors.newFixedThreadPool(2)
+            val ready = CountDownLatch(2)
+            val start = CountDownLatch(1)
+            val successes = mutableListOf<CustomerReservationIntentResult>()
+            val failures = mutableListOf<Throwable>()
+            try {
+                (1..2).forEach { index ->
+                    executor.submit {
+                        try {
+                            ready.countDown()
+                            start.await(5, TimeUnit.SECONDS)
+                            val result = customerReservationApplication.createReservationIntent(
+                                idempotencyKey = "concurrent-booking-key-$index",
+                                memberId = "customer-e2e",
+                                propertyId = "prop-e2e",
+                                roomTypeId = "rt-e2e",
+                                checkIn = checkIn,
+                                checkOut = checkOut,
+                                numberOfGuests = 2,
+                                guestName = "E2E고객",
+                                guestPhone = "010-9999-9999",
+                                guestEmail = "e2e@test.com"
+                            )
+                            synchronized(successes) { successes += result }
+                        } catch (exception: Throwable) {
+                            synchronized(failures) { failures += exception }
+                        }
+                    }
+                }
+                assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue()
+                start.countDown()
+                executor.shutdown()
+                assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue()
+
+                assertThat(successes).hasSize(1)
+                assertThat(failures).hasSize(1)
+                assertThat(failures.single()).isInstanceOf(ConflictException::class.java)
+                assertThat((failures.single() as ConflictException).code)
+                    .isEqualTo("DUPLICATE_ACTIVE_RESERVATION_ATTEMPT")
+                assertThat(mongoTemplate.getCollection("reservation_intents").countDocuments()).isEqualTo(1)
+                assertThat(mongoTemplate.getCollection("reservation_intent_requests").countDocuments()).isEqualTo(1)
+                assertThat(mongoTemplate.getCollection("active_reservation_attempts").countDocuments()).isEqualTo(1)
+                assertThat(paymentRepository.findByMemberId("customer-e2e")).hasSize(1)
+            } finally {
+                executor.shutdownNow()
+            }
+        }
     }
 
     @Nested
@@ -279,6 +366,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             assertThat(confirmedPayment.reservationId).isEqualTo(reservationId)
             assertThat(inventoryHoldRepository.findByReservationIntentId(intentResult.intent.id)!!.status)
                 .isEqualTo(InventoryHoldStatus.CONSUMED)
+            assertThat(mongoTemplate.getCollection("active_reservation_attempts").countDocuments()).isZero()
 
             // 3. 마이페이지 조회
             val myReservations = customerReservationApplication.getMyReservations("customer-e2e")
@@ -645,6 +733,7 @@ class CustomerReservationE2ETest @Autowired constructor(
             assertThat(failedIntent.reservationId).isNull()
             assertThat(reservationRepository.findPageByMemberId("customer-e2e", 0, 20).content).isEmpty()
             assertThat(mongoTemplate.getCollection("guests").countDocuments()).isZero()
+            assertThat(mongoTemplate.getCollection("active_reservation_attempts").countDocuments()).isZero()
 
             every { paymentGateway.cancel(any(), any(), any()) } returns
                 PaymentCancelResult("toss_pk_mongo_compensation")

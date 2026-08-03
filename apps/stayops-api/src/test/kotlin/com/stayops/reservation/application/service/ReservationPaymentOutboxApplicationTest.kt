@@ -28,6 +28,7 @@ import com.stayops.reservation.domain.model.ReservationPricing
 import com.stayops.reservation.domain.model.ReservationIntent
 import com.stayops.reservation.domain.model.ReservationIntentStatus
 import com.stayops.reservation.domain.model.ReservationStatus
+import com.stayops.reservation.domain.repository.ActiveReservationAttemptRepository
 import com.stayops.reservation.domain.repository.ReservationIntentRepository
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.shared.domain.DateRange
@@ -55,6 +56,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
     val paymentRepository = mockk<PaymentRepository>()
     val reservationRepository = mockk<ReservationRepository>()
     val reservationIntentRepository = mockk<ReservationIntentRepository>()
+    val activeReservationAttemptRepository = mockk<ActiveReservationAttemptRepository>()
     val guestRepository = mockk<GuestRepository>()
     val inventoryReservationService = mockk<InventoryReservationService>()
     val inventoryHoldService = mockk<InventoryHoldService>()
@@ -71,6 +73,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         paymentRepository = paymentRepository,
         reservationRepository = reservationRepository,
         reservationIntentRepository = reservationIntentRepository,
+        activeReservationAttemptRepository = activeReservationAttemptRepository,
         guestRepository = guestRepository,
         inventoryReservationService = inventoryReservationService,
         inventoryHoldService = inventoryHoldService,
@@ -256,6 +259,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
         every { inventoryReservationService.release(any(), any(), any()) } returns Unit
         every { inventoryHoldService.consume(any()) } returns Unit
         every { inventoryHoldService.release(any()) } returns Unit
+        every { activeReservationAttemptRepository.deleteByReservationIntentId(any()) } returns Unit
     }
 
     afterSpec {
@@ -327,6 +331,9 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
 
                 verify { paymentRepository.save(match { it.status == PaymentStatus.APPROVED }) }
                 verify(exactly = 1) { inventoryHoldService.consume("intent-1") }
+                verify(exactly = 1) {
+                    activeReservationAttemptRepository.deleteByReservationIntentId("intent-1")
+                }
                 verify(exactly = 0) { inventoryReservationService.reserve(any(), any(), any()) }
                 verify { guestRepository.save(match { it.propertyId == "prop-1" && it.phone == "010-1111-2222" }) }
                 verify {
@@ -401,6 +408,9 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
                 }
                 verify { reservationIntentRepository.save(match { it.status == ReservationIntentStatus.PAYMENT_FAILED }) }
                 verify(exactly = 1) { inventoryHoldService.release("intent-1") }
+                verify(exactly = 1) {
+                    activeReservationAttemptRepository.deleteByReservationIntentId("intent-1")
+                }
                 verify {
                     outboxRepository.save(match {
                         it.type == PaymentOutboxType.CANCEL_PAYMENT &&
@@ -438,6 +448,9 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
                 verify { paymentRepository.save(match { it.status == PaymentStatus.FAILED }) }
                 verify { reservationIntentRepository.save(match { it.status == ReservationIntentStatus.PAYMENT_FAILED }) }
                 verify(exactly = 1) { inventoryHoldService.release("intent-1") }
+                verify(exactly = 1) {
+                    activeReservationAttemptRepository.deleteByReservationIntentId("intent-1")
+                }
                 verify(exactly = 0) { inventoryHoldService.consume(any()) }
                 verify { outboxRepository.save(match { it.status == PaymentOutboxStatus.COMPLETED }) }
             }

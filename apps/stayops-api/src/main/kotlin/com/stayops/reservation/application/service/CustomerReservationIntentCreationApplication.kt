@@ -10,11 +10,14 @@ import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolverService
 import com.stayops.reservation.application.required.ReservationPaymentService
 import com.stayops.reservation.application.required.ReservationPaymentSnapshot
+import com.stayops.reservation.domain.model.ActiveReservationAttempt
+import com.stayops.reservation.domain.model.ActiveReservationAttemptAlreadyExistsException
 import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.ReservationChannel
 import com.stayops.reservation.domain.model.ReservationIntent
 import com.stayops.reservation.domain.model.ReservationIntentRequest
 import com.stayops.reservation.domain.model.ReservationPricing
+import com.stayops.reservation.domain.repository.ActiveReservationAttemptRepository
 import com.stayops.reservation.domain.repository.ReservationIntentRepository
 import com.stayops.reservation.domain.repository.ReservationIntentRequestRepository
 import com.stayops.reservation.domain.repository.ReservationRepository
@@ -40,6 +43,7 @@ class CustomerReservationIntentCreationApplication(
     private val reservationRepository: ReservationRepository,
     private val reservationIntentRepository: ReservationIntentRepository,
     private val reservationIntentRequestRepository: ReservationIntentRequestRepository,
+    private val activeReservationAttemptRepository: ActiveReservationAttemptRepository,
     private val inventoryRepository: RoomInventoryRepository,
     private val inventoryHoldService: InventoryHoldService,
     private val reservationPaymentService: ReservationPaymentService,
@@ -137,6 +141,22 @@ class CustomerReservationIntentCreationApplication(
                 createdAt = now
             )
         )
+        try {
+            activeReservationAttemptRepository.save(
+                ActiveReservationAttempt.create(
+                    bookingKey = command.activeBookingKey(),
+                    reservationIntentId = reservationIntentId,
+                    memberId = memberId,
+                    expiresAt = expiresAt,
+                    createdAt = now
+                )
+            )
+        } catch (_: ActiveReservationAttemptAlreadyExistsException) {
+            throw ConflictException(
+                "DUPLICATE_ACTIVE_RESERVATION_ATTEMPT",
+                "동일 조건의 활성 예약 시도가 이미 존재합니다"
+            )
+        }
         val hold = inventoryHoldService.hold(
             holdId = holdId,
             reservationIntentId = reservationIntentId,

@@ -1,6 +1,7 @@
 package com.stayops.reservation.infrastructure.persistence.rdb
 
 import com.stayops.RdbTestcontainersConfiguration
+import com.stayops.jooq.generated.Tables.ACTIVE_RESERVATION_ATTEMPTS
 import com.stayops.jooq.generated.Tables.MEMBERS
 import com.stayops.jooq.generated.Tables.PROPERTIES
 import com.stayops.jooq.generated.Tables.RESERVATION_INTENTS
@@ -8,6 +9,8 @@ import com.stayops.jooq.generated.Tables.RESERVATION_INTENT_REQUESTS
 import com.stayops.jooq.generated.Tables.ROOM_TYPES
 import com.stayops.member.domain.model.MemberRole
 import com.stayops.member.domain.model.MemberStatus
+import com.stayops.reservation.domain.model.ActiveReservationAttempt
+import com.stayops.reservation.domain.model.ActiveReservationAttemptAlreadyExistsException
 import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.ReservationChannel
 import com.stayops.reservation.domain.model.ReservationIntent
@@ -15,6 +18,7 @@ import com.stayops.reservation.domain.model.ReservationIntentStatus
 import com.stayops.reservation.domain.model.ReservationIntentRequest
 import com.stayops.reservation.domain.model.ReservationIntentRequestAlreadyExistsException
 import com.stayops.reservation.domain.model.ReservationPricing
+import com.stayops.reservation.domain.repository.ActiveReservationAttemptRepository
 import com.stayops.reservation.domain.repository.ReservationIntentRepository
 import com.stayops.reservation.domain.repository.ReservationIntentRequestRepository
 import com.stayops.shared.domain.DateRange
@@ -43,6 +47,7 @@ import java.time.ZoneOffset
 class RdbReservationIntentRepositoryTest @Autowired constructor(
     private val repository: ReservationIntentRepository,
     private val requestRepository: ReservationIntentRequestRepository,
+    private val activeReservationAttemptRepository: ActiveReservationAttemptRepository,
     private val dsl: DSLContext
 ) {
 
@@ -50,6 +55,7 @@ class RdbReservationIntentRepositoryTest @Autowired constructor(
     @EnableAutoConfiguration
     @Import(
         RdbTestcontainersConfiguration::class,
+        RdbActiveReservationAttemptRepository::class,
         RdbReservationIntentRepository::class,
         RdbReservationIntentRequestRepository::class
     )
@@ -61,11 +67,37 @@ class RdbReservationIntentRepositoryTest @Autowired constructor(
 
     @BeforeEach
     fun setUp() {
+        dsl.deleteFrom(ACTIVE_RESERVATION_ATTEMPTS).execute()
         dsl.deleteFrom(RESERVATION_INTENT_REQUESTS).execute()
         dsl.deleteFrom(RESERVATION_INTENTS).execute()
         dsl.deleteFrom(ROOM_TYPES).execute()
         dsl.deleteFrom(PROPERTIES).execute()
         dsl.deleteFrom(MEMBERS).execute()
+    }
+
+    @Nested
+    inner class `활성 예약 시도 claim` {
+        @Test
+        fun `같은 booking key는 한 번만 저장하고 기존 intent 종료 후 다시 저장한다`() {
+            insertDependencies()
+            repository.save(newIntent(id = "intent-1"))
+            repository.save(newIntent(id = "intent-2"))
+            val first = activeAttempt("intent-1")
+            val second = activeAttempt("intent-2")
+
+            activeReservationAttemptRepository.save(first)
+
+            assertThatThrownBy { activeReservationAttemptRepository.save(second) }
+                .isInstanceOf(ActiveReservationAttemptAlreadyExistsException::class.java)
+            assertThat(activeReservationAttemptRepository.findByBookingKey(first.bookingKey)?.reservationIntentId)
+                .isEqualTo("intent-1")
+
+            activeReservationAttemptRepository.deleteByReservationIntentId("intent-1")
+            activeReservationAttemptRepository.save(second)
+
+            assertThat(activeReservationAttemptRepository.findByBookingKey(second.bookingKey)?.reservationIntentId)
+                .isEqualTo("intent-2")
+        }
     }
 
     @Nested
@@ -189,6 +221,15 @@ class RdbReservationIntentRepositoryTest @Autowired constructor(
             holdId = "hold-1",
             expiresAt = expiresAt,
             now = now.minusSeconds(10)
+        )
+
+    private fun activeAttempt(reservationIntentId: String): ActiveReservationAttempt =
+        ActiveReservationAttempt.create(
+            bookingKey = "b".repeat(64),
+            reservationIntentId = reservationIntentId,
+            memberId = "member-1",
+            expiresAt = now.plusSeconds(900),
+            createdAt = now
         )
 
     private fun insertDependencies() {

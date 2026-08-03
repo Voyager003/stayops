@@ -22,6 +22,7 @@ import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationIntent
 import com.stayops.reservation.domain.model.ReservationIntentStatus
 import com.stayops.reservation.domain.model.ReservationStatus
+import com.stayops.reservation.domain.repository.ActiveReservationAttemptRepository
 import com.stayops.reservation.domain.repository.ReservationIntentRepository
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.shared.domain.IdGenerator
@@ -39,6 +40,7 @@ class ReservationPaymentOutboxApplication(
     private val paymentRepository: PaymentRepository,
     private val reservationRepository: ReservationRepository,
     private val reservationIntentRepository: ReservationIntentRepository,
+    private val activeReservationAttemptRepository: ActiveReservationAttemptRepository,
     private val guestRepository: GuestRepository,
     private val inventoryReservationService: InventoryReservationService,
     private val inventoryHoldService: InventoryHoldService,
@@ -206,6 +208,7 @@ class ReservationPaymentOutboxApplication(
             payment.status == PaymentStatus.APPROVED
         ) {
             transactionBoundary.required {
+                activeReservationAttemptRepository.deleteByReservationIntentId(reservationIntent.id)
                 outboxRepository.save(message.complete(now))
             }
             return
@@ -223,6 +226,15 @@ class ReservationPaymentOutboxApplication(
             )
             transactionBoundary.required {
                 releaseReservationIntentHold(reservationIntent)
+                if (
+                    reservationIntent.status == ReservationIntentStatus.PAYMENT_WAITING ||
+                    reservationIntent.status == ReservationIntentStatus.CONFIRM_REQUESTED
+                ) {
+                    reservationIntentRepository.save(
+                        reservationIntent.failPayment("결제가 이미 실패 상태입니다", now)
+                    )
+                }
+                activeReservationAttemptRepository.deleteByReservationIntentId(reservationIntent.id)
                 outboxRepository.save(message.skip("결제가 이미 실패 상태입니다", now))
             }
             return
@@ -467,6 +479,7 @@ class ReservationPaymentOutboxApplication(
         reservationIntentRepository.save(
             reservationIntent.failPayment("PG 승인 후 내부 예약 확정 실패", clock.instant())
         )
+        activeReservationAttemptRepository.deleteByReservationIntentId(reservationIntent.id)
 
         val existingCancelOutbox = outboxRepository.findByPaymentIdAndType(
             payment.id,
@@ -558,6 +571,7 @@ class ReservationPaymentOutboxApplication(
         }
         inventoryHoldService.consume(reservationIntent.id)
         reservationIntentRepository.save(reservationIntent.markReserved(reservation.id, now))
+        activeReservationAttemptRepository.deleteByReservationIntentId(reservationIntent.id)
         publishReservationCreatedForInventorySync(reservation)
         outboxRepository.save(message.complete(clock.instant()))
         return reservation.id
@@ -578,6 +592,7 @@ class ReservationPaymentOutboxApplication(
         releaseReservationIntentHold(reservationIntent)
         paymentRepository.save(payment.fail(reason))
         reservationIntentRepository.save(reservationIntent.failPayment(reason, clock.instant()))
+        activeReservationAttemptRepository.deleteByReservationIntentId(reservationIntent.id)
     }
 
     private fun releaseReservationIntentHold(reservationIntent: ReservationIntent) {
