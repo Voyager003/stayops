@@ -11,6 +11,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.MethodArgumentNotValidException
+import org.springframework.web.bind.MissingRequestHeaderException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import java.time.Instant
@@ -27,6 +28,18 @@ class GlobalExceptionHandler {
         log.warn("잘못된 요청: code=INVALID_ARGUMENT, message={}", ex.message)
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
             ErrorResponse(code = "INVALID_ARGUMENT", message = ex.message ?: "잘못된 요청입니다", timestamp = Instant.now())
+        )
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException::class)
+    fun handleMissingRequestHeaderException(ex: MissingRequestHeaderException): ResponseEntity<ErrorResponse> {
+        log.warn("필수 요청 헤더 누락: header={}", ex.headerName)
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+            ErrorResponse(
+                code = "MISSING_REQUEST_HEADER",
+                message = "필수 요청 헤더가 누락되었습니다: ${ex.headerName}",
+                timestamp = Instant.now()
+            )
         )
     }
 

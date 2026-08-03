@@ -5,12 +5,17 @@ import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.ReservationChannel
 import com.stayops.reservation.domain.model.ReservationIntent
 import com.stayops.reservation.domain.model.ReservationIntentStatus
+import com.stayops.reservation.domain.model.ReservationIntentRequest
+import com.stayops.reservation.domain.model.ReservationIntentRequestAlreadyExistsException
 import com.stayops.reservation.domain.model.ReservationPricing
 import com.stayops.reservation.domain.repository.ReservationIntentRepository
+import com.stayops.reservation.domain.repository.ReservationIntentRequestRepository
+import com.stayops.reservation.infrastructure.persistence.mongo.dao.ReservationIntentRequestMongoDao
 import com.stayops.reservation.infrastructure.persistence.mongo.dao.ReservationIntentMongoDao
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -25,7 +30,9 @@ import java.time.LocalDate
 @Import(TestcontainersConfiguration::class)
 class MongoReservationIntentRepositoryTest @Autowired constructor(
     private val repository: ReservationIntentRepository,
-    private val mongoDao: ReservationIntentMongoDao
+    private val mongoDao: ReservationIntentMongoDao,
+    private val requestRepository: ReservationIntentRequestRepository,
+    private val requestMongoDao: ReservationIntentRequestMongoDao
 ) {
 
     private val now = Instant.parse("2026-04-01T01:00:00Z")
@@ -34,7 +41,30 @@ class MongoReservationIntentRepositoryTest @Autowired constructor(
 
     @BeforeEach
     fun setUp() {
+        requestMongoDao.deleteAll()
         mongoDao.deleteAll()
+    }
+
+    @Nested
+    inner class `intent 생성 요청 멱등성` {
+        @Test
+        fun `같은 회원과 멱등성 키는 한 번만 저장한다`() {
+            repository.save(newIntent())
+            val request = ReservationIntentRequest.create(
+                memberId = "member-1",
+                idempotencyKey = "intent-key-1",
+                requestHash = "a".repeat(64),
+                reservationIntentId = "intent-1",
+                createdAt = now
+            )
+
+            requestRepository.save(request)
+
+            assertThatThrownBy { requestRepository.save(request) }
+                .isInstanceOf(ReservationIntentRequestAlreadyExistsException::class.java)
+            assertThat(requestRepository.findByMemberIdAndIdempotencyKey("member-1", "intent-key-1"))
+                .isEqualTo(request)
+        }
     }
 
     @Nested

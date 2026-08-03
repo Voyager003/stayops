@@ -9,13 +9,14 @@ import java.time.LocalDate
 
 @Service
 class CustomerReservationApplication(
-    private val intentCreationApplication: CustomerReservationIntentCreationApplication,
+    private val intentCreationApplication: CustomerReservationIntentIdempotencyApplication,
     private val intentPaymentApplication: CustomerReservationIntentPaymentApplication,
     private val queryApplication: CustomerReservationQueryApplication,
     private val cancellationApplication: CustomerReservationCancellationApplication
 ) {
 
     fun createReservationIntent(
+        idempotencyKey: String,
         memberId: String,
         propertyId: String,
         roomTypeId: String,
@@ -27,15 +28,18 @@ class CustomerReservationApplication(
         guestEmail: String?
     ): CustomerReservationIntentResult =
         intentCreationApplication.createReservationIntent(
-            memberId = memberId,
-            propertyId = propertyId,
-            roomTypeId = roomTypeId,
-            checkIn = checkIn,
-            checkOut = checkOut,
-            numberOfGuests = numberOfGuests,
-            guestName = guestName,
-            guestPhone = guestPhone,
-            guestEmail = guestEmail
+            idempotencyKey = idempotencyKey,
+            command = CustomerReservationIntentCommand(
+                memberId = memberId,
+                propertyId = propertyId,
+                roomTypeId = roomTypeId,
+                checkIn = checkIn,
+                checkOut = checkOut,
+                numberOfGuests = numberOfGuests,
+                guestName = guestName,
+                guestPhone = guestPhone,
+                guestEmail = guestEmail
+            )
         )
 
     fun getMyReservations(memberId: String, page: Int = 0, size: Int = 20): PagedResult<CustomerReservationReadResult> =

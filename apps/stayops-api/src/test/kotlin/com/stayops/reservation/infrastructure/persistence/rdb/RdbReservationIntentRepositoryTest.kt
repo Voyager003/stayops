@@ -4,6 +4,7 @@ import com.stayops.RdbTestcontainersConfiguration
 import com.stayops.jooq.generated.Tables.MEMBERS
 import com.stayops.jooq.generated.Tables.PROPERTIES
 import com.stayops.jooq.generated.Tables.RESERVATION_INTENTS
+import com.stayops.jooq.generated.Tables.RESERVATION_INTENT_REQUESTS
 import com.stayops.jooq.generated.Tables.ROOM_TYPES
 import com.stayops.member.domain.model.MemberRole
 import com.stayops.member.domain.model.MemberStatus
@@ -11,8 +12,11 @@ import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.ReservationChannel
 import com.stayops.reservation.domain.model.ReservationIntent
 import com.stayops.reservation.domain.model.ReservationIntentStatus
+import com.stayops.reservation.domain.model.ReservationIntentRequest
+import com.stayops.reservation.domain.model.ReservationIntentRequestAlreadyExistsException
 import com.stayops.reservation.domain.model.ReservationPricing
 import com.stayops.reservation.domain.repository.ReservationIntentRepository
+import com.stayops.reservation.domain.repository.ReservationIntentRequestRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.ConflictException
@@ -38,12 +42,17 @@ import java.time.ZoneOffset
 @ActiveProfiles("rdb")
 class RdbReservationIntentRepositoryTest @Autowired constructor(
     private val repository: ReservationIntentRepository,
+    private val requestRepository: ReservationIntentRequestRepository,
     private val dsl: DSLContext
 ) {
 
     @TestConfiguration(proxyBeanMethods = false)
     @EnableAutoConfiguration
-    @Import(RdbTestcontainersConfiguration::class, RdbReservationIntentRepository::class)
+    @Import(
+        RdbTestcontainersConfiguration::class,
+        RdbReservationIntentRepository::class,
+        RdbReservationIntentRequestRepository::class
+    )
     class TestApplication
 
     private val now = Instant.parse("2026-04-01T01:00:00Z")
@@ -52,10 +61,34 @@ class RdbReservationIntentRepositoryTest @Autowired constructor(
 
     @BeforeEach
     fun setUp() {
+        dsl.deleteFrom(RESERVATION_INTENT_REQUESTS).execute()
         dsl.deleteFrom(RESERVATION_INTENTS).execute()
         dsl.deleteFrom(ROOM_TYPES).execute()
         dsl.deleteFrom(PROPERTIES).execute()
         dsl.deleteFrom(MEMBERS).execute()
+    }
+
+    @Nested
+    inner class `intent 생성 요청 멱등성` {
+        @Test
+        fun `같은 회원과 멱등성 키는 한 번만 저장한다`() {
+            insertDependencies()
+            repository.save(newIntent())
+            val request = ReservationIntentRequest.create(
+                memberId = "member-1",
+                idempotencyKey = "intent-key-1",
+                requestHash = "a".repeat(64),
+                reservationIntentId = "intent-1",
+                createdAt = now
+            )
+
+            requestRepository.save(request)
+
+            assertThatThrownBy { requestRepository.save(request) }
+                .isInstanceOf(ReservationIntentRequestAlreadyExistsException::class.java)
+            assertThat(requestRepository.findByMemberIdAndIdempotencyKey("member-1", "intent-key-1"))
+                .isEqualTo(request)
+        }
     }
 
     @Nested

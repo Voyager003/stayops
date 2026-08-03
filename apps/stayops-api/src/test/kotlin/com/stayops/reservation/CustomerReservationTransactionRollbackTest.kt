@@ -143,6 +143,7 @@ class CustomerReservationTransactionRollbackTest @Autowired constructor(
 
             assertThatThrownBy {
                 customerReservationApplication.createReservationIntent(
+                    idempotencyKey = "test-intent-key",
                     memberId = memberId,
                     propertyId = propertyId,
                     roomTypeId = roomTypeId,
