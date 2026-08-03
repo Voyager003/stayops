@@ -13,8 +13,10 @@ import com.stayops.reservation.application.required.ReservationPaymentSnapshot
 import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.ReservationChannel
 import com.stayops.reservation.domain.model.ReservationIntent
+import com.stayops.reservation.domain.model.ReservationIntentRequest
 import com.stayops.reservation.domain.model.ReservationPricing
 import com.stayops.reservation.domain.repository.ReservationIntentRepository
+import com.stayops.reservation.domain.repository.ReservationIntentRequestRepository
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
@@ -37,6 +39,7 @@ class CustomerReservationIntentCreationApplication(
     private val ratePlanRepository: RatePlanRepository,
     private val reservationRepository: ReservationRepository,
     private val reservationIntentRepository: ReservationIntentRepository,
+    private val reservationIntentRequestRepository: ReservationIntentRequestRepository,
     private val inventoryRepository: RoomInventoryRepository,
     private val inventoryHoldService: InventoryHoldService,
     private val reservationPaymentService: ReservationPaymentService,
@@ -54,16 +57,15 @@ class CustomerReservationIntentCreationApplication(
 
     @Transactional
     fun createReservationIntent(
-        memberId: String,
-        propertyId: String,
-        roomTypeId: String,
-        checkIn: LocalDate,
-        checkOut: LocalDate,
-        numberOfGuests: Int,
-        guestName: String,
-        guestPhone: String,
-        guestEmail: String?
+        idempotencyKey: String,
+        requestHash: String,
+        command: CustomerReservationIntentCommand
     ): CustomerReservationIntentResult {
+        val memberId = command.memberId
+        val propertyId = command.propertyId
+        val roomTypeId = command.roomTypeId
+        val checkIn = command.checkIn
+        val checkOut = command.checkOut
         val now = clock.instant()
         val hasDuplicate = reservationRepository.existsActiveByMemberIdAndRoomTypeIdAndCheckInAndCheckOut(
             memberId,
@@ -115,15 +117,24 @@ class CustomerReservationIntentCreationApplication(
                 memberId = memberId,
                 propertyId = propertyId,
                 roomTypeId = roomTypeId,
-                guestInfo = GuestInfo(name = guestName, phone = guestPhone, email = guestEmail),
+                guestInfo = GuestInfo(name = command.guestName, phone = command.guestPhone, email = command.guestEmail),
                 dateRange = dateRange,
-                numberOfGuests = numberOfGuests,
+                numberOfGuests = command.numberOfGuests,
                 channel = ReservationChannel(channelCode = DIRECT_CHANNEL_CODE, commissionRate = channel.commissionRate),
                 pricing = pricing,
                 paymentId = paymentId,
                 holdId = holdId,
                 expiresAt = expiresAt,
                 now = now
+            )
+        )
+        reservationIntentRequestRepository.save(
+            ReservationIntentRequest.create(
+                memberId = memberId,
+                idempotencyKey = idempotencyKey,
+                requestHash = requestHash,
+                reservationIntentId = reservationIntentId,
+                createdAt = now
             )
         )
         val hold = inventoryHoldService.hold(
@@ -141,7 +152,6 @@ class CustomerReservationIntentCreationApplication(
             memberId = memberId,
             amount = pricing.totalAmount
         )
-
         log.info(
             "예약 intent 생성: reservationIntentId={}, paymentId={}, holdId={}",
             intent.id,

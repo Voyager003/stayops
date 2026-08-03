@@ -20,6 +20,7 @@ import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.domain.model.ReservationIntent
 import com.stayops.reservation.domain.model.ReservationIntentStatus
 import com.stayops.reservation.domain.repository.ReservationIntentRepository
+import com.stayops.reservation.domain.repository.ReservationIntentRequestRepository
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomTypeRepository
@@ -48,6 +49,7 @@ class CustomerReservationIntentCreationApplicationTest : BehaviorSpec({
     val ratePlanRepository = mockk<RatePlanRepository>()
     val reservationRepository = mockk<ReservationRepository>()
     val reservationIntentRepository = mockk<ReservationIntentRepository>()
+    val reservationIntentRequestRepository = mockk<ReservationIntentRequestRepository>()
     val inventoryRepository = mockk<RoomInventoryRepository>()
     val inventoryHoldService = mockk<InventoryHoldService>()
     val reservationPaymentService = mockk<ReservationPaymentService>()
@@ -65,6 +67,7 @@ class CustomerReservationIntentCreationApplicationTest : BehaviorSpec({
         ratePlanRepository = ratePlanRepository,
         reservationRepository = reservationRepository,
         reservationIntentRepository = reservationIntentRepository,
+        reservationIntentRequestRepository = reservationIntentRequestRepository,
         inventoryRepository = inventoryRepository,
         inventoryHoldService = inventoryHoldService,
         reservationPaymentService = reservationPaymentService,
@@ -196,18 +199,23 @@ class CustomerReservationIntentCreationApplicationTest : BehaviorSpec({
                 )
             } returns pendingPayment()
             every { reservationIntentRepository.save(capture(savedIntent)) } answers { firstArg() }
+            every { reservationIntentRequestRepository.save(any()) } answers { firstArg() }
             every { reservationRepository.save(any()) } answers { firstArg() }
 
             val result = sut.createReservationIntent(
-                memberId = "member-1",
-                propertyId = "prop-1",
-                roomTypeId = "rt-1",
-                checkIn = checkIn,
-                checkOut = checkOut,
-                numberOfGuests = 2,
-                guestName = "김고객",
-                guestPhone = "010-1111-2222",
-                guestEmail = "kim@test.com"
+                idempotencyKey = "intent-key-1",
+                requestHash = "request-hash-1",
+                command = CustomerReservationIntentCommand(
+                    memberId = "member-1",
+                    propertyId = "prop-1",
+                    roomTypeId = "rt-1",
+                    checkIn = checkIn,
+                    checkOut = checkOut,
+                    numberOfGuests = 2,
+                    guestName = "김고객",
+                    guestPhone = "010-1111-2222",
+                    guestEmail = "kim@test.com"
+                )
             )
 
             then("Reservation 없이 intent, hold, pending payment를 생성한다") {
@@ -237,6 +245,7 @@ class CustomerReservationIntentCreationApplicationTest : BehaviorSpec({
                         amount = Money.won(200_000)
                     )
                 }
+                verify { reservationIntentRequestRepository.save(any()) }
                 verify(exactly = 0) { reservationRepository.save(any()) }
             }
         }
@@ -276,15 +285,19 @@ class CustomerReservationIntentCreationApplicationTest : BehaviorSpec({
             then("예약 intent를 만들기 전에 비즈니스 예외로 차단한다") {
                 val ex = shouldThrow<BusinessException> {
                     sut.createReservationIntent(
-                        memberId = "member-1",
-                        propertyId = "prop-1",
-                        roomTypeId = "rt-1",
-                        checkIn = checkIn,
-                        checkOut = checkOut,
-                        numberOfGuests = 2,
-                        guestName = "김고객",
-                        guestPhone = "010-1111-2222",
-                        guestEmail = "kim@test.com"
+                        idempotencyKey = "intent-key-1",
+                        requestHash = "request-hash-1",
+                        command = CustomerReservationIntentCommand(
+                            memberId = "member-1",
+                            propertyId = "prop-1",
+                            roomTypeId = "rt-1",
+                            checkIn = checkIn,
+                            checkOut = checkOut,
+                            numberOfGuests = 2,
+                            guestName = "김고객",
+                            guestPhone = "010-1111-2222",
+                            guestEmail = "kim@test.com"
+                        )
                     )
                 }
 

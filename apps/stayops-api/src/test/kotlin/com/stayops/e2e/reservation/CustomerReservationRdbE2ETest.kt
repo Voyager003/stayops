@@ -24,6 +24,7 @@ import com.stayops.jooq.generated.Tables.RATE_PLANS
 import com.stayops.jooq.generated.Tables.RATE_PLAN_DAY_OF_WEEK_RULES
 import com.stayops.jooq.generated.Tables.RESERVATIONS
 import com.stayops.jooq.generated.Tables.RESERVATION_INTENTS
+import com.stayops.jooq.generated.Tables.RESERVATION_INTENT_REQUESTS
 import com.stayops.jooq.generated.Tables.ROOMS
 import com.stayops.jooq.generated.Tables.ROOM_INVENTORIES
 import com.stayops.jooq.generated.Tables.ROOM_TYPES
@@ -48,6 +49,7 @@ import com.stayops.property.domain.model.Property
 import com.stayops.property.domain.model.PropertyType
 import com.stayops.property.domain.repository.PropertyRepository
 import com.stayops.reservation.application.service.CustomerReservationApplication
+import com.stayops.reservation.application.service.CustomerReservationIntentResult
 import com.stayops.reservation.application.service.ReservationApplication
 import com.stayops.reservation.application.service.ReservationIntentExpirationApplication
 import com.stayops.reservation.application.service.ReservationPaymentOutboxApplication
@@ -119,6 +121,48 @@ class CustomerReservationRdbE2ETest @Autowired constructor(
         checkOut = checkIn.plusDays(1)
         clearRdb()
         createBookableProperty(totalRooms = 1)
+    }
+
+    @Nested
+    inner class `예약 intent 생성 멱등성` {
+        @Test
+        fun `같은 키로 재요청하면 기존 intent를 반환하고 재고를 한 번만 점유한다`() {
+            val first = createIntent(idempotencyKey = "same-intent-key")
+
+            val replayed = createIntent(idempotencyKey = "same-intent-key")
+
+            assertThat(replayed.intent.id).isEqualTo(first.intent.id)
+            assertThat(replayed.payment.id).isEqualTo(first.payment.id)
+            assertThat(availability().heldCount).isEqualTo(1)
+            assertThat(paymentRepository.findByMemberId(CUSTOMER_ID)).hasSize(1)
+            assertThat(dsl.fetchCount(RESERVATION_INTENT_REQUESTS)).isEqualTo(1)
+        }
+
+        @Test
+        fun `같은 키의 동시 요청도 하나의 intent와 payment를 반환한다`() {
+            val start = CountDownLatch(1)
+            val executor = Executors.newFixedThreadPool(2)
+            try {
+                val futures = (1..2).map {
+                    executor.submit<CustomerReservationIntentResult> {
+                        start.await()
+                        createIntent(idempotencyKey = "concurrent-intent-key")
+                    }
+                }
+                start.countDown()
+
+                val results = futures.map { it.get(10, TimeUnit.SECONDS) }
+
+                assertThat(results.map { it.intent.id }.distinct()).hasSize(1)
+                assertThat(results.map { it.payment.id }.distinct()).hasSize(1)
+                assertThat(dsl.fetchCount(RESERVATION_INTENTS)).isEqualTo(1)
+                assertThat(dsl.fetchCount(RESERVATION_INTENT_REQUESTS)).isEqualTo(1)
+                assertThat(paymentRepository.findByMemberId(CUSTOMER_ID)).hasSize(1)
+                assertThat(availability().heldCount).isEqualTo(1)
+            } finally {
+                executor.shutdownNow()
+            }
+        }
     }
 
     @Nested
@@ -414,6 +458,7 @@ class CustomerReservationRdbE2ETest @Autowired constructor(
         fun `만료된 PAYMENT_WAITING intent만 EXPIRED 처리하고 hold를 해제해 같은 날짜 재시도를 허용한다`() {
             val expiredTarget = createIntent(guestPhone = "010-1111-0001")
             customerReservationApplication.createReservationIntent(
+                idempotencyKey = "test-intent-key",
                 memberId = SECOND_CUSTOMER_ID,
                 propertyId = PROPERTY_ID,
                 roomTypeId = SECOND_ROOM_TYPE_ID,
@@ -436,7 +481,10 @@ class CustomerReservationRdbE2ETest @Autowired constructor(
             assertThat(availability().availableCount).isEqualTo(1)
             assertThat(availability().heldCount).isEqualTo(0)
 
-            val retry = createIntent(guestPhone = "010-1111-0003")
+            val retry = createIntent(
+                idempotencyKey = "retry-after-expiration-key",
+                guestPhone = "010-1111-0003"
+            )
             assertThat(retry.intent.status).isEqualTo(ReservationIntentStatus.PAYMENT_WAITING)
             assertThat(availability().availableCount).isEqualTo(0)
             assertThat(availability().heldCount).isEqualTo(1)
@@ -526,11 +574,13 @@ class CustomerReservationRdbE2ETest @Autowired constructor(
     }
 
     private fun createIntent(
+        idempotencyKey: String = "test-intent-key",
         memberId: String = CUSTOMER_ID,
         guestName: String = "RDB고객",
         guestPhone: String = "010-9999-9999",
         guestEmail: String? = "rdb@test.com"
     ) = customerReservationApplication.createReservationIntent(
+        idempotencyKey = idempotencyKey,
         memberId = memberId,
         propertyId = PROPERTY_ID,
         roomTypeId = ROOM_TYPE_ID,
@@ -643,6 +693,7 @@ class CustomerReservationRdbE2ETest @Autowired constructor(
         dsl.deleteFrom(PAYMENTS).execute()
         dsl.deleteFrom(INVENTORY_HOLD_DATES).execute()
         dsl.deleteFrom(INVENTORY_HOLDS).execute()
+        dsl.deleteFrom(RESERVATION_INTENT_REQUESTS).execute()
         dsl.deleteFrom(RESERVATION_INTENTS).execute()
         dsl.deleteFrom(RESERVATIONS).execute()
         dsl.deleteFrom(GUESTS).execute()

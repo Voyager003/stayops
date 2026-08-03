@@ -5,6 +5,7 @@ import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
 import com.stayops.member.domain.repository.MemberRepository
 import com.stayops.reservation.application.service.CustomerReservationApplication
+import com.stayops.reservation.application.service.CustomerReservationIntentResult
 import com.stayops.channel.domain.model.Channel
 import com.stayops.channel.domain.repository.ChannelRepository
 import com.stayops.inventory.application.provided.InventoryHoldService
@@ -144,12 +145,88 @@ class CustomerReservationE2ETest @Autowired constructor(
     }
 
     @Nested
+    inner class `예약_intent_생성_멱등성` {
+        @Test
+        fun `같은_키로_재요청하면_기존_intent를_반환하고_재고를_한_번만_점유한다`() {
+            val first = customerReservationApplication.createReservationIntent(
+                idempotencyKey = "same-intent-key",
+                memberId = "customer-e2e",
+                propertyId = "prop-e2e",
+                roomTypeId = "rt-e2e",
+                checkIn = checkIn,
+                checkOut = checkOut,
+                numberOfGuests = 2,
+                guestName = "E2E고객",
+                guestPhone = "010-9999-9999",
+                guestEmail = "e2e@test.com"
+            )
+
+            val replayed = customerReservationApplication.createReservationIntent(
+                idempotencyKey = "same-intent-key",
+                memberId = "customer-e2e",
+                propertyId = "prop-e2e",
+                roomTypeId = "rt-e2e",
+                checkIn = checkIn,
+                checkOut = checkOut,
+                numberOfGuests = 2,
+                guestName = "E2E고객",
+                guestPhone = "010-9999-9999",
+                guestEmail = "e2e@test.com"
+            )
+
+            assertThat(replayed.intent.id).isEqualTo(first.intent.id)
+            assertThat(replayed.payment.id).isEqualTo(first.payment.id)
+            assertThat(
+                inventoryApplication.getAvailability("prop-e2e", "rt-e2e", checkIn, checkOut.minusDays(1))
+            ).allSatisfy { availability -> assertThat(availability.heldCount).isEqualTo(1) }
+            assertThat(paymentRepository.findByMemberId("customer-e2e")).hasSize(1)
+        }
+
+        @Test
+        fun `같은_키의_동시_요청도_하나의_intent와_payment를_반환한다`() {
+            val start = CountDownLatch(1)
+            val executor = Executors.newFixedThreadPool(2)
+            try {
+                val futures = (1..2).map {
+                    executor.submit<CustomerReservationIntentResult> {
+                        start.await()
+                        customerReservationApplication.createReservationIntent(
+                            idempotencyKey = "concurrent-intent-key",
+                            memberId = "customer-e2e",
+                            propertyId = "prop-e2e",
+                            roomTypeId = "rt-e2e",
+                            checkIn = checkIn,
+                            checkOut = checkOut,
+                            numberOfGuests = 2,
+                            guestName = "E2E고객",
+                            guestPhone = "010-9999-9999",
+                            guestEmail = "e2e@test.com"
+                        )
+                    }
+                }
+                start.countDown()
+
+                val results = futures.map { it.get(10, TimeUnit.SECONDS) }
+
+                assertThat(results.map { it.intent.id }.distinct()).hasSize(1)
+                assertThat(results.map { it.payment.id }.distinct()).hasSize(1)
+                assertThat(mongoTemplate.getCollection("reservation_intents").countDocuments()).isEqualTo(1)
+                assertThat(mongoTemplate.getCollection("reservation_intent_requests").countDocuments()).isEqualTo(1)
+                assertThat(paymentRepository.findByMemberId("customer-e2e")).hasSize(1)
+            } finally {
+                executor.shutdownNow()
+            }
+        }
+    }
+
+    @Nested
     inner class `전체_예매_플로우` {
 
         @Test
         fun `예약_intent_생성_결제_승인_예약_확정_취소_전체_흐름`() {
             // 1. 예약 intent 생성
             val intentResult = customerReservationApplication.createReservationIntent(
+                idempotencyKey = "test-intent-key",
                 memberId = "customer-e2e",
                 propertyId = "prop-e2e",
                 roomTypeId = "rt-e2e",
@@ -238,6 +315,7 @@ class CustomerReservationE2ETest @Autowired constructor(
         @Test
         fun `확정된_예약과_동일_조건으로_예약_intent를_생성하면_ConflictException_발생`() {
             val intentResult = customerReservationApplication.createReservationIntent(
+                idempotencyKey = "test-intent-key",
                 memberId = "customer-e2e",
                 propertyId = "prop-e2e",
                 roomTypeId = "rt-e2e",
@@ -266,6 +344,7 @@ class CustomerReservationE2ETest @Autowired constructor(
 
             assertThatThrownBy {
                 customerReservationApplication.createReservationIntent(
+                    idempotencyKey = "new-booking-attempt-key",
                     memberId = "customer-e2e",
                     propertyId = "prop-e2e",
                     roomTypeId = "rt-e2e",
@@ -287,6 +366,7 @@ class CustomerReservationE2ETest @Autowired constructor(
         @Test
         fun `결제가_이미_완료된_예약_intent에_confirmPayment를_다시_호출하면_기존_결과_반환`() {
             val intentResult = customerReservationApplication.createReservationIntent(
+                idempotencyKey = "test-intent-key",
                 memberId = "customer-e2e",
                 propertyId = "prop-e2e",
                 roomTypeId = "rt-e2e",
@@ -336,6 +416,7 @@ class CustomerReservationE2ETest @Autowired constructor(
         @Test
         fun `완료된_confirm_outbox가_재전달되어도_PG와_예약을_중복_처리하지_않는다`() {
             val intentResult = customerReservationApplication.createReservationIntent(
+                idempotencyKey = "test-intent-key",
                 memberId = "customer-e2e",
                 propertyId = "prop-e2e",
                 roomTypeId = "rt-e2e",
@@ -397,6 +478,7 @@ class CustomerReservationE2ETest @Autowired constructor(
         @Test
         fun `PG_승인_후_hold_소비에_실패하면_TX3의_내부_저장을_모두_롤백한다`() {
             val intentResult = customerReservationApplication.createReservationIntent(
+                idempotencyKey = "test-intent-key",
                 memberId = "customer-e2e",
                 propertyId = "prop-e2e",
                 roomTypeId = "rt-e2e",
@@ -447,6 +529,7 @@ class CustomerReservationE2ETest @Autowired constructor(
         @Test
         fun `hold_소비_후_intent_저장이_충돌하면_TX3의_내부_저장과_hold_소비를_모두_롤백한다`() {
             val intentResult = customerReservationApplication.createReservationIntent(
+                idempotencyKey = "test-intent-key",
                 memberId = "customer-e2e",
                 propertyId = "prop-e2e",
                 roomTypeId = "rt-e2e",
@@ -504,6 +587,7 @@ class CustomerReservationE2ETest @Autowired constructor(
         fun `내부_예약_확정이_3회_실패하면_결제_취소를_요청하고_PG_취소_성공_후_완료한다`() {
             val mutableClock = clock as MutableClock
             val intentResult = customerReservationApplication.createReservationIntent(
+                idempotencyKey = "test-intent-key",
                 memberId = "customer-e2e",
                 propertyId = "prop-e2e",
                 roomTypeId = "rt-e2e",
@@ -590,6 +674,7 @@ class CustomerReservationE2ETest @Autowired constructor(
 
             // 예약 intent 생성 (hold 재고 점유)
             val intentResult = customerReservationApplication.createReservationIntent(
+                idempotencyKey = "test-intent-key",
                 memberId = "customer-e2e",
                 propertyId = "prop-e2e",
                 roomTypeId = "rt-e2e",
@@ -679,6 +764,7 @@ class CustomerReservationE2ETest @Autowired constructor(
                         ready.countDown()
                         start.await(5, TimeUnit.SECONDS)
                         val result = customerReservationApplication.createReservationIntent(
+                            idempotencyKey = "test-intent-key",
                             memberId = memberId,
                             propertyId = "prop-e2e",
                             roomTypeId = "rt-e2e",

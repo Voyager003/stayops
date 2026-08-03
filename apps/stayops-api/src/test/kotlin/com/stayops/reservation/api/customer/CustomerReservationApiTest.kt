@@ -101,9 +101,10 @@ class CustomerReservationIntentApiTest {
         @Test
         fun `유효한 예약 intent 생성 요청이면 201을 반환한다`() {
             mockCustomer()
-            every { customerReservationApplication.createReservationIntent(any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns sampleCustomerReservationIntentResult()
+            every { customerReservationApplication.createReservationIntent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns sampleCustomerReservationIntentResult()
 
             mockMvc.post("/api/v1/customer/reservation-intents") {
+                header("Idempotency-Key", "intent-key-1")
                 contentType = MediaType.APPLICATION_JSON
                 content = """
                     {
@@ -123,6 +124,28 @@ class CustomerReservationIntentApiTest {
                 jsonPath("$.intentStatus") { value("PAYMENT_WAITING") }
                 jsonPath("$.paymentStatus") { value("PENDING") }
                 jsonPath("$.orderId") { exists() }
+            }
+        }
+
+        @Test
+        fun `멱등성 키가 없으면 400을 반환한다`() {
+            mockCustomer()
+
+            mockMvc.post("/api/v1/customer/reservation-intents") {
+                contentType = MediaType.APPLICATION_JSON
+                content = """
+                    {
+                        "propertyId": "prop-1",
+                        "roomTypeId": "rt-1",
+                        "checkIn": "2026-04-01",
+                        "checkOut": "2026-04-03",
+                        "numberOfGuests": 2,
+                        "guestName": "김고객",
+                        "guestPhone": "010-1111-2222"
+                    }
+                """.trimIndent()
+            }.andExpect {
+                status { isBadRequest() }
             }
         }
     }

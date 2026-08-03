@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
@@ -26,11 +27,13 @@ class CustomerReservationIntentApi(
 
     @PostMapping
     fun createReservationIntent(
+        @RequestHeader("Idempotency-Key") idempotencyKey: String,
         @Valid @RequestBody request: CreateReservationIntentRequest,
         @AuthenticationPrincipal member: Member?
     ): ResponseEntity<CustomerReservationIntentResponse> {
         val customer = memberAccessApplication.requireCustomer(member)
         val result = customerReservationApplication.createReservationIntent(
+            idempotencyKey = idempotencyKey,
             memberId = customer.id,
             propertyId = request.propertyId,
             roomTypeId = request.roomTypeId,
