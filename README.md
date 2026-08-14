@@ -63,7 +63,19 @@ loadtest/          # k6 부하 테스트와 테스트 데이터 seed script
 
 같은 비즈니스 로직을 서로 다른 DB로 구현하도록 하여 프로필을 구분했습니다.
 
-### MongoDB 프로필 실행
+### RDB(PostgreSQL) 기본 프로필 실행
+
+```bash
+# 필요한 의존성 (Postgres, Redis, Mock-OTA Server)
+docker compose -f docker-compose.yml -f docker-compose.rdb.yml up -d postgres redis mock-ota-mongo mock-ota
+set -a && source .env.local && set +a
+./gradlew :apps:stayops-api:bootRun
+
+# Docker에 App까지 띄우기
+docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.rdb.yml up -d app
+```
+
+### MongoDB 선택 프로필 실행
 
 ```bash
 # 필요한 의존성 (MongoDB, Redis, Mock-OTA Server)
@@ -73,18 +85,6 @@ SPRING_PROFILES_ACTIVE=local,mongo ./gradlew :apps:stayops-api:bootRun
 
 # Docker에 App까지 띄우기
 docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.mongo.yml up -d app
-```
-
-### RDB(PostgreSQL) 프로필 실행
-
-```bash
-# 필요한 의존성 (Postgres, Redis, Mock-OTA Server)
-docker compose -f docker-compose.yml -f docker-compose.rdb.yml up -d postgres redis mock-ota-mongo mock-ota
-set -a && source .env.local && set +a
-SPRING_PROFILES_ACTIVE=local,rdb ./gradlew :apps:stayops-api:bootRun
-
-# Docker에 App까지 띄우기
-docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.rdb.yml up -d app
 ```
 
 결제까지 로컬에서 확인하려면 `.env.local.example`을 `.env.local`로 복사한 뒤 `TOSS_SECRET_KEY`를 로컬 값으로 설정합니다.

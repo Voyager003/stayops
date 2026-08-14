@@ -2,7 +2,7 @@ spring:
   application:
     name: stayops
   profiles:
-    active: local,mongo
+    active: local,rdb
   session:
     redis:
       repository-type: default
