@@ -250,7 +250,9 @@ validate_required_env() {
 
   case "${ROLE}" in
     app)
-      require_env_value "${env_file}" "SPRING_MONGODB_URI"
+      require_env_value "${env_file}" "SPRING_DATASOURCE_URL"
+      require_env_value "${env_file}" "SPRING_DATASOURCE_USERNAME"
+      require_env_value "${env_file}" "SPRING_DATASOURCE_PASSWORD"
       require_env_value "${env_file}" "SPRING_DATA_REDIS_HOST"
       require_env_value "${env_file}" "TOSS_SECRET_KEY"
       require_env_value "${env_file}" "MOCK_OTA_ENDPOINT"
@@ -277,7 +279,9 @@ validate_required_env() {
       ;;
     minimal-app)
       require_env_value "${env_file}" "API_DOMAIN"
-      require_env_value "${env_file}" "SPRING_MONGODB_URI"
+      require_env_value "${env_file}" "SPRING_DATASOURCE_URL"
+      require_env_value "${env_file}" "SPRING_DATASOURCE_USERNAME"
+      require_env_value "${env_file}" "SPRING_DATASOURCE_PASSWORD"
       require_env_value "${env_file}" "TOSS_SECRET_KEY"
       require_env_value "${env_file}" "MOCK_OTA_ENDPOINT"
       require_env_value "${env_file}" "MOCK_OTA_PMS_WEBHOOK_URL"
