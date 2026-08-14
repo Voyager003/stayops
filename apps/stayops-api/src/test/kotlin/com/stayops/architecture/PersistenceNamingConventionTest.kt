@@ -120,6 +120,34 @@ class PersistenceNamingConventionTest {
     }
 
     @Test
+    fun should_use_rdb_profile_and_datasource_in_app_deployment_manifests() {
+        val repositoryRoot = Path.of("../..").normalize()
+        val manifests = listOf(
+            repositoryRoot.resolve("docker-compose.prod.yml"),
+            repositoryRoot.resolve("infra/production/app/docker-compose.yml"),
+            repositoryRoot.resolve("infra/minimal/app/docker-compose.yml")
+        )
+
+        manifests.forEach { manifest ->
+            val content = Files.readString(manifest)
+            assertTrue(
+                actual = Regex("""SPRING_PROFILES_ACTIVE\s*[:=]\s*prod,rdb""").containsMatchIn(content),
+                message = "App deployment must activate the prod,rdb profiles: $manifest"
+            )
+            listOf(
+                "SPRING_DATASOURCE_URL",
+                "SPRING_DATASOURCE_USERNAME",
+                "SPRING_DATASOURCE_PASSWORD"
+            ).forEach { property ->
+                assertTrue(
+                    actual = content.contains(property),
+                    message = "App deployment must provide $property: $manifest"
+                )
+            }
+        }
+    }
+
+    @Test
     fun should_keep_jooq_generated_code_inside_rdb_infrastructure() {
         val sourceRoot = Path.of("src/main/kotlin/com/stayops")
         val forbiddenJooqImports = Files.walk(sourceRoot).use { paths ->

@@ -386,7 +386,9 @@ workflow_dispatch
 최소 예시:
 
 ```text
-/stayops/prod/app/SPRING_MONGODB_URI
+/stayops/prod/app/SPRING_DATASOURCE_URL
+/stayops/prod/app/SPRING_DATASOURCE_USERNAME
+/stayops/prod/app/SPRING_DATASOURCE_PASSWORD
 /stayops/prod/app/SPRING_DATA_REDIS_HOST
 /stayops/prod/app/SPRING_DATA_REDIS_PORT
 /stayops/prod/app/TOSS_SECRET_KEY
@@ -417,7 +419,9 @@ workflow_dispatch
 /stayops/prod/observability/GRAFANA_PASSWORD
 
 /stayops/minimal/app/API_DOMAIN
-/stayops/minimal/app/SPRING_MONGODB_URI
+/stayops/minimal/app/SPRING_DATASOURCE_URL
+/stayops/minimal/app/SPRING_DATASOURCE_USERNAME
+/stayops/minimal/app/SPRING_DATASOURCE_PASSWORD
 /stayops/minimal/app/TOSS_SECRET_KEY
 /stayops/minimal/app/MOCK_OTA_ENDPOINT
 /stayops/minimal/app/MOCK_OTA_PMS_WEBHOOK_URL
@@ -449,14 +453,16 @@ minimal 구성은 production과 다른 prefix를 사용한다. `/stayops/prod/*`
 | Key | Type | Value |
 | --- | --- | --- |
 | `/stayops/minimal/app/API_DOMAIN` | `String` | `api.learniverse.store` 또는 minimal app에 연결할 public API domain |
-| `/stayops/minimal/app/SPRING_MONGODB_URI` | `SecureString` | `mongodb://stayops_app:<MONGO_APP_PASSWORD>@minimal-mongo.stayops.internal:27017/stayops?replicaSet=rs0&directConnection=true&retryWrites=true&authSource=admin` |
+| `/stayops/minimal/app/SPRING_DATASOURCE_URL` | `String` | `jdbc:postgresql://postgres.stayops.internal:5432/stayops` |
+| `/stayops/minimal/app/SPRING_DATASOURCE_USERNAME` | `String` | PostgreSQL 애플리케이션 사용자명 |
+| `/stayops/minimal/app/SPRING_DATASOURCE_PASSWORD` | `SecureString` | PostgreSQL 애플리케이션 비밀번호 |
 | `/stayops/minimal/app/TOSS_SECRET_KEY` | `SecureString` | 사용할 Toss secret key |
 | `/stayops/minimal/app/MOCK_OTA_ENDPOINT` | `String` | `http://mock-ota-app:8081` |
 | `/stayops/minimal/app/MOCK_OTA_PMS_WEBHOOK_URL` | `String` | `http://app:8080/api/v1/properties/{propertyId}/channels/webhook/{channelCode}` |
 | `/stayops/minimal/app/MOCK_OTA_HTPASSWD_B64` | `SecureString` | `.htpasswd` 파일 내용을 base64로 인코딩한 값 |
 
-`SPRING_MONGODB_URI`의 `<MONGO_APP_PASSWORD>`는
-`/stayops/minimal/mongodb/MONGO_APP_PASSWORD`와 같은 값이어야 한다.
+PostgreSQL 접속 정보는 Terraform의 `postgres_private_dns`, `postgres_database_name`,
+`postgres_master_user_secret_arn` 출력을 기준으로 준비한다.
 
 GHCR image가 private이면 다음 값을 추가한다. public image이면 생략할 수 있다.
 
