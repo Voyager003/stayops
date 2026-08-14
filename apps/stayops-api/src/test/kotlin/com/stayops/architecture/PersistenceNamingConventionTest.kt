@@ -87,8 +87,8 @@ class PersistenceNamingConventionTest {
         val migrationRoot = resourceRoot.resolve("db/migration")
 
         assertTrue(
-            actual = applicationConfig.contains("active: local,mongo"),
-            message = "Default application profile must keep existing Mongo behavior with local,mongo"
+            actual = applicationConfig.contains("active: local,rdb"),
+            message = "Default application profile must use PostgreSQL persistence with local,rdb"
         )
 
         assertTrue(
