@@ -4,14 +4,9 @@
 #
 # Usage: ./run.sh [concurrency] [base-url]
 #
-# The app must run with rate limiting disabled, otherwise account setup dies on
-# customer-auth-signup (5 per 600s per IP) long before the inventory is touched:
-#
-#   ./gradlew :apps:stayops-api:bootRun \
-#     --args='--spring.profiles.active=local,rdb --stayops.rate-limit.enabled=false'
-#
-# /api/v1/customer/reservation-intents itself has no rate-limit rule, so the
-# measured request path is unaffected by that switch.
+# Rate limiting is disabled by default (stayops.rate-limit.enabled). If it is
+# turned back on via STAYOPS_RATE_LIMIT_ENABLED=true, account setup dies on
+# customer-auth-signup (5 per 600s per IP) long before the inventory is touched.
 set -euo pipefail
 
 CONCURRENCY="${1:-30}"

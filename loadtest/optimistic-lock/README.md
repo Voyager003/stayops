@@ -16,13 +16,13 @@ Postgres / Redis 기동:
 docker compose -f docker-compose.yml -f docker-compose.rdb.yml up -d postgres redis
 ```
 
-앱은 **rate limit을 끄고** 기동한다:
+앱 기동:
 
 ```bash
-./gradlew :apps:stayops-api:bootRun --args='--spring.profiles.active=local,rdb --stayops.rate-limit.enabled=false'
+./gradlew :apps:stayops-api:bootRun --args='--spring.profiles.active=local,rdb'
 ```
 
-`customer-auth-signup`이 IP당 600초에 5회로 제한되어 있어, 켜두면 계정 준비 단계가 재고에 닿기도 전에 429로 끝난다. 발사 대상인 `/api/v1/customer/reservation-intents`에는 rate limit 규칙이 없으므로 측정 경로는 이 스위치의 영향을 받지 않는다.
+rate limit은 기본값이 비활성이라 별도 조치가 필요 없다. `STAYOPS_RATE_LIMIT_ENABLED=true`로 켜면 `customer-auth-signup`이 IP당 600초에 5회로 제한되어 계정 준비 단계가 재고에 닿기도 전에 429로 끝나므로, 이 검증을 돌릴 때는 켜지 않는다.
 
 ## 실행
 
