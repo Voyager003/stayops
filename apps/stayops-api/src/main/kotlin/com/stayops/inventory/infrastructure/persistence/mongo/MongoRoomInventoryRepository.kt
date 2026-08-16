@@ -8,6 +8,7 @@ import com.stayops.inventory.infrastructure.persistence.mongo.dao.RoomInventoryM
 import com.stayops.inventory.infrastructure.persistence.mongo.document.RoomInventoryDocument
 import com.stayops.shared.exception.ConflictException
 import jakarta.annotation.PostConstruct
+import org.slf4j.LoggerFactory
 import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.index.CompoundIndexDefinition
@@ -21,6 +22,8 @@ class MongoRoomInventoryRepository(
     private val mongoTemplate: MongoTemplate
 ) : RoomInventoryRepository {
 
+    private val log = LoggerFactory.getLogger(javaClass)
+
     @PostConstruct
     fun createIndexes() {
         mongoTemplate.indexOps(RoomInventoryDocument::class.java).createIndex(
@@ -32,8 +35,28 @@ class MongoRoomInventoryRepository(
 
     override fun save(inventory: RoomInventory): RoomInventory =
         try {
-            mongo.save(RoomInventoryDocument.from(inventory)).toDomain()
+            mongo.save(RoomInventoryDocument.from(inventory)).toDomain().also { saved ->
+                log.debug(
+                    "[재고 저장] inventoryId={}, date={}, version={}->{}, held={}, reserved={}, available={}",
+                    saved.id,
+                    saved.date,
+                    inventory.version,
+                    saved.version,
+                    saved.heldCount,
+                    saved.reservedCount,
+                    saved.availableCount
+                )
+            }
         } catch (e: OptimisticLockingFailureException) {
+            // attemptedVersion identifies which snapshot lost the race
+            log.warn(
+                "[재고 낙관적 락 충돌] inventoryId={}, propertyId={}, roomTypeId={}, date={}, attemptedVersion={}",
+                inventory.id,
+                inventory.propertyId,
+                inventory.roomTypeId,
+                inventory.date,
+                inventory.version
+            )
             throw ConflictException(
                 code = "INVENTORY_CONFLICT",
                 message = "재고 변경 충돌이 발생했습니다. 다시 시도해주세요."
