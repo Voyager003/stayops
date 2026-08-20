@@ -1,0 +1,226 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="1040" viewBox="0 0 1680 1040" role="img" aria-labelledby="title desc">
+  <title id="title">StayOps production infrastructure architecture</title>
+  <desc id="desc">AWS production architecture with two availability zones, public and private subnets, ALB, NAT Gateway, app servers, MongoDB Replica Set, Redis, Mock OTA, Observability, PostgreSQL RDS, S3, SSM Session Manager, Parameter Store, and communication directions.</desc>
+
+  <defs>
+    <marker id="arrow-dark" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#344054"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#1d4ed8"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#047857"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#be123c"/>
+    </marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#101828" flood-opacity="0.10"/>
+    </filter>
+    <style>
+      .bg { fill: #f8fafc; }
+      .cloud { fill: #ffffff; stroke: #111827; stroke-width: 1.5; }
+      .vpc { fill: #f8fbff; stroke: #2563eb; stroke-width: 2.2; stroke-dasharray: 9 7; }
+      .az { fill: #ffffff; stroke: #98a2b3; stroke-width: 1.25; }
+      .public { fill: #fff7ed; stroke: #f97316; stroke-width: 1.6; }
+      .private { fill: #eff6ff; stroke: #2563eb; stroke-width: 1.6; }
+      .node { fill: #ffffff; stroke: #667085; stroke-width: 1.35; filter: url(#shadow); }
+      .network { fill: #fef3c7; stroke: #d97706; stroke-width: 1.45; filter: url(#shadow); }
+      .data { fill: #ecfdf3; stroke: #059669; stroke-width: 1.45; filter: url(#shadow); }
+      .ops { fill: #fff1f2; stroke: #e11d48; stroke-width: 1.45; filter: url(#shadow); }
+      .external { fill: #ffffff; stroke: #667085; stroke-width: 1.35; filter: url(#shadow); }
+      .title { font-family: Inter, Pretendard, Apple SD Gothic Neo, Arial, sans-serif; font-size: 25px; font-weight: 600; fill: #101828; }
+      .label { font-family: Inter, Pretendard, Apple SD Gothic Neo, Arial, sans-serif; font-size: 18px; font-weight: 600; fill: #1d2939; }
+      .sub { font-family: Inter, Pretendard, Apple SD Gothic Neo, Arial, sans-serif; font-size: 14px; font-weight: 500; fill: #475467; }
+      .tiny { font-family: Inter, Pretendard, Apple SD Gothic Neo, Arial, sans-serif; font-size: 12px; font-weight: 400; fill: #667085; }
+      .aws { font-family: Inter, Arial, sans-serif; font-size: 18px; font-weight: 700; fill: #ffffff; }
+      .flow { fill: none; stroke: #344054; stroke-width: 1.7; marker-end: url(#arrow-dark); }
+      .traffic { fill: none; stroke: #1d4ed8; stroke-width: 2.4; marker-end: url(#arrow-blue); }
+      .dataflow { fill: none; stroke: #047857; stroke-width: 2.0; marker-end: url(#arrow-green); }
+      .opsflow { fill: none; stroke: #be123c; stroke-width: 1.9; marker-end: url(#arrow-red); }
+      .dashed { fill: none; stroke: #667085; stroke-width: 1.8; stroke-dasharray: 7 6; marker-end: url(#arrow-dark); }
+      .bi { fill: none; stroke: #047857; stroke-width: 1.9; marker-start: url(#arrow-green); marker-end: url(#arrow-green); }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1680" height="1040"/>
+
+  <g id="user">
+    <circle cx="70" cy="375" r="24" fill="#ffffff" stroke="#344054" stroke-width="2"/>
+    <path d="M30 462c6-42 35-68 78-68s72 26 78 68" fill="#ffffff" stroke="#344054" stroke-width="2"/>
+    <text x="108" y="508" text-anchor="middle" class="label">User</text>
+  </g>
+
+  <rect x="190" y="42" width="1448" height="880" class="cloud"/>
+  <rect x="214" y="66" width="58" height="42" fill="#232f3e"/>
+  <text x="243" y="93" text-anchor="middle" class="aws">aws</text>
+  <text x="292" y="94" class="title">AWS Cloud</text>
+
+  <g id="edge">
+    <rect x="285" y="158" width="150" height="72" rx="10" class="external"/>
+    <text x="360" y="188" text-anchor="middle" class="label">Route 53</text>
+    <text x="360" y="211" text-anchor="middle" class="sub">Public DNS</text>
+
+    <rect x="475" y="158" width="150" height="72" rx="10" class="external"/>
+    <text x="550" y="188" text-anchor="middle" class="label">ACM</text>
+    <text x="550" y="211" text-anchor="middle" class="sub">TLS 인증서</text>
+
+    <rect x="665" y="158" width="150" height="72" rx="10" class="network"/>
+    <text x="740" y="188" text-anchor="middle" class="label">Internet</text>
+    <text x="740" y="211" text-anchor="middle" class="sub">Gateway</text>
+  </g>
+
+  <g id="management">
+    <rect x="965" y="78" width="150" height="72" rx="10" class="external"/>
+    <text x="1040" y="108" text-anchor="middle" class="label">S3 Bucket</text>
+    <text x="1040" y="131" text-anchor="middle" class="sub">App artifact</text>
+
+    <rect x="1160" y="78" width="170" height="72" rx="10" class="ops"/>
+    <text x="1245" y="108" text-anchor="middle" class="label">SSM</text>
+    <text x="1245" y="131" text-anchor="middle" class="sub">Session Manager</text>
+
+    <rect x="1372" y="78" width="180" height="72" rx="10" class="ops"/>
+    <text x="1462" y="108" text-anchor="middle" class="label">Parameter Store</text>
+    <text x="1462" y="131" text-anchor="middle" class="sub">환경 변수 / 설정</text>
+  </g>
+
+  <rect x="250" y="282" width="1320" height="580" rx="12" class="vpc"/>
+  <text x="283" y="322" class="title">VPC 10.0.0.0/16</text>
+
+  <rect x="720" y="318" width="360" height="74" rx="12" class="network"/>
+  <text x="900" y="348" text-anchor="middle" class="label">Application Load Balancer</text>
+  <text x="900" y="371" text-anchor="middle" class="sub">HTTPS :443 → Target Group :8080</text>
+
+  <g id="az-a">
+    <rect x="295" y="405" width="585" height="410" rx="12" class="az"/>
+    <text x="320" y="438" class="title">ap-northeast-2a</text>
+
+    <rect x="325" y="462" width="525" height="115" rx="10" class="public"/>
+    <text x="350" y="492" class="label">Public Subnet A</text>
+    <text x="350" y="515" class="sub">10.0.101.0/24</text>
+
+    <rect x="425" y="522" width="145" height="38" rx="9" class="network"/>
+    <text x="497" y="547" text-anchor="middle" class="sub">ALB node</text>
+
+    <rect x="660" y="505" width="145" height="55" rx="10" class="network"/>
+    <text x="732" y="527" text-anchor="middle" class="label">NAT</text>
+    <text x="732" y="548" text-anchor="middle" class="sub">Gateway</text>
+
+    <rect x="325" y="610" width="525" height="175" rx="10" class="private"/>
+    <text x="350" y="640" class="label">Private Subnet A</text>
+    <text x="350" y="663" class="sub">10.0.10.0/24</text>
+
+    <rect x="375" y="692" width="130" height="58" rx="10" class="node"/>
+    <text x="440" y="717" text-anchor="middle" class="label">App-1</text>
+    <text x="440" y="739" text-anchor="middle" class="sub">:8080</text>
+
+    <rect x="535" y="692" width="130" height="58" rx="10" class="data"/>
+    <text x="600" y="717" text-anchor="middle" class="label">Mongo-1</text>
+    <text x="600" y="739" text-anchor="middle" class="sub">:27017</text>
+
+    <rect x="695" y="692" width="120" height="58" rx="10" class="data"/>
+    <text x="755" y="717" text-anchor="middle" class="label">Redis</text>
+    <text x="755" y="739" text-anchor="middle" class="sub">:6379</text>
+
+    <rect x="535" y="770" width="145" height="50" rx="10" class="node"/>
+    <text x="607" y="791" text-anchor="middle" class="label">Mock OTA</text>
+    <text x="607" y="811" text-anchor="middle" class="sub">Nginx :80</text>
+  </g>
+
+  <g id="az-c">
+    <rect x="945" y="405" width="585" height="410" rx="12" class="az"/>
+    <text x="970" y="438" class="title">ap-northeast-2c</text>
+
+    <rect x="975" y="462" width="525" height="115" rx="10" class="public"/>
+    <text x="1000" y="492" class="label">Public Subnet C</text>
+    <text x="1000" y="515" class="sub">10.0.102.0/24</text>
+
+    <rect x="1080" y="522" width="145" height="38" rx="9" class="network"/>
+    <text x="1152" y="547" text-anchor="middle" class="sub">ALB node</text>
+
+    <rect x="975" y="610" width="525" height="175" rx="10" class="private"/>
+    <text x="1000" y="640" class="label">Private Subnet C</text>
+    <text x="1000" y="663" class="sub">10.0.20.0/24</text>
+
+    <rect x="1015" y="692" width="130" height="58" rx="10" class="node"/>
+    <text x="1080" y="717" text-anchor="middle" class="label">App-2</text>
+    <text x="1080" y="739" text-anchor="middle" class="sub">:8080</text>
+
+    <rect x="1175" y="692" width="130" height="58" rx="10" class="data"/>
+    <text x="1240" y="717" text-anchor="middle" class="label">Mongo-2</text>
+    <text x="1240" y="739" text-anchor="middle" class="sub">:27017</text>
+
+    <rect x="1335" y="692" width="130" height="58" rx="10" class="data"/>
+    <text x="1400" y="717" text-anchor="middle" class="label">Mongo-3</text>
+    <text x="1400" y="739" text-anchor="middle" class="sub">:27017</text>
+
+    <rect x="1170" y="770" width="190" height="50" rx="10" class="ops"/>
+    <text x="1265" y="791" text-anchor="middle" class="label">Observability</text>
+    <text x="1265" y="811" text-anchor="middle" class="sub">Prometheus / Loki</text>
+  </g>
+
+  <rect x="720" y="885" width="360" height="74" rx="12" class="data"/>
+  <text x="900" y="916" text-anchor="middle" class="label">PostgreSQL RDS</text>
+  <text x="900" y="939" text-anchor="middle" class="sub">Private DB Subnet Group / Multi-AZ</text>
+
+  <g id="legend">
+    <rect x="70" y="720" width="160" height="150" rx="12" class="external"/>
+    <text x="95" y="750" class="label">Legend</text>
+    <line x1="96" y1="778" x2="145" y2="778" class="traffic"/>
+    <text x="158" y="783" class="tiny">사용자 요청</text>
+    <line x1="96" y1="813" x2="145" y2="813" class="dataflow"/>
+    <text x="158" y="818" class="tiny">서비스 통신</text>
+    <line x1="96" y1="848" x2="145" y2="848" class="opsflow"/>
+    <text x="158" y="853" class="tiny">관측 데이터</text>
+  </g>
+
+  <!-- Ingress path -->
+  <path d="M188 418 C220 330 242 194 285 194" class="traffic"/>
+  <path d="M435 194 L475 194" class="flow"/>
+  <path d="M625 194 L665 194" class="flow"/>
+  <path d="M815 194 C865 224 890 272 900 318" class="traffic"/>
+  <path d="M820 392 C710 455 612 506 570 541" class="traffic"/>
+  <path d="M980 392 C1038 448 1084 489 1130 522" class="traffic"/>
+  <path d="M815 392 C660 500 490 620 440 692" class="traffic"/>
+  <path d="M985 392 C1048 510 1070 620 1080 692" class="traffic"/>
+
+  <!-- Private outbound through NAT -->
+  <path d="M440 692 C505 620 605 570 660 535" class="dashed"/>
+  <path d="M1080 692 C950 595 835 550 805 535" class="dashed"/>
+  <path d="M732 505 C732 400 736 300 740 230" class="dashed"/>
+  <text x="770" y="602" class="tiny">Private subnet egress → NAT → Internet</text>
+
+  <!-- Service/data communication -->
+  <path d="M505 721 L535 721" class="dataflow"/>
+  <path d="M1145 721 L1175 721" class="dataflow"/>
+  <path d="M505 735 C560 780 635 780 695 735" class="dataflow"/>
+  <path d="M440 750 C456 786 498 795 535 795" class="dataflow"/>
+  <path d="M1080 750 C1048 835 1000 872 948 885" class="dataflow"/>
+  <path d="M440 750 C555 848 655 895 720 922" class="dataflow"/>
+  <path d="M607 770 C665 650 760 480 900 392" class="dataflow"/>
+  <text x="642" y="675" class="tiny">Mock OTA webhook → ALB public endpoint</text>
+
+  <!-- MongoDB replica set -->
+  <path d="M665 713 C820 635 1010 635 1175 713" class="bi"/>
+  <path d="M1305 721 L1335 721" class="bi"/>
+  <path d="M665 735 C900 808 1150 808 1335 735" class="bi"/>
+  <text x="965" y="676" class="tiny">MongoDB Replica Set replication</text>
+
+  <!-- Observability is intentionally grouped to reduce visual noise -->
+  <path d="M820 750 C930 810 1060 828 1170 795" class="opsflow"/>
+  <path d="M665 750 C830 835 1045 850 1170 805" class="opsflow"/>
+  <path d="M1265 770 C1220 710 1185 690 1145 710" class="dashed"/>
+  <text x="1368" y="810" class="tiny">logs :3100 / metrics scrape</text>
+
+  <!-- Deployment and management plane -->
+  <path d="M1040 150 C1010 210 968 274 925 318" class="dashed"/>
+  <path d="M1245 150 C1200 325 1150 545 1080 692" class="dashed"/>
+  <path d="M1462 150 C1345 360 1180 570 1080 692" class="dashed"/>
+  <text x="1208" y="248" class="tiny">SSM 접근 / Parameter Store 주입</text>
+
+  <!-- Labels -->
+  <text x="205" y="392" class="tiny">HTTPS :443</text>
+  <text x="785" y="295" class="tiny">internet-facing</text>
+  <text x="1175" y="861" class="tiny">Observability는 private subnet 내부에서 수집/조회</text>
+</svg>
