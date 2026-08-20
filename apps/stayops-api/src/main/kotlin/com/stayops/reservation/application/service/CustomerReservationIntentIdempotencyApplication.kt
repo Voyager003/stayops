@@ -7,6 +7,7 @@ import com.stayops.reservation.domain.repository.ReservationIntentRepository
 import com.stayops.reservation.domain.repository.ReservationIntentRequestRepository
 import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.exception.NotFoundException
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.security.MessageDigest
 import java.time.LocalDate
@@ -18,6 +19,9 @@ class CustomerReservationIntentIdempotencyApplication(
     private val intentRepository: ReservationIntentRepository,
     private val paymentService: ReservationPaymentService
 ) {
+
+    private val log = LoggerFactory.getLogger(javaClass)
+
     fun createReservationIntent(
         idempotencyKey: String,
         command: CustomerReservationIntentCommand
@@ -25,7 +29,7 @@ class CustomerReservationIntentIdempotencyApplication(
         validateIdempotencyKey(idempotencyKey)
         val requestHash = command.fingerprint()
         val existing = requestRepository.findByMemberIdAndIdempotencyKey(command.memberId, idempotencyKey)
-        if (existing != null) return resolveExisting(existing, requestHash)
+        if (existing != null) return resolveExisting(existing, requestHash, RESOLUTION_REPLAYED)
 
         return try {
             creationApplication.createReservationIntent(idempotencyKey, requestHash, command)
@@ -35,7 +39,7 @@ class CustomerReservationIntentIdempotencyApplication(
                     "IDEMPOTENCY_REQUEST_IN_PROGRESS",
                     "동일한 예약 요청이 처리 중입니다"
                 )
-            resolveExisting(concurrentlyCreated, requestHash)
+            resolveExisting(concurrentlyCreated, requestHash, RESOLUTION_CONCURRENT)
         }
     }
 
@@ -54,9 +58,17 @@ class CustomerReservationIntentIdempotencyApplication(
 
     private fun resolveExisting(
         request: ReservationIntentRequest,
-        requestHash: String
+        requestHash: String,
+        resolution: String
     ): CustomerReservationIntentResult {
         if (request.requestHash != requestHash) {
+            log.warn(
+                "[멱등성 키 재사용 거부] event=reservation_intent_idempotency_key_reused " +
+                    "reservationIntentId={} memberId={} resolution={}",
+                request.reservationIntentId,
+                request.memberId,
+                resolution
+            )
             throw ConflictException(
                 "IDEMPOTENCY_KEY_REUSED",
                 "동일한 멱등성 키를 다른 예약 요청에 사용할 수 없습니다"
@@ -72,6 +84,17 @@ class CustomerReservationIntentIdempotencyApplication(
                 "PAYMENT_NOT_FOUND",
                 "결제 정보를 찾을 수 없습니다: ${request.reservationIntentId}"
             )
+        log.info(
+            "[예약 intent 멱등 재사용] event=reservation_intent_idempotent_hit reservationIntentId={} " +
+                "paymentId={} orderId={} memberId={} intentStatus={} paymentStatus={} resolution={}",
+            intent.id,
+            payment.id,
+            payment.orderId,
+            request.memberId,
+            intent.status,
+            payment.status,
+            resolution
+        )
         return CustomerReservationIntentResult(intent, payment)
     }
 
@@ -85,6 +108,11 @@ class CustomerReservationIntentIdempotencyApplication(
     companion object {
         private const val CONCURRENT_RESULT_LOOKUP_ATTEMPTS = 5
         private const val CONCURRENT_RESULT_LOOKUP_DELAY_MILLIS = 10L
+
+        // Distinguishes a retry that arrived after the first request finished from one
+        // that raced it: only the latter proves the unique-constraint fallback is exercised
+        private const val RESOLUTION_REPLAYED = "replayed"
+        private const val RESOLUTION_CONCURRENT = "concurrent"
     }
 }
 

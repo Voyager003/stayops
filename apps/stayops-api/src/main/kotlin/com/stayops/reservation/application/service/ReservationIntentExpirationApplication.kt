@@ -26,7 +26,15 @@ class ReservationIntentExpirationApplication(
             inventoryHoldService.release(intent.id)
             reservationIntentRepository.save(intent.expire(now))
             activeReservationAttemptRepository.deleteByReservationIntentId(intent.id)
-            log.info("예약 intent 만료 처리: reservationIntentId={}, holdId={}", intent.id, intent.holdId)
+            log.info(
+                "[예약 intent 만료] event=reservation_intent_expired reservationIntentId={} paymentId={} " +
+                    "holdId={} memberId={} expiresAt={}",
+                intent.id,
+                intent.paymentId,
+                intent.holdId,
+                intent.memberId,
+                intent.expiresAt
+            )
         }
         return expiredIntents.size
     }

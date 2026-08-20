@@ -173,10 +173,17 @@ class CustomerReservationIntentCreationApplication(
             amount = pricing.totalAmount
         )
         log.info(
-            "예약 intent 생성: reservationIntentId={}, paymentId={}, holdId={}",
+            "[예약 intent 생성] event=reservation_intent_created reservationIntentId={} paymentId={} holdId={} " +
+                "orderId={} memberId={} amount={} intentStatus={} paymentStatus={} expiresAt={}",
             intent.id,
             payment.id,
-            hold.id
+            hold.id,
+            payment.orderId,
+            memberId,
+            payment.amount.amount,
+            intent.status,
+            payment.status,
+            expiresAt
         )
         return CustomerReservationIntentResult(intent, payment)
     }

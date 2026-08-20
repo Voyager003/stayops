@@ -65,13 +65,16 @@ class ReservationPaymentOutboxApplication(
     )
 
     fun processPendingMessages(workerId: String = "payment-outbox-worker") {
-        repeat(MAX_MESSAGES_PER_RUN) {
+        val startedAt = System.nanoTime()
+        var claimedCount = 0
+        while (claimedCount < MAX_MESSAGES_PER_RUN) {
             val now = clock.instant()
             val processing = outboxRepository.claimReadyForProcessing(
                 workerId = workerId,
                 now = now,
                 lockedUntil = now.plusSeconds(LEASE_SECONDS)
-            ) ?: return
+            ) ?: break
+            claimedCount++
             log.info("[결제 작업 선점] event=payment_outbox_claimed {}", processing.traceFields())
             try {
                 process(processing)
@@ -100,11 +103,29 @@ class ReservationPaymentOutboxApplication(
                     )
                 }
             } catch (e: Exception) {
-                log.error("[결제 작업 처리 실패] outboxId={}", processing.id, e)
+                log.error(
+                    "[결제 작업 처리 실패] event=payment_outbox_processing_failed {} errorType={}",
+                    processing.traceFields(),
+                    e.javaClass.simpleName,
+                    e
+                )
                 transactionBoundary.required {
                     outboxRepository.save(failOutbox(processing, e.message ?: e.javaClass.simpleName))
                 }
             }
+        }
+
+        // claimed == batchCapacity means the run hit its cap with work possibly still queued,
+        // which is the signal that the worker is falling behind the incoming payment rate
+        if (claimedCount > 0) {
+            log.info(
+                "[결제 작업 배치 완료] event=payment_outbox_batch_completed workerId={} claimed={} " +
+                    "batchCapacity={} durationMs={}",
+                workerId,
+                claimedCount,
+                MAX_MESSAGES_PER_RUN,
+                (System.nanoTime() - startedAt) / 1_000_000
+            )
         }
     }
 
@@ -150,8 +171,9 @@ class ReservationPaymentOutboxApplication(
                     payment
                 }
                 log.info(
-                    "결제 승인 Outbox 건너뜀: outboxId={}, reservationStatus={}, paymentStatus={}",
-                    message.id,
+                    "[결제 작업 건너뜀] event=payment_outbox_skipped {} reservationStatus={} paymentStatus={} " +
+                        "reason=already_terminated",
+                    message.traceFields(),
                     reservation.status,
                     currentPayment.status
                 )
@@ -197,6 +219,13 @@ class ReservationPaymentOutboxApplication(
         val reservationIntent = reservationIntentRepository.findById(message.reservationIntentId!!)
 
         if (payment == null || reservationIntent == null) {
+            log.error(
+                "[결제 작업 대상 유실] event=payment_outbox_skipped {} reason=target_not_found " +
+                    "paymentFound={} intentFound={}",
+                message.traceFields(),
+                payment != null,
+                reservationIntent != null
+            )
             transactionBoundary.required {
                 outboxRepository.save(message.skip("결제 또는 예약 intent를 찾을 수 없습니다", now))
             }
@@ -207,6 +236,13 @@ class ReservationPaymentOutboxApplication(
             reservationIntent.status == ReservationIntentStatus.RESERVED &&
             payment.status == PaymentStatus.APPROVED
         ) {
+            log.info(
+                "[결제 작업 중복 처리 정리] event=payment_outbox_completed_idempotent {} " +
+                    "intentStatus={} paymentStatus={}",
+                message.traceFields(),
+                reservationIntent.status,
+                payment.status
+            )
             transactionBoundary.required {
                 activeReservationAttemptRepository.deleteByReservationIntentId(reservationIntent.id)
                 outboxRepository.save(message.complete(now))
@@ -216,12 +252,10 @@ class ReservationPaymentOutboxApplication(
 
         if (payment.status == PaymentStatus.FAILED) {
             log.warn(
-                "예약 intent 결제 승인 건너뜀: reservationIntentId={}, paymentId={}, outboxId={}, orderId={}, amount={}, paymentStatus={}, reason=already_failed",
-                reservationIntent.id,
-                payment.id,
-                message.id,
-                message.orderId,
-                message.amount.amount,
+                "[결제 작업 건너뜀] event=payment_outbox_skipped {} intentStatus={} paymentStatus={} " +
+                    "reason=payment_already_failed",
+                message.traceFields(),
+                reservationIntent.status,
                 payment.status
             )
             transactionBoundary.required {
@@ -360,15 +394,12 @@ class ReservationPaymentOutboxApplication(
             inquireAtGateway(message)
         } catch (e: PaymentGatewayException) {
             log.warn(
-                "예약 intent 결제 외부 상태 조회 실패: reservationIntentId={}, paymentId={}, outboxId={}, orderId={}, amount={}, paymentKeySuffix={}, cause={}, error={}",
-                reservationIntent.id,
-                payment.id,
-                message.id,
-                message.orderId,
-                message.amount.amount,
+                "[결제 상태 조회 복구 실패] event=payment_recovery_inquiry_failed {} " +
+                    "paymentKeySuffix={} causeType={} errorType={}",
+                message.traceFields(),
                 message.paymentKey.maskSuffix(),
                 cause.javaClass.simpleName,
-                e.message
+                e.javaClass.simpleName
             )
             transactionBoundary.required {
                 outboxRepository.save(failOutbox(message, e.message ?: cause.message ?: "PG 상태 조회 실패"))
@@ -395,12 +426,9 @@ class ReservationPaymentOutboxApplication(
 
         if (failPaymentWhenNotDone) {
             log.warn(
-                "예약 intent 결제 외부 상태 미완료로 실패 처리: reservationIntentId={}, paymentId={}, outboxId={}, orderId={}, amount={}, paymentKeySuffix={}, externalStatus={}",
-                reservationIntent.id,
-                payment.id,
-                message.id,
-                message.orderId,
-                message.amount.amount,
+                "[결제 상태 미완료로 실패 확정] event=payment_recovery_failed {} " +
+                    "paymentKeySuffix={} externalStatus={}",
+                message.traceFields(),
                 message.paymentKey.maskSuffix(),
                 inquiry.status
             )
@@ -416,12 +444,9 @@ class ReservationPaymentOutboxApplication(
         }
 
         log.warn(
-            "예약 intent 결제 외부 상태 미완료로 재시도: reservationIntentId={}, paymentId={}, outboxId={}, orderId={}, amount={}, paymentKeySuffix={}, externalStatus={}",
-            reservationIntent.id,
-            payment.id,
-            message.id,
-            message.orderId,
-            message.amount.amount,
+            "[결제 상태 미완료로 재시도] event=payment_recovery_retry_scheduled {} " +
+                "paymentKeySuffix={} externalStatus={}",
+            message.traceFields(),
             message.paymentKey.maskSuffix(),
             inquiry.status
         )
@@ -515,13 +540,10 @@ class ReservationPaymentOutboxApplication(
     ): String? {
         if (confirmResult.orderId != message.orderId || confirmResult.totalAmount.compareTo(message.amount.amount) != 0) {
             log.warn(
-                "예약 intent 결제 승인 결과 불일치: reservationIntentId={}, paymentId={}, outboxId={}, expectedOrderId={}, actualOrderId={}, expectedAmount={}, actualAmount={}, paymentKeySuffix={}",
-                reservationIntent.id,
-                payment.id,
-                message.id,
-                message.orderId,
+                "[PG 승인 결과 불일치] event=payment_confirm_result_mismatch {} " +
+                    "actualOrderId={} actualAmount={} paymentKeySuffix={}",
+                message.traceFields(),
                 confirmResult.orderId,
-                message.amount.amount,
                 confirmResult.totalAmount,
                 message.paymentKey.maskSuffix()
             )
@@ -583,10 +605,14 @@ class ReservationPaymentOutboxApplication(
         reason: String
     ) {
         log.info(
-            "예약 intent 결제 실패 보상 처리: reservationIntentId={}, paymentId={}, holdId={}, reason={}",
+            "[결제 실패 보상 처리] event=payment_failure_compensated reservationIntentId={} paymentId={} " +
+                "orderId={} holdId={} intentStatus={} paymentStatus={} reason={}",
             reservationIntent.id,
             payment.id,
+            payment.orderId,
             reservationIntent.holdId,
+            reservationIntent.status,
+            payment.status,
             reason
         )
         releaseReservationIntentHold(reservationIntent)
@@ -611,12 +637,11 @@ class ReservationPaymentOutboxApplication(
         reason: String
     ) {
         log.warn(
-            "예약 intent 결제 승인 실패: reservationIntentId={}, paymentId={}, outboxId={}, orderId={}, amount={}, paymentKeySuffix={}, errorType={}, errorCode={}, reason={}",
-            reservationIntent.id,
-            payment.id,
-            message.id,
-            message.orderId,
-            message.amount.amount,
+            "[결제 승인 실패] event=payment_confirm_failed {} intentStatus={} paymentStatus={} " +
+                "paymentKeySuffix={} errorType={} errorCode={} reason={}",
+            message.traceFields(),
+            reservationIntent.status,
+            payment.status,
             message.paymentKey.maskSuffix(),
             errorType,
             errorCode,
