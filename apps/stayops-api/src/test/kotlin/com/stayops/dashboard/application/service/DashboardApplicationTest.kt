@@ -107,7 +107,7 @@ class DashboardApplicationTest : BehaviorSpec({
                 val confirmedReservation = sampleReservation("rsv-1", ReservationStatus.CONFIRMED, checkIn = today, totalAmount = 200_000)
                 val cancelledReservation = sampleReservation("rsv-2", ReservationStatus.PENDING, checkIn = today, totalAmount = 150_000)
                     // PENDING->CANCELLED via cancelPending
-                val cancelledRes = cancelledReservation.cancelPending()
+                val cancelledRes = cancelledReservation.cancel()
 
                 every {
                     reservationRepository.findByPropertyIdAndDateRange("prop-1", today, today)

@@ -14,7 +14,6 @@ import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.Reservation
 import com.stayops.reservation.domain.model.ReservationChannel
 import com.stayops.reservation.domain.model.ReservationPricing
-import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
@@ -133,11 +132,7 @@ class ReservationApplication(
     fun cancelReservation(propertyId: String, reservationId: String): Reservation {
         val reservation = getReservation(propertyId, reservationId)
         val shouldReleaseInventory = reservationCancellationPolicy.shouldReleaseInventoryOnCancel(reservation)
-        val cancelled = if (reservation.status == ReservationStatus.PENDING) {
-            reservation.cancelPending()
-        } else {
-            reservation.cancel()
-        }
+        val cancelled = reservation.cancel()
         val saved = reservationRepository.save(cancelled)
 
         if (shouldReleaseInventory) {
