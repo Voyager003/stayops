@@ -6,7 +6,6 @@ import com.stayops.reservation.application.required.ReservationPaymentSnapshot
 import com.stayops.reservation.application.required.ReservationPaymentStatus
 import com.stayops.reservation.domain.event.ReservationCancelled
 import com.stayops.reservation.domain.model.Reservation
-import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.shared.exception.ForbiddenException
 import com.stayops.shared.exception.NotFoundException
@@ -41,12 +40,12 @@ class CustomerReservationCancellationApplication(
             payment.status == ReservationPaymentStatus.CANCEL_REQUESTED ||
             payment.status == ReservationPaymentStatus.CANCEL_FAILED
 
-        if (reservation.status == ReservationStatus.PENDING && !shouldRequestRefund) {
-            cancelledReservation = reservationRepository.save(reservation.cancelPending())
+        if (reservation.isPending() && !shouldRequestRefund) {
+            cancelledReservation = reservationRepository.save(reservation.cancel())
             cancelledPayment = reservationPaymentPort.cancelPendingByCustomerRequest(reservation.id)
         } else {
             cancelledReservation = reservationRepository.save(
-                if (reservation.status == ReservationStatus.PENDING) reservation.cancelPending() else reservation.cancel()
+                reservation.cancel()
             )
             cancelledPayment = reservationPaymentPort.requestCancelByCustomerRequest(
                 reservationId = reservation.id,

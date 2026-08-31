@@ -855,7 +855,7 @@ class ReservationPaymentOutboxApplicationTest : BehaviorSpec({
                 val message = confirmMessage()
                 claim(message)
                 every { paymentRepository.findById("pay-1") } returns confirmRequestedPayment().fail("고객 요청에 의한 취소")
-                every { reservationRepository.findById("rsv-1") } returns pendingReservation().cancelPending()
+                every { reservationRepository.findById("rsv-1") } returns pendingReservation().cancel()
 
                 application.processPendingMessages(workerId = "worker-1")
 

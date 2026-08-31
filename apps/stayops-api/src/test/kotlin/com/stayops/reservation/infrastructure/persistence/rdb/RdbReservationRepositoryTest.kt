@@ -103,7 +103,7 @@ class RdbReservationRepositoryTest @Autowired constructor(
 
             assertThat(updated.version).isEqualTo(1L)
             assertThatThrownBy {
-                reservationRepository.save(staleSnapshot.cancelPending())
+                reservationRepository.save(staleSnapshot.cancel())
             }.isInstanceOf(ConflictException::class.java)
                 .hasMessageContaining("Reservation 버전 충돌")
             assertThat(reservationRepository.findById("res-1")!!.status)

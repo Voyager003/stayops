@@ -203,11 +203,45 @@ class ReservationTest : BehaviorSpec({
     given("PENDING 상태의 예약을 취소할 때") {
         val reservation = pendingReservation()
 
-        `when`("cancelPending() 호출 시") {
-            val cancelled = reservation.cancelPending()
+        `when`("cancel() 호출 시") {
+            val cancelled = reservation.cancel()
 
             then("상태가 CANCELLED로 변경된다") {
                 cancelled.status shouldBe ReservationStatus.CANCELLED
+            }
+        }
+    }
+
+    given("예약 취소 가능 여부를 판정할 때") {
+        `when`("PENDING 상태이면") {
+            then("취소할 수 있다") {
+                pendingReservation().isCancellable() shouldBe true
+            }
+        }
+
+        `when`("CONFIRMED 상태이면") {
+            then("취소할 수 있다") {
+                pendingReservation().confirm().isCancellable() shouldBe true
+            }
+        }
+
+        `when`("CHECKED_IN 상태이면") {
+            then("취소할 수 없다") {
+                pendingReservation().confirm().checkIn("room-101").isCancellable() shouldBe false
+            }
+        }
+    }
+
+    given("예약이 결제 대기 상태인지 판정할 때") {
+        `when`("PENDING 상태이면") {
+            then("결제 대기로 판정한다") {
+                pendingReservation().isPending() shouldBe true
+            }
+        }
+
+        `when`("CONFIRMED 상태이면") {
+            then("결제 대기가 아닌 것으로 판정한다") {
+                pendingReservation().confirm().isPending() shouldBe false
             }
         }
     }

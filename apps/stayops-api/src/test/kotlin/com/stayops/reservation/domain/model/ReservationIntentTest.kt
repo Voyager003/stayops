@@ -124,6 +124,29 @@ class ReservationIntentTest : BehaviorSpec({
         }
     }
 
+    given("결제 실패 처리 가능 여부를 판정할 때") {
+        `when`("결제 대기 상태이면") {
+            then("결제 실패 처리할 수 있다") {
+                intent().canFailPayment() shouldBe true
+            }
+        }
+
+        `when`("결제 승인 요청 상태이면") {
+            then("결제 실패 처리할 수 있다") {
+                intent().requestPaymentConfirmation(now.plusSeconds(60)).canFailPayment() shouldBe true
+            }
+        }
+
+        `when`("이미 예약이 확정된 상태이면") {
+            then("결제 실패 처리할 수 없다") {
+                intent()
+                    .requestPaymentConfirmation(now.plusSeconds(60))
+                    .markReserved("reservation-1")
+                    .canFailPayment() shouldBe false
+            }
+        }
+    }
+
     given("결제 승인 이후 최종 예약으로 전환할 때") {
         `when`("결제 승인 요청 상태이면") {
             val reserved = intent()

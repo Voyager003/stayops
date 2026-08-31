@@ -260,10 +260,7 @@ class ReservationPaymentOutboxApplication(
             )
             transactionBoundary.required {
                 releaseReservationIntentHold(reservationIntent)
-                if (
-                    reservationIntent.status == ReservationIntentStatus.PAYMENT_WAITING ||
-                    reservationIntent.status == ReservationIntentStatus.CONFIRM_REQUESTED
-                ) {
+                if (reservationIntent.canFailPayment()) {
                     reservationIntentRepository.save(
                         reservationIntent.failPayment("결제가 이미 실패 상태입니다", now)
                     )
@@ -776,8 +773,8 @@ class ReservationPaymentOutboxApplication(
         reason: String
     ) {
         paymentRepository.save(payment.fail(reason))
-        if (reservation.status == ReservationStatus.PENDING) {
-            reservationRepository.save(reservation.cancelPending())
+        if (reservation.isPending()) {
+            reservationRepository.save(reservation.cancel())
         }
     }
 
@@ -789,8 +786,8 @@ class ReservationPaymentOutboxApplication(
     ) {
         val cancelRequestedPayment = paymentRepository.save(payment.requestCancel())
 
-        if (reservation.status == ReservationStatus.PENDING) {
-            reservationRepository.save(reservation.cancelPending())
+        if (reservation.isPending()) {
+            reservationRepository.save(reservation.cancel())
         }
 
         val existingCancelOutbox = outboxRepository.findByPaymentIdAndType(

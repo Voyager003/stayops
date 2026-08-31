@@ -43,8 +43,10 @@ class Member private constructor(
 
     fun recordLogin(): Member = copyState(lastLoginAt = Instant.now(), updatedAt = Instant.now())
 
+    fun isActive(): Boolean = status == MemberStatus.ACTIVE
+
     fun deactivate(): Member {
-        check(status == MemberStatus.ACTIVE) { "이미 비활성화된 회원입니다." }
+        check(isActive()) { "이미 비활성화된 회원입니다." }
         return copyState(status = MemberStatus.INACTIVE, updatedAt = Instant.now())
     }
 
