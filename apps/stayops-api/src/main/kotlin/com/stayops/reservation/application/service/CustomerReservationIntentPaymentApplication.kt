@@ -74,7 +74,7 @@ class CustomerReservationIntentPaymentApplication(
             logConfirmIgnored(intent, payment, "already_terminated")
             return CustomerReservationIntentResult(intent, payment)
         }
-        if (clock.instant().isAfter(intent.expiresAt)) {
+        if (intent.isExpiredAt(clock.instant())) {
             log.warn(
                 "[결제 승인 요청 거부] event=payment_confirm_rejected reservationIntentId={} paymentId={} " +
                     "orderId={} intentStatus={} paymentStatus={} expiresAt={} reason=intent_expired",

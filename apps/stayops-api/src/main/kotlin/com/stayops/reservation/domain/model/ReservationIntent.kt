@@ -24,11 +24,13 @@ class ReservationIntent private constructor(
     val updatedAt: Instant
 ) {
 
+    fun isExpiredAt(now: Instant): Boolean = now.isAfter(expiresAt)
+
     fun requestPaymentConfirmation(now: Instant = Instant.now()): ReservationIntent {
         check(status == ReservationIntentStatus.PAYMENT_WAITING) {
             "PAYMENT_WAITING 상태에서만 결제 승인 요청을 시작할 수 있습니다: $status"
         }
-        check(!now.isAfter(expiresAt)) {
+        check(!isExpiredAt(now)) {
             "만료된 예약 intent는 결제 승인 요청을 시작할 수 없습니다: expiresAt=$expiresAt"
         }
         return copyState(status = ReservationIntentStatus.CONFIRM_REQUESTED, updatedAt = now)
@@ -50,7 +52,7 @@ class ReservationIntent private constructor(
         check(status == ReservationIntentStatus.PAYMENT_WAITING) {
             "PAYMENT_WAITING 상태에서만 만료 처리할 수 있습니다: $status"
         }
-        check(now.isAfter(expiresAt)) {
+        check(isExpiredAt(now)) {
             "만료 시간이 지나지 않은 예약 intent는 만료 처리할 수 없습니다: expiresAt=$expiresAt"
         }
         return copyState(status = ReservationIntentStatus.EXPIRED, updatedAt = now)

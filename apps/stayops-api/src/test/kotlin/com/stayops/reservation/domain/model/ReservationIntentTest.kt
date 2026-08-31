@@ -86,6 +86,26 @@ class ReservationIntentTest : BehaviorSpec({
         }
     }
 
+    given("만료 여부를 판정할 때") {
+        `when`("기준 시각이 만료 시각 이전이면") {
+            then("만료되지 않은 것으로 판정한다") {
+                intent().isExpiredAt(expiresAt.minusSeconds(1)) shouldBe false
+            }
+        }
+
+        `when`("기준 시각이 만료 시각과 같으면") {
+            then("아직 만료되지 않은 것으로 판정한다") {
+                intent().isExpiredAt(expiresAt) shouldBe false
+            }
+        }
+
+        `when`("기준 시각이 만료 시각을 지났으면") {
+            then("만료된 것으로 판정한다") {
+                intent().isExpiredAt(expiresAt.plusSeconds(1)) shouldBe true
+            }
+        }
+    }
+
     given("결제 승인 요청을 시작할 때") {
         `when`("intent가 만료되지 않은 결제 대기 상태이면") {
             val requested = intent().requestPaymentConfirmation(now.plusSeconds(60))
