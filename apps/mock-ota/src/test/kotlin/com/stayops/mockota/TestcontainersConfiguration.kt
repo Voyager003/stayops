@@ -11,7 +11,9 @@ class TestcontainersConfiguration {
 
     @Bean
     fun mongoDbContainer(): MongoDBContainer {
+        // MongoDB 8.x refuses to start on Linux kernel 6.19+ (SERVER-121912); letting glibc own rseq works around it
         return MongoDBContainer(DockerImageName.parse("mongo:8"))
+            .withEnv("GLIBC_TUNABLES", "glibc.pthread.rseq=1")
     }
 
     @Bean
