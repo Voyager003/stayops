@@ -87,8 +87,8 @@ class PersistenceNamingConventionTest {
         val migrationRoot = resourceRoot.resolve("db/migration")
 
         assertTrue(
-            actual = applicationConfig.contains("active: local,mongo"),
-            message = "Default application profile must keep existing Mongo behavior with local,mongo"
+            actual = applicationConfig.contains("active: local,rdb"),
+            message = "Default application profile must use PostgreSQL persistence with local,rdb"
         )
 
         assertTrue(
@@ -104,19 +104,47 @@ class PersistenceNamingConventionTest {
             message = "RDB profile must manage PostgreSQL schema with Flyway migrations under db/migration"
         )
 
-        val indexDefinitions = Files.walk(migrationRoot).use { paths ->
+        val initialModelingIndexes = Files.walk(migrationRoot).use { paths ->
             paths
                 .filter { Files.isRegularFile(it) }
-                .filter { it.fileName.toString().endsWith(".sql") }
+                .filter { it.fileName.toString().startsWith("V1__") }
                 .filter { Files.readString(it).contains(Regex("""(?i)\bcreate\s+(unique\s+)?index\b""")) }
                 .map { migrationRoot.relativize(it).toString() }
                 .toList()
         }
 
         assertTrue(
-            actual = indexDefinitions.isEmpty(),
-            message = "Initial RDB modeling migrations must define tables, PKs, and FKs only. Defer indexes to query-pattern migrations: $indexDefinitions"
+            actual = initialModelingIndexes.isEmpty(),
+            message = "Initial RDB modeling migration must define tables, PKs, and FKs only. Defer indexes to query-pattern migrations: $initialModelingIndexes"
         )
+    }
+
+    @Test
+    fun should_use_rdb_profile_and_datasource_in_app_deployment_manifests() {
+        val repositoryRoot = Path.of("../..").normalize()
+        val manifests = listOf(
+            repositoryRoot.resolve("docker-compose.prod.yml"),
+            repositoryRoot.resolve("infra/production/app/docker-compose.yml"),
+            repositoryRoot.resolve("infra/minimal/app/docker-compose.yml")
+        )
+
+        manifests.forEach { manifest ->
+            val content = Files.readString(manifest)
+            assertTrue(
+                actual = Regex("""SPRING_PROFILES_ACTIVE\s*[:=]\s*prod,rdb""").containsMatchIn(content),
+                message = "App deployment must activate the prod,rdb profiles: $manifest"
+            )
+            listOf(
+                "SPRING_DATASOURCE_URL",
+                "SPRING_DATASOURCE_USERNAME",
+                "SPRING_DATASOURCE_PASSWORD"
+            ).forEach { property ->
+                assertTrue(
+                    actual = content.contains(property),
+                    message = "App deployment must provide $property: $manifest"
+                )
+            }
+        }
     }
 
     @Test

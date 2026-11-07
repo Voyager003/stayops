@@ -166,6 +166,7 @@ class CustomerReservationCancellationInventoryRestoreTest @Autowired constructor
 
             // When: 3박 예약 intent 생성 (5/1~5/4 = night1, night2, night3)
             val intentResult = customerReservationApplication.createReservationIntent(
+                idempotencyKey = "test-intent-key",
                 memberId = memberId,
                 propertyId = propertyId,
                 roomTypeId = roomTypeId,

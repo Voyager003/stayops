@@ -11,6 +11,8 @@ import com.stayops.reservation.domain.model.ReservationPricing
 import com.stayops.reservation.domain.repository.ReservationIntentRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
+import com.stayops.shared.exception.BusinessException
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
@@ -51,6 +53,23 @@ class CustomerReservationIntentPaymentApplicationTest : BehaviorSpec({
             holdId = "hold-1",
             expiresAt = fixedInstant.plusSeconds(900),
             now = fixedInstant
+        )
+
+    fun expiredIntent(): ReservationIntent =
+        ReservationIntent.create(
+            id = "intent-1",
+            memberId = "member-1",
+            propertyId = "prop-1",
+            roomTypeId = "rt-1",
+            guestInfo = GuestInfo("김고객", "010-1111-2222", "kim@test.com"),
+            dateRange = DateRange.of(LocalDate.of(2026, 4, 1), LocalDate.of(2026, 4, 3)),
+            numberOfGuests = 2,
+            channel = ReservationChannel("DIRECT", commissionRate = BigDecimal.ZERO),
+            pricing = ReservationPricing.calculate(Money.won(200_000), Money.ZERO, BigDecimal.ZERO),
+            paymentId = "pay-1",
+            holdId = "hold-1",
+            expiresAt = fixedInstant.minusSeconds(1),
+            now = fixedInstant.minusSeconds(900)
         )
 
     fun payment(status: ReservationPaymentStatus = ReservationPaymentStatus.PENDING): ReservationPaymentSnapshot =
@@ -108,6 +127,29 @@ class CustomerReservationIntentPaymentApplicationTest : BehaviorSpec({
                 result.payment.status shouldBe ReservationPaymentStatus.FAILED
                 verify(exactly = 0) { reservationIntentRepository.save(any()) }
                 verify(exactly = 0) { reservationPaymentService.requestConfirmForReservationIntent(any(), any(), any(), any(), any()) }
+            }
+        }
+
+        `when`("결제 가능 시간이 만료된 intent이면") {
+            every { reservationIntentRepository.findById("intent-1") } returns expiredIntent()
+            every { reservationPaymentService.findByReservationIntentId("intent-1") } returns payment()
+
+            val exception = shouldThrow<BusinessException> {
+                sut.confirmPayment(
+                    memberId = "member-1",
+                    reservationIntentId = "intent-1",
+                    paymentKey = "toss_pk_123",
+                    orderId = "STAYOPS-intent-1-123",
+                    amount = BigDecimal(200_000)
+                )
+            }
+
+            then("만료 예외를 던지고 승인 요청을 시작하지 않는다") {
+                exception.code shouldBe "RESERVATION_INTENT_EXPIRED"
+                verify(exactly = 0) { reservationIntentRepository.save(any()) }
+                verify(exactly = 0) {
+                    reservationPaymentService.requestConfirmForReservationIntent(any(), any(), any(), any(), any())
+                }
             }
         }
 

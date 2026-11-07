@@ -8,6 +8,7 @@ import com.stayops.shared.config.RdbPersistence
 import com.stayops.shared.exception.ConflictException
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Repository
 import java.time.Instant
 import java.time.LocalDate
@@ -19,6 +20,8 @@ import java.time.ZoneOffset
 class RdbRoomInventoryRepository(
     private val dsl: DSLContext
 ) : RoomInventoryRepository {
+
+    private val log = LoggerFactory.getLogger(javaClass)
 
     override fun save(inventory: RoomInventory): RoomInventory =
         dsl.transactionResult { configuration ->
@@ -56,13 +59,33 @@ class RdbRoomInventoryRepository(
             }
 
             if (updatedRows == 0 && inventory.version != null) {
+                // attemptedVersion identifies which snapshot lost the race
+                log.warn(
+                    "[재고 낙관적 락 충돌] inventoryId={}, propertyId={}, roomTypeId={}, date={}, attemptedVersion={}",
+                    inventory.id,
+                    inventory.propertyId,
+                    inventory.roomTypeId,
+                    inventory.date,
+                    inventory.version
+                )
                 throw ConflictException(
                     code = "INVENTORY_CONFLICT",
                     message = "재고 변경 충돌이 발생했습니다. 다시 시도해주세요."
                 )
             }
 
-            tx.findInventoryById(inventory.id) ?: inventory
+            val saved = tx.findInventoryById(inventory.id) ?: inventory
+            log.debug(
+                "[재고 저장] inventoryId={}, date={}, version={}->{}, held={}, reserved={}, available={}",
+                saved.id,
+                saved.date,
+                inventory.version,
+                saved.version,
+                saved.heldCount,
+                saved.reservedCount,
+                saved.availableCount
+            )
+            saved
         }
 
     override fun findByPropertyIdAndRoomTypeIdAndDate(

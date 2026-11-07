@@ -1,6 +1,7 @@
 package com.stayops.reservation.application.service
 
 import com.stayops.inventory.application.provided.InventoryHoldService
+import com.stayops.reservation.domain.repository.ActiveReservationAttemptRepository
 import com.stayops.reservation.domain.repository.ReservationIntentRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -10,6 +11,7 @@ import java.time.Clock
 @Service
 class ReservationIntentExpirationApplication(
     private val reservationIntentRepository: ReservationIntentRepository,
+    private val activeReservationAttemptRepository: ActiveReservationAttemptRepository,
     private val inventoryHoldService: InventoryHoldService,
     private val clock: Clock
 ) {
@@ -23,7 +25,16 @@ class ReservationIntentExpirationApplication(
         expiredIntents.forEach { intent ->
             inventoryHoldService.release(intent.id)
             reservationIntentRepository.save(intent.expire(now))
-            log.info("예약 intent 만료 처리: reservationIntentId={}, holdId={}", intent.id, intent.holdId)
+            activeReservationAttemptRepository.deleteByReservationIntentId(intent.id)
+            log.info(
+                "[예약 intent 만료] event=reservation_intent_expired reservationIntentId={} paymentId={} " +
+                    "holdId={} memberId={} expiresAt={}",
+                intent.id,
+                intent.paymentId,
+                intent.holdId,
+                intent.memberId,
+                intent.expiresAt
+            )
         }
         return expiredIntents.size
     }

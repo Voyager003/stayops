@@ -14,6 +14,7 @@ import com.stayops.shared.config.RdbPersistence
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
 import com.stayops.shared.domain.PagedResult
+import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.time.StayopsTimeProperties
 import org.jooq.Condition
 import org.jooq.DSLContext
@@ -32,7 +33,7 @@ class RdbReservationRepository(
 ) : ReservationRepository {
 
     override fun save(reservation: Reservation): Reservation {
-        dsl.insertInto(RESERVATIONS)
+        val affectedRows = dsl.insertInto(RESERVATIONS)
             .set(RESERVATIONS.ID, reservation.id)
             .set(RESERVATIONS.PROPERTY_ID, reservation.propertyId)
             .set(RESERVATIONS.ROOM_TYPE_ID, reservation.roomTypeId)
@@ -85,10 +86,17 @@ class RdbReservationRepository(
             .set(RESERVATIONS.NET_AMOUNT, reservation.pricing.netAmount.amount)
             .set(RESERVATIONS.MEMBER_ID, reservation.memberId)
             .set(RESERVATIONS.EXPIRES_AT, reservation.expiresAt?.toOffsetDateTime())
-            .set(RESERVATIONS.VERSION, reservation.version)
-            .set(RESERVATIONS.CREATED_AT, reservation.createdAt.toOffsetDateTime())
+            .set(RESERVATIONS.VERSION, RESERVATIONS.VERSION.plus(1L))
             .set(RESERVATIONS.UPDATED_AT, reservation.updatedAt.toOffsetDateTime())
+            .where(RESERVATIONS.VERSION.eq(reservation.version))
             .execute()
+
+        if (affectedRows == 0) {
+            throw ConflictException(
+                code = "RESERVATION_CONFLICT",
+                message = "Reservation 버전 충돌이 발생했습니다: ${reservation.id}"
+            )
+        }
 
         return findById(reservation.id) ?: reservation
     }

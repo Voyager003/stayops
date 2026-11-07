@@ -7,6 +7,7 @@ import com.stayops.jooq.generated.Tables.INVENTORY_HOLD_DATES
 import com.stayops.jooq.generated.Tables.INVENTORY_HOLDS
 import com.stayops.jooq.generated.tables.records.InventoryHoldsRecord
 import com.stayops.shared.config.RdbPersistence
+import com.stayops.shared.exception.ConflictException
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
@@ -24,7 +25,7 @@ class RdbInventoryHoldRepository(
     override fun save(hold: InventoryHold): InventoryHold =
         dsl.transactionResult { configuration ->
             val tx = DSL.using(configuration)
-            tx.insertInto(INVENTORY_HOLDS)
+            val affectedRows = tx.insertInto(INVENTORY_HOLDS)
                 .set(INVENTORY_HOLDS.ID, hold.id)
                 .set(INVENTORY_HOLDS.RESERVATION_INTENT_ID, hold.reservationIntentId)
                 .set(INVENTORY_HOLDS.PROPERTY_ID, hold.propertyId)
@@ -43,10 +44,17 @@ class RdbInventoryHoldRepository(
                 .set(INVENTORY_HOLDS.QUANTITY, hold.quantity)
                 .set(INVENTORY_HOLDS.STATUS, hold.status.name)
                 .set(INVENTORY_HOLDS.EXPIRES_AT, hold.expiresAt.toOffsetDateTime())
-                .set(INVENTORY_HOLDS.VERSION, hold.version)
-                .set(INVENTORY_HOLDS.CREATED_AT, hold.createdAt.toOffsetDateTime())
+                .set(INVENTORY_HOLDS.VERSION, INVENTORY_HOLDS.VERSION.plus(1L))
                 .set(INVENTORY_HOLDS.UPDATED_AT, hold.updatedAt.toOffsetDateTime())
+                .where(INVENTORY_HOLDS.VERSION.eq(hold.version))
                 .execute()
+
+            if (affectedRows == 0) {
+                throw ConflictException(
+                    code = "INVENTORY_HOLD_CONFLICT",
+                    message = "InventoryHold 버전 충돌이 발생했습니다: ${hold.id}"
+                )
+            }
 
             tx.deleteFrom(INVENTORY_HOLD_DATES)
                 .where(INVENTORY_HOLD_DATES.HOLD_ID.eq(hold.id))
@@ -71,7 +79,7 @@ class RdbInventoryHoldRepository(
             .where(INVENTORY_HOLDS.RESERVATION_INTENT_ID.eq(reservationIntentId))
             .fetchOne()
             ?: return null
-        return record.toDomain(loadDates(record.id))
+        return record.toDomain(dsl.loadDates(record.id))
     }
 
     override fun findActiveByPropertyIdAndRoomTypeIdAndDates(
@@ -92,7 +100,7 @@ class RdbInventoryHoldRepository(
             .orderBy(INVENTORY_HOLDS.CREATED_AT.asc(), INVENTORY_HOLDS.ID.asc())
             .fetch { row ->
                 val record = row.into(INVENTORY_HOLDS)
-                record.toDomain(loadDates(record.id))
+                record.toDomain(dsl.loadDates(record.id))
             }
     }
 
@@ -104,8 +112,8 @@ class RdbInventoryHoldRepository(
         return record.toDomain(loadDates(id))
     }
 
-    private fun loadDates(holdId: String): List<LocalDate> =
-        dsl.select(INVENTORY_HOLD_DATES.HOLD_DATE)
+    private fun DSLContext.loadDates(holdId: String): List<LocalDate> =
+        select(INVENTORY_HOLD_DATES.HOLD_DATE)
             .from(INVENTORY_HOLD_DATES)
             .where(INVENTORY_HOLD_DATES.HOLD_ID.eq(holdId))
             .orderBy(INVENTORY_HOLD_DATES.HOLD_DATE.asc())

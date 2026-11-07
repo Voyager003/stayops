@@ -2,7 +2,7 @@ spring:
   application:
     name: stayops
   profiles:
-    active: local,mongo
+    active: local,rdb
   session:
     redis:
       repository-type: default
@@ -42,7 +42,8 @@ stayops:
       connect-timeout: 2s
       read-timeout: 5s
   rate-limit:
-    enabled: true
+    # Disabled by default; set STAYOPS_RATE_LIMIT_ENABLED=true to turn it back on
+    enabled: ${STAYOPS_RATE_LIMIT_ENABLED:false}
     fail-open: true
     rules:
       - id: auth-login

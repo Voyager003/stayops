@@ -10,11 +10,16 @@ import com.stayops.rate.domain.repository.RatePlanRepository
 import com.stayops.rate.domain.service.RateResolverService
 import com.stayops.reservation.application.required.ReservationPaymentService
 import com.stayops.reservation.application.required.ReservationPaymentSnapshot
+import com.stayops.reservation.domain.model.ActiveReservationAttempt
+import com.stayops.reservation.domain.model.ActiveReservationAttemptAlreadyExistsException
 import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.ReservationChannel
 import com.stayops.reservation.domain.model.ReservationIntent
+import com.stayops.reservation.domain.model.ReservationIntentRequest
 import com.stayops.reservation.domain.model.ReservationPricing
+import com.stayops.reservation.domain.repository.ActiveReservationAttemptRepository
 import com.stayops.reservation.domain.repository.ReservationIntentRepository
+import com.stayops.reservation.domain.repository.ReservationIntentRequestRepository
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.repository.RoomTypeRepository
 import com.stayops.shared.domain.DateRange
@@ -37,6 +42,8 @@ class CustomerReservationIntentCreationApplication(
     private val ratePlanRepository: RatePlanRepository,
     private val reservationRepository: ReservationRepository,
     private val reservationIntentRepository: ReservationIntentRepository,
+    private val reservationIntentRequestRepository: ReservationIntentRequestRepository,
+    private val activeReservationAttemptRepository: ActiveReservationAttemptRepository,
     private val inventoryRepository: RoomInventoryRepository,
     private val inventoryHoldService: InventoryHoldService,
     private val reservationPaymentService: ReservationPaymentService,
@@ -54,16 +61,15 @@ class CustomerReservationIntentCreationApplication(
 
     @Transactional
     fun createReservationIntent(
-        memberId: String,
-        propertyId: String,
-        roomTypeId: String,
-        checkIn: LocalDate,
-        checkOut: LocalDate,
-        numberOfGuests: Int,
-        guestName: String,
-        guestPhone: String,
-        guestEmail: String?
+        idempotencyKey: String,
+        requestHash: String,
+        command: CustomerReservationIntentCommand
     ): CustomerReservationIntentResult {
+        val memberId = command.memberId
+        val propertyId = command.propertyId
+        val roomTypeId = command.roomTypeId
+        val checkIn = command.checkIn
+        val checkOut = command.checkOut
         val now = clock.instant()
         val hasDuplicate = reservationRepository.existsActiveByMemberIdAndRoomTypeIdAndCheckInAndCheckOut(
             memberId,
@@ -115,9 +121,9 @@ class CustomerReservationIntentCreationApplication(
                 memberId = memberId,
                 propertyId = propertyId,
                 roomTypeId = roomTypeId,
-                guestInfo = GuestInfo(name = guestName, phone = guestPhone, email = guestEmail),
+                guestInfo = GuestInfo(name = command.guestName, phone = command.guestPhone, email = command.guestEmail),
                 dateRange = dateRange,
-                numberOfGuests = numberOfGuests,
+                numberOfGuests = command.numberOfGuests,
                 channel = ReservationChannel(channelCode = DIRECT_CHANNEL_CODE, commissionRate = channel.commissionRate),
                 pricing = pricing,
                 paymentId = paymentId,
@@ -126,6 +132,31 @@ class CustomerReservationIntentCreationApplication(
                 now = now
             )
         )
+        reservationIntentRequestRepository.save(
+            ReservationIntentRequest.create(
+                memberId = memberId,
+                idempotencyKey = idempotencyKey,
+                requestHash = requestHash,
+                reservationIntentId = reservationIntentId,
+                createdAt = now
+            )
+        )
+        try {
+            activeReservationAttemptRepository.save(
+                ActiveReservationAttempt.create(
+                    bookingKey = command.activeBookingKey(),
+                    reservationIntentId = reservationIntentId,
+                    memberId = memberId,
+                    expiresAt = expiresAt,
+                    createdAt = now
+                )
+            )
+        } catch (_: ActiveReservationAttemptAlreadyExistsException) {
+            throw ConflictException(
+                "DUPLICATE_ACTIVE_RESERVATION_ATTEMPT",
+                "동일 조건의 활성 예약 시도가 이미 존재합니다"
+            )
+        }
         val hold = inventoryHoldService.hold(
             holdId = holdId,
             reservationIntentId = reservationIntentId,
@@ -141,12 +172,18 @@ class CustomerReservationIntentCreationApplication(
             memberId = memberId,
             amount = pricing.totalAmount
         )
-
         log.info(
-            "예약 intent 생성: reservationIntentId={}, paymentId={}, holdId={}",
+            "[예약 intent 생성] event=reservation_intent_created reservationIntentId={} paymentId={} holdId={} " +
+                "orderId={} memberId={} amount={} intentStatus={} paymentStatus={} expiresAt={}",
             intent.id,
             payment.id,
-            hold.id
+            hold.id,
+            payment.orderId,
+            memberId,
+            payment.amount.amount,
+            intent.status,
+            payment.status,
+            expiresAt
         )
         return CustomerReservationIntentResult(intent, payment)
     }

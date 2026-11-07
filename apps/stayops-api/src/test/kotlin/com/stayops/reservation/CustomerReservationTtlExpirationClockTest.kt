@@ -143,6 +143,7 @@ class CustomerReservationTtlExpirationClockTest @Autowired constructor(
 
         // When: T0에 예약 intent 생성 → expiresAt = T0 + 15분 = 10:15:00
         val intentResult = customerReservationApplication.createReservationIntent(
+            idempotencyKey = "test-intent-key",
             memberId = memberId,
             propertyId = propertyId,
             roomTypeId = roomTypeId,

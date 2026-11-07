@@ -86,6 +86,26 @@ class ReservationIntentTest : BehaviorSpec({
         }
     }
 
+    given("만료 여부를 판정할 때") {
+        `when`("기준 시각이 만료 시각 이전이면") {
+            then("만료되지 않은 것으로 판정한다") {
+                intent().isExpiredAt(expiresAt.minusSeconds(1)) shouldBe false
+            }
+        }
+
+        `when`("기준 시각이 만료 시각과 같으면") {
+            then("아직 만료되지 않은 것으로 판정한다") {
+                intent().isExpiredAt(expiresAt) shouldBe false
+            }
+        }
+
+        `when`("기준 시각이 만료 시각을 지났으면") {
+            then("만료된 것으로 판정한다") {
+                intent().isExpiredAt(expiresAt.plusSeconds(1)) shouldBe true
+            }
+        }
+    }
+
     given("결제 승인 요청을 시작할 때") {
         `when`("intent가 만료되지 않은 결제 대기 상태이면") {
             val requested = intent().requestPaymentConfirmation(now.plusSeconds(60))
@@ -100,6 +120,29 @@ class ReservationIntentTest : BehaviorSpec({
                 shouldThrow<IllegalStateException> {
                     intent().requestPaymentConfirmation(expiresAt.plusSeconds(1))
                 }
+            }
+        }
+    }
+
+    given("결제 실패 처리 가능 여부를 판정할 때") {
+        `when`("결제 대기 상태이면") {
+            then("결제 실패 처리할 수 있다") {
+                intent().canFailPayment() shouldBe true
+            }
+        }
+
+        `when`("결제 승인 요청 상태이면") {
+            then("결제 실패 처리할 수 있다") {
+                intent().requestPaymentConfirmation(now.plusSeconds(60)).canFailPayment() shouldBe true
+            }
+        }
+
+        `when`("이미 예약이 확정된 상태이면") {
+            then("결제 실패 처리할 수 없다") {
+                intent()
+                    .requestPaymentConfirmation(now.plusSeconds(60))
+                    .markReserved("reservation-1")
+                    .canFailPayment() shouldBe false
             }
         }
     }

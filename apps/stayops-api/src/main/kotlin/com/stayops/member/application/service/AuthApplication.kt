@@ -3,7 +3,6 @@ package com.stayops.member.application.service
 import com.stayops.member.domain.model.Member
 import com.stayops.member.domain.model.MemberRole
 import com.stayops.member.domain.repository.MemberRepository
-import com.stayops.member.domain.model.MemberStatus
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.ConflictException
@@ -50,7 +49,7 @@ class AuthApplication(
             throw BusinessException("INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다.")
         }
 
-        if (member.status != MemberStatus.ACTIVE) {
+        if (!member.isActive()) {
             throw BusinessException("INACTIVE_MEMBER", "비활성화된 회원입니다.")
         }
 

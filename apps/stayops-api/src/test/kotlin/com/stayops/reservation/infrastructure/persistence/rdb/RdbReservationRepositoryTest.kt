@@ -18,8 +18,10 @@ import com.stayops.reservation.domain.model.ReservationStatus
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
+import com.stayops.shared.exception.ConflictException
 import com.stayops.shared.time.StayopsTimeProperties
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -88,6 +90,24 @@ class RdbReservationRepositoryTest @Autowired constructor(
             assertThat(found.channel.externalReservationId).isEqualTo("ota-1")
             assertThat(found.pricing.totalAmount).isEqualTo(Money.of(BigDecimal("220000.00")))
             assertThat(found.memberId).isEqualTo("member-1")
+        }
+
+        @Test
+        fun `먼저 저장된 Reservation과 같은 버전의 stale 변경은 거부한다`() {
+            insertDependencies()
+            reservationRepository.save(newReservation())
+            val firstSnapshot = reservationRepository.findById("res-1")!!
+            val staleSnapshot = reservationRepository.findById("res-1")!!
+
+            val updated = reservationRepository.save(firstSnapshot.confirm())
+
+            assertThat(updated.version).isEqualTo(1L)
+            assertThatThrownBy {
+                reservationRepository.save(staleSnapshot.cancel())
+            }.isInstanceOf(ConflictException::class.java)
+                .hasMessageContaining("Reservation 버전 충돌")
+            assertThat(reservationRepository.findById("res-1")!!.status)
+                .isEqualTo(ReservationStatus.CONFIRMED)
         }
     }
 

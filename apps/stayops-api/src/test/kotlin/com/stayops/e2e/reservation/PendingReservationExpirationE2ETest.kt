@@ -126,6 +126,7 @@ class PendingExpirationE2ETest @Autowired constructor(
             assertThat(initialAvailable).isEqualTo(1)
 
             val intentResult = customerReservationApplication.createReservationIntent(
+                idempotencyKey = "test-intent-key",
                 memberId = "customer-exp",
                 propertyId = "prop-exp",
                 roomTypeId = "rt-exp",
@@ -163,6 +164,7 @@ class PendingExpirationE2ETest @Autowired constructor(
             assertThat(afterExpiration[0].reservedCount).isEqualTo(0)
 
             val secondIntent = customerReservationApplication.createReservationIntent(
+                idempotencyKey = "test-intent-key-after-expiration",
                 memberId = "customer-exp",
                 propertyId = "prop-exp",
                 roomTypeId = "rt-exp",

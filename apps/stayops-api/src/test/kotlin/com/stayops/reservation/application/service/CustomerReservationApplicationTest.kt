@@ -28,7 +28,7 @@ import java.time.LocalDate
 
 class CustomerReservationApplicationTest : BehaviorSpec({
 
-    val intentCreationApplication = mockk<CustomerReservationIntentCreationApplication>()
+    val intentCreationApplication = mockk<CustomerReservationIntentIdempotencyApplication>()
     val intentPaymentApplication = mockk<CustomerReservationIntentPaymentApplication>()
     val reservationRepository = mockk<ReservationRepository>()
     val reservationPaymentService = mockk<com.stayops.reservation.application.required.ReservationPaymentService>()
@@ -112,19 +112,13 @@ class CustomerReservationApplicationTest : BehaviorSpec({
             clearAllMocks()
             every {
                 intentCreationApplication.createReservationIntent(
-                    memberId = "member-1",
-                    propertyId = "prop-1",
-                    roomTypeId = "rt-1",
-                    checkIn = checkIn,
-                    checkOut = checkOut,
-                    numberOfGuests = 2,
-                    guestName = "김고객",
-                    guestPhone = "010-1111-2222",
-                    guestEmail = "kim@test.com"
+                    idempotencyKey = "intent-key-1",
+                    command = any()
                 )
             } returns intentResult()
 
             val result = service.createReservationIntent(
+                idempotencyKey = "intent-key-1",
                 memberId = "member-1",
                 propertyId = "prop-1",
                 roomTypeId = "rt-1",

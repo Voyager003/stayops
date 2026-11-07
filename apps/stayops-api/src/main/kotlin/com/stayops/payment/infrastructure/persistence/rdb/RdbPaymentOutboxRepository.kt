@@ -8,8 +8,10 @@ import com.stayops.payment.domain.model.PaymentOutboxType
 import com.stayops.payment.domain.repository.PaymentOutboxRepository
 import com.stayops.shared.config.RdbPersistence
 import com.stayops.shared.domain.Money
+import com.stayops.shared.exception.ConflictException
 import org.jooq.Condition
 import org.jooq.DSLContext
+import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -22,7 +24,7 @@ class RdbPaymentOutboxRepository(
 ) : PaymentOutboxRepository {
 
     override fun save(message: PaymentOutboxMessage): PaymentOutboxMessage {
-        dsl.insertInto(PAYMENT_OUTBOX_MESSAGES)
+        val affectedRows = dsl.insertInto(PAYMENT_OUTBOX_MESSAGES)
             .set(PAYMENT_OUTBOX_MESSAGES.ID, message.id)
             .set(PAYMENT_OUTBOX_MESSAGES.PAYMENT_ID, message.paymentId)
             .set(PAYMENT_OUTBOX_MESSAGES.RESERVATION_ID, message.reservationId)
@@ -65,10 +67,17 @@ class RdbPaymentOutboxRepository(
             .set(PAYMENT_OUTBOX_MESSAGES.LOCKED_BY, message.lockedBy)
             .set(PAYMENT_OUTBOX_MESSAGES.LOCKED_UNTIL, message.lockedUntil?.toOffsetDateTime())
             .set(PAYMENT_OUTBOX_MESSAGES.LAST_ERROR, message.lastError)
-            .set(PAYMENT_OUTBOX_MESSAGES.VERSION, message.version)
-            .set(PAYMENT_OUTBOX_MESSAGES.CREATED_AT, message.createdAt.toOffsetDateTime())
+            .set(PAYMENT_OUTBOX_MESSAGES.VERSION, PAYMENT_OUTBOX_MESSAGES.VERSION.plus(1L))
             .set(PAYMENT_OUTBOX_MESSAGES.UPDATED_AT, message.updatedAt.toOffsetDateTime())
+            .where(PAYMENT_OUTBOX_MESSAGES.VERSION.eq(message.version))
             .execute()
+
+        if (affectedRows == 0) {
+            throw ConflictException(
+                code = "PAYMENT_OUTBOX_CONFLICT",
+                message = "PaymentOutbox 버전 충돌이 발생했습니다: ${message.id}"
+            )
+        }
 
         return findById(message.id) ?: message
     }
@@ -85,6 +94,38 @@ class RdbPaymentOutboxRepository(
             .and(PAYMENT_OUTBOX_MESSAGES.TYPE.eq(type.name))
             .fetchOne()
             ?.toDomain()
+
+    override fun claimReadyForProcessing(
+        workerId: String,
+        now: Instant,
+        lockedUntil: Instant
+    ): PaymentOutboxMessage? =
+        dsl.transactionResult { configuration ->
+            val tx = DSL.using(configuration)
+            val outboxId = tx.select(PAYMENT_OUTBOX_MESSAGES.ID)
+                .from(PAYMENT_OUTBOX_MESSAGES)
+                .where(readyCondition(now))
+                .orderBy(PAYMENT_OUTBOX_MESSAGES.CREATED_AT.asc(), PAYMENT_OUTBOX_MESSAGES.ID.asc())
+                .limit(1)
+                .forUpdate()
+                .skipLocked()
+                .fetchOne(PAYMENT_OUTBOX_MESSAGES.ID)
+                ?: return@transactionResult null
+
+            tx.update(PAYMENT_OUTBOX_MESSAGES)
+                .set(PAYMENT_OUTBOX_MESSAGES.STATUS, PaymentOutboxStatus.IN_PROGRESS.name)
+                .set(PAYMENT_OUTBOX_MESSAGES.LOCKED_BY, workerId)
+                .set(PAYMENT_OUTBOX_MESSAGES.LOCKED_UNTIL, lockedUntil.toOffsetDateTime())
+                .set(PAYMENT_OUTBOX_MESSAGES.UPDATED_AT, now.toOffsetDateTime())
+                .set(PAYMENT_OUTBOX_MESSAGES.VERSION, PAYMENT_OUTBOX_MESSAGES.VERSION.plus(1))
+                .where(PAYMENT_OUTBOX_MESSAGES.ID.eq(outboxId))
+                .execute()
+
+            tx.selectFrom(PAYMENT_OUTBOX_MESSAGES)
+                .where(PAYMENT_OUTBOX_MESSAGES.ID.eq(outboxId))
+                .fetchOne()
+                ?.toDomain()
+        }
 
     override fun findReadyForProcessing(now: Instant): List<PaymentOutboxMessage> =
         dsl.selectFrom(PAYMENT_OUTBOX_MESSAGES)

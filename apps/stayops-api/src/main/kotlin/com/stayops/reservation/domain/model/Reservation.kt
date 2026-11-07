@@ -44,16 +44,14 @@ class Reservation private constructor(
         return copyState(status = ReservationStatus.CHECKED_OUT)
     }
 
-    fun cancel(): Reservation {
-        check(status == ReservationStatus.CONFIRMED) {
-            "CONFIRMED 상태에서만 취소할 수 있습니다: $status"
-        }
-        return copyState(status = ReservationStatus.CANCELLED)
-    }
+    fun isPending(): Boolean = status == ReservationStatus.PENDING
 
-    fun cancelPending(): Reservation {
-        check(status == ReservationStatus.PENDING) {
-            "PENDING 상태에서만 취소할 수 있습니다: $status"
+    fun isCancellable(): Boolean =
+        status == ReservationStatus.PENDING || status == ReservationStatus.CONFIRMED
+
+    fun cancel(): Reservation {
+        check(isCancellable()) {
+            "PENDING 또는 CONFIRMED 상태에서만 취소할 수 있습니다: $status"
         }
         return copyState(status = ReservationStatus.CANCELLED)
     }

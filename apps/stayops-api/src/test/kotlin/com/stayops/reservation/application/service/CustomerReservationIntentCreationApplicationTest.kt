@@ -17,9 +17,13 @@ import com.stayops.rate.domain.service.RateResolverService
 import com.stayops.reservation.application.required.ReservationPaymentService
 import com.stayops.reservation.application.required.ReservationPaymentSnapshot
 import com.stayops.reservation.application.required.ReservationPaymentStatus
+import com.stayops.reservation.domain.model.ActiveReservationAttempt
+import com.stayops.reservation.domain.model.ActiveReservationAttemptAlreadyExistsException
 import com.stayops.reservation.domain.model.ReservationIntent
 import com.stayops.reservation.domain.model.ReservationIntentStatus
+import com.stayops.reservation.domain.repository.ActiveReservationAttemptRepository
 import com.stayops.reservation.domain.repository.ReservationIntentRepository
+import com.stayops.reservation.domain.repository.ReservationIntentRequestRepository
 import com.stayops.reservation.domain.repository.ReservationRepository
 import com.stayops.room.domain.model.RoomType
 import com.stayops.room.domain.repository.RoomTypeRepository
@@ -27,9 +31,11 @@ import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.BusinessException
+import com.stayops.shared.exception.ConflictException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
+import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -48,6 +54,8 @@ class CustomerReservationIntentCreationApplicationTest : BehaviorSpec({
     val ratePlanRepository = mockk<RatePlanRepository>()
     val reservationRepository = mockk<ReservationRepository>()
     val reservationIntentRepository = mockk<ReservationIntentRepository>()
+    val reservationIntentRequestRepository = mockk<ReservationIntentRequestRepository>()
+    val activeReservationAttemptRepository = mockk<ActiveReservationAttemptRepository>()
     val inventoryRepository = mockk<RoomInventoryRepository>()
     val inventoryHoldService = mockk<InventoryHoldService>()
     val reservationPaymentService = mockk<ReservationPaymentService>()
@@ -65,6 +73,8 @@ class CustomerReservationIntentCreationApplicationTest : BehaviorSpec({
         ratePlanRepository = ratePlanRepository,
         reservationRepository = reservationRepository,
         reservationIntentRepository = reservationIntentRepository,
+        reservationIntentRequestRepository = reservationIntentRequestRepository,
+        activeReservationAttemptRepository = activeReservationAttemptRepository,
         inventoryRepository = inventoryRepository,
         inventoryHoldService = inventoryHoldService,
         reservationPaymentService = reservationPaymentService,
@@ -196,18 +206,24 @@ class CustomerReservationIntentCreationApplicationTest : BehaviorSpec({
                 )
             } returns pendingPayment()
             every { reservationIntentRepository.save(capture(savedIntent)) } answers { firstArg() }
+            every { reservationIntentRequestRepository.save(any()) } answers { firstArg() }
+            every { activeReservationAttemptRepository.save(any()) } answers { firstArg() }
             every { reservationRepository.save(any()) } answers { firstArg() }
 
             val result = sut.createReservationIntent(
-                memberId = "member-1",
-                propertyId = "prop-1",
-                roomTypeId = "rt-1",
-                checkIn = checkIn,
-                checkOut = checkOut,
-                numberOfGuests = 2,
-                guestName = "김고객",
-                guestPhone = "010-1111-2222",
-                guestEmail = "kim@test.com"
+                idempotencyKey = "intent-key-1",
+                requestHash = "request-hash-1",
+                command = CustomerReservationIntentCommand(
+                    memberId = "member-1",
+                    propertyId = "prop-1",
+                    roomTypeId = "rt-1",
+                    checkIn = checkIn,
+                    checkOut = checkOut,
+                    numberOfGuests = 2,
+                    guestName = "김고객",
+                    guestPhone = "010-1111-2222",
+                    guestEmail = "kim@test.com"
+                )
             )
 
             then("Reservation 없이 intent, hold, pending payment를 생성한다") {
@@ -237,7 +253,78 @@ class CustomerReservationIntentCreationApplicationTest : BehaviorSpec({
                         amount = Money.won(200_000)
                     )
                 }
+                verify { reservationIntentRequestRepository.save(any()) }
+                verify {
+                    activeReservationAttemptRepository.save(
+                        match<ActiveReservationAttempt> {
+                            it.reservationIntentId == "intent-1" &&
+                                it.memberId == "member-1" &&
+                                it.expiresAt == expiresAt
+                        }
+                    )
+                }
                 verify(exactly = 0) { reservationRepository.save(any()) }
+            }
+        }
+
+        `when`("서로 다른 멱등성 키로 동일 조건의 활성 예약 시도가 이미 있으면") {
+            every {
+                reservationRepository.existsActiveByMemberIdAndRoomTypeIdAndCheckInAndCheckOut(
+                    "member-1",
+                    "rt-1",
+                    checkIn,
+                    checkOut,
+                    fixedInstant
+                )
+            } returns false
+            every { propertyRepository.findById("prop-1") } returns activeProperty()
+            every { roomTypeRepository.findById("rt-1") } returns activeRoomType()
+            every { channelRepository.findByPropertyIdAndCode("prop-1", "DIRECT") } returns directChannel()
+            every {
+                ratePlanRepository.findByPropertyIdAndRoomTypeIdAndStatus(
+                    "prop-1",
+                    "rt-1",
+                    RatePlanStatus.ACTIVE
+                )
+            } returns emptyList()
+            every {
+                inventoryRepository.findByPropertyIdAndRoomTypeIdAndDateBetween(
+                    "prop-1",
+                    "rt-1",
+                    checkIn,
+                    checkOut.minusDays(1)
+                )
+            } returns listOf(inventory(checkIn), inventory(checkIn.plusDays(1)))
+            every { reservationIntentRepository.save(any()) } answers { firstArg() }
+            every { reservationIntentRequestRepository.save(any()) } answers { firstArg() }
+            every { activeReservationAttemptRepository.save(any()) } throws
+                ActiveReservationAttemptAlreadyExistsException()
+
+            then("활성 예약 중복 예외로 차단하고 hold와 payment를 만들지 않는다") {
+                clearMocks(inventoryHoldService, reservationPaymentService, answers = false)
+                val ex = shouldThrow<ConflictException> {
+                    sut.createReservationIntent(
+                        idempotencyKey = "another-key",
+                        requestHash = "another-request-hash",
+                        command = CustomerReservationIntentCommand(
+                            memberId = "member-1",
+                            propertyId = "prop-1",
+                            roomTypeId = "rt-1",
+                            checkIn = checkIn,
+                            checkOut = checkOut,
+                            numberOfGuests = 2,
+                            guestName = "김고객",
+                            guestPhone = "010-1111-2222",
+                            guestEmail = "kim@test.com"
+                        )
+                    )
+                }
+
+                ex.code shouldBe "DUPLICATE_ACTIVE_RESERVATION_ATTEMPT"
+                verify(exactly = 0) { inventoryHoldService.hold(any(), any(), any(), any(), any(), any(), any()) }
+                verify(exactly = 0) {
+                    reservationPaymentService.createPendingPaymentForReservationIntent(any(), any(), any(), any())
+                }
             }
         }
 
@@ -276,15 +363,19 @@ class CustomerReservationIntentCreationApplicationTest : BehaviorSpec({
             then("예약 intent를 만들기 전에 비즈니스 예외로 차단한다") {
                 val ex = shouldThrow<BusinessException> {
                     sut.createReservationIntent(
-                        memberId = "member-1",
-                        propertyId = "prop-1",
-                        roomTypeId = "rt-1",
-                        checkIn = checkIn,
-                        checkOut = checkOut,
-                        numberOfGuests = 2,
-                        guestName = "김고객",
-                        guestPhone = "010-1111-2222",
-                        guestEmail = "kim@test.com"
+                        idempotencyKey = "intent-key-1",
+                        requestHash = "request-hash-1",
+                        command = CustomerReservationIntentCommand(
+                            memberId = "member-1",
+                            propertyId = "prop-1",
+                            roomTypeId = "rt-1",
+                            checkIn = checkIn,
+                            checkOut = checkOut,
+                            numberOfGuests = 2,
+                            guestName = "김고객",
+                            guestPhone = "010-1111-2222",
+                            guestEmail = "kim@test.com"
+                        )
                     )
                 }
 

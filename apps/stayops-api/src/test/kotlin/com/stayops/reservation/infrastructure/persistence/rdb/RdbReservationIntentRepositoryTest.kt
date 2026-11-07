@@ -1,21 +1,31 @@
 package com.stayops.reservation.infrastructure.persistence.rdb
 
 import com.stayops.RdbTestcontainersConfiguration
+import com.stayops.jooq.generated.Tables.ACTIVE_RESERVATION_ATTEMPTS
 import com.stayops.jooq.generated.Tables.MEMBERS
 import com.stayops.jooq.generated.Tables.PROPERTIES
 import com.stayops.jooq.generated.Tables.RESERVATION_INTENTS
+import com.stayops.jooq.generated.Tables.RESERVATION_INTENT_REQUESTS
 import com.stayops.jooq.generated.Tables.ROOM_TYPES
 import com.stayops.member.domain.model.MemberRole
 import com.stayops.member.domain.model.MemberStatus
+import com.stayops.reservation.domain.model.ActiveReservationAttempt
+import com.stayops.reservation.domain.model.ActiveReservationAttemptAlreadyExistsException
 import com.stayops.reservation.domain.model.GuestInfo
 import com.stayops.reservation.domain.model.ReservationChannel
 import com.stayops.reservation.domain.model.ReservationIntent
 import com.stayops.reservation.domain.model.ReservationIntentStatus
+import com.stayops.reservation.domain.model.ReservationIntentRequest
+import com.stayops.reservation.domain.model.ReservationIntentRequestAlreadyExistsException
 import com.stayops.reservation.domain.model.ReservationPricing
+import com.stayops.reservation.domain.repository.ActiveReservationAttemptRepository
 import com.stayops.reservation.domain.repository.ReservationIntentRepository
+import com.stayops.reservation.domain.repository.ReservationIntentRequestRepository
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
+import com.stayops.shared.exception.ConflictException
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -36,12 +46,19 @@ import java.time.ZoneOffset
 @ActiveProfiles("rdb")
 class RdbReservationIntentRepositoryTest @Autowired constructor(
     private val repository: ReservationIntentRepository,
+    private val requestRepository: ReservationIntentRequestRepository,
+    private val activeReservationAttemptRepository: ActiveReservationAttemptRepository,
     private val dsl: DSLContext
 ) {
 
     @TestConfiguration(proxyBeanMethods = false)
     @EnableAutoConfiguration
-    @Import(RdbTestcontainersConfiguration::class, RdbReservationIntentRepository::class)
+    @Import(
+        RdbTestcontainersConfiguration::class,
+        RdbActiveReservationAttemptRepository::class,
+        RdbReservationIntentRepository::class,
+        RdbReservationIntentRequestRepository::class
+    )
     class TestApplication
 
     private val now = Instant.parse("2026-04-01T01:00:00Z")
@@ -50,10 +67,60 @@ class RdbReservationIntentRepositoryTest @Autowired constructor(
 
     @BeforeEach
     fun setUp() {
+        dsl.deleteFrom(ACTIVE_RESERVATION_ATTEMPTS).execute()
+        dsl.deleteFrom(RESERVATION_INTENT_REQUESTS).execute()
         dsl.deleteFrom(RESERVATION_INTENTS).execute()
         dsl.deleteFrom(ROOM_TYPES).execute()
         dsl.deleteFrom(PROPERTIES).execute()
         dsl.deleteFrom(MEMBERS).execute()
+    }
+
+    @Nested
+    inner class `활성 예약 시도 claim` {
+        @Test
+        fun `같은 booking key는 한 번만 저장하고 기존 intent 종료 후 다시 저장한다`() {
+            insertDependencies()
+            repository.save(newIntent(id = "intent-1"))
+            repository.save(newIntent(id = "intent-2"))
+            val first = activeAttempt("intent-1")
+            val second = activeAttempt("intent-2")
+
+            activeReservationAttemptRepository.save(first)
+
+            assertThatThrownBy { activeReservationAttemptRepository.save(second) }
+                .isInstanceOf(ActiveReservationAttemptAlreadyExistsException::class.java)
+            assertThat(activeReservationAttemptRepository.findByBookingKey(first.bookingKey)?.reservationIntentId)
+                .isEqualTo("intent-1")
+
+            activeReservationAttemptRepository.deleteByReservationIntentId("intent-1")
+            activeReservationAttemptRepository.save(second)
+
+            assertThat(activeReservationAttemptRepository.findByBookingKey(second.bookingKey)?.reservationIntentId)
+                .isEqualTo("intent-2")
+        }
+    }
+
+    @Nested
+    inner class `intent 생성 요청 멱등성` {
+        @Test
+        fun `같은 회원과 멱등성 키는 한 번만 저장한다`() {
+            insertDependencies()
+            repository.save(newIntent())
+            val request = ReservationIntentRequest.create(
+                memberId = "member-1",
+                idempotencyKey = "intent-key-1",
+                requestHash = "a".repeat(64),
+                reservationIntentId = "intent-1",
+                createdAt = now
+            )
+
+            requestRepository.save(request)
+
+            assertThatThrownBy { requestRepository.save(request) }
+                .isInstanceOf(ReservationIntentRequestAlreadyExistsException::class.java)
+            assertThat(requestRepository.findByMemberIdAndIdempotencyKey("member-1", "intent-key-1"))
+                .isEqualTo(request)
+        }
     }
 
     @Nested
@@ -75,6 +142,24 @@ class RdbReservationIntentRepositoryTest @Autowired constructor(
             assertThat(found.paymentId).isEqualTo("payment-1")
             assertThat(found.holdId).isEqualTo("hold-1")
             assertThat(found.status).isEqualTo(ReservationIntentStatus.PAYMENT_WAITING)
+        }
+
+        @Test
+        fun `먼저 저장된 ReservationIntent와 같은 버전의 stale 변경은 거부한다`() {
+            insertDependencies()
+            repository.save(newIntent())
+            val firstSnapshot = repository.findById("intent-1")!!
+            val staleSnapshot = repository.findById("intent-1")!!
+
+            val updated = repository.save(firstSnapshot.requestPaymentConfirmation(now))
+
+            assertThat(updated.version).isEqualTo(1L)
+            assertThatThrownBy {
+                repository.save(staleSnapshot.failPayment("stale update", now))
+            }.isInstanceOf(ConflictException::class.java)
+                .hasMessageContaining("ReservationIntent 버전 충돌")
+            assertThat(repository.findById("intent-1")!!.status)
+                .isEqualTo(ReservationIntentStatus.CONFIRM_REQUESTED)
         }
     }
 
@@ -136,6 +221,15 @@ class RdbReservationIntentRepositoryTest @Autowired constructor(
             holdId = "hold-1",
             expiresAt = expiresAt,
             now = now.minusSeconds(10)
+        )
+
+    private fun activeAttempt(reservationIntentId: String): ActiveReservationAttempt =
+        ActiveReservationAttempt.create(
+            bookingKey = "b".repeat(64),
+            reservationIntentId = reservationIntentId,
+            memberId = "member-1",
+            expiresAt = now.plusSeconds(900),
+            createdAt = now
         )
 
     private fun insertDependencies() {

@@ -56,7 +56,7 @@ class RoomInventoryHoldApplication(
         )
 
         log.info(
-            "재고 hold 생성: holdId={}, reservationIntentId={}, propertyId={}, roomTypeId={}, quantity={}",
+            "[재고 점유 생성] holdId={}, reservationIntentId={}, propertyId={}, roomTypeId={}, quantity={}",
             hold.id,
             reservationIntentId,
             propertyId,
@@ -93,7 +93,7 @@ class RoomInventoryHoldApplication(
 
         inventoryHoldRepository.save(processing.consume(now))
         log.info(
-            "재고 hold 소비: holdId={}, reservationIntentId={}",
+            "[재고 점유 확정] holdId={}, reservationIntentId={}",
             processing.id,
             reservationIntentId
         )
@@ -122,7 +122,7 @@ class RoomInventoryHoldApplication(
 
         inventoryHoldRepository.save(hold.release(clock.instant()))
         log.info(
-            "재고 hold 해제: holdId={}, reservationIntentId={}",
+            "[재고 점유 해제] holdId={}, reservationIntentId={}",
             hold.id,
             reservationIntentId
         )

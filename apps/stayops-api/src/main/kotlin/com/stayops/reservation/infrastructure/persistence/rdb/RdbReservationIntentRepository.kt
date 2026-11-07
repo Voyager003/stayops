@@ -11,6 +11,7 @@ import com.stayops.reservation.domain.repository.ReservationIntentRepository
 import com.stayops.shared.config.RdbPersistence
 import com.stayops.shared.domain.DateRange
 import com.stayops.shared.domain.Money
+import com.stayops.shared.exception.ConflictException
 import org.jooq.DSLContext
 import org.springframework.stereotype.Repository
 import java.time.Instant
@@ -25,7 +26,7 @@ class RdbReservationIntentRepository(
 ) : ReservationIntentRepository {
 
     override fun save(intent: ReservationIntent): ReservationIntent {
-        dsl.insertInto(RESERVATION_INTENTS)
+        val affectedRows = dsl.insertInto(RESERVATION_INTENTS)
             .set(RESERVATION_INTENTS.ID, intent.id)
             .set(RESERVATION_INTENTS.MEMBER_ID, intent.memberId)
             .set(RESERVATION_INTENTS.PROPERTY_ID, intent.propertyId)
@@ -80,10 +81,17 @@ class RdbReservationIntentRepository(
             .set(RESERVATION_INTENTS.RESERVATION_ID, intent.reservationId)
             .set(RESERVATION_INTENTS.STATUS, intent.status.name)
             .set(RESERVATION_INTENTS.EXPIRES_AT, intent.expiresAt.toOffsetDateTime())
-            .set(RESERVATION_INTENTS.VERSION, intent.version)
-            .set(RESERVATION_INTENTS.CREATED_AT, intent.createdAt.toOffsetDateTime())
+            .set(RESERVATION_INTENTS.VERSION, RESERVATION_INTENTS.VERSION.plus(1L))
             .set(RESERVATION_INTENTS.UPDATED_AT, intent.updatedAt.toOffsetDateTime())
+            .where(RESERVATION_INTENTS.VERSION.eq(intent.version))
             .execute()
+
+        if (affectedRows == 0) {
+            throw ConflictException(
+                code = "RESERVATION_INTENT_CONFLICT",
+                message = "ReservationIntent 버전 충돌이 발생했습니다: ${intent.id}"
+            )
+        }
 
         return findById(intent.id) ?: intent
     }

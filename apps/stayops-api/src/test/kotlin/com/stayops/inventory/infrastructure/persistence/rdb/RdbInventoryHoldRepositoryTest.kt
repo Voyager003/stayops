@@ -12,7 +12,9 @@ import com.stayops.jooq.generated.Tables.RESERVATION_INTENTS
 import com.stayops.jooq.generated.Tables.ROOM_TYPES
 import com.stayops.member.domain.model.MemberRole
 import com.stayops.member.domain.model.MemberStatus
+import com.stayops.shared.exception.ConflictException
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -21,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Import
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig
 import java.math.BigDecimal
@@ -71,6 +74,54 @@ class RdbInventoryHoldRepositoryTest @Autowired constructor(
             assertThat(found.quantity).isEqualTo(1)
             assertThat(found.status).isEqualTo(InventoryHoldStatus.HELD)
         }
+
+        @Test
+        fun `먼저 저장된 InventoryHold와 같은 버전의 stale 변경은 거부한다`() {
+            insertDependencies()
+            repository.save(newHold())
+            val firstSnapshot = repository.findById("hold-1")!!
+            val staleSnapshot = repository.findById("hold-1")!!
+
+            val updated = repository.save(firstSnapshot.startPaymentProcessing(now))
+
+            assertThat(updated.version).isEqualTo(1L)
+            assertThatThrownBy {
+                repository.save(staleSnapshot.release(now))
+            }.isInstanceOf(ConflictException::class.java)
+                .hasMessageContaining("InventoryHold 버전 충돌")
+            val found = repository.findById("hold-1")!!
+            assertThat(found.status).isEqualTo(InventoryHoldStatus.PAYMENT_PROCESSING)
+            assertThat(found.dates).containsExactlyElementsOf(dates)
+        }
+
+        @Test
+        fun `날짜 목록 저장에 실패하면 InventoryHold 본문과 날짜 변경을 함께 롤백한다`() {
+            insertDependencies()
+            repository.save(newHold())
+            val current = repository.findById("hold-1")!!
+            val invalidUpdate = InventoryHold.reconstitute(
+                id = current.id,
+                reservationIntentId = current.reservationIntentId,
+                propertyId = current.propertyId,
+                roomTypeId = current.roomTypeId,
+                dates = listOf(dates.first(), dates.first()),
+                quantity = current.quantity,
+                status = InventoryHoldStatus.PAYMENT_PROCESSING,
+                expiresAt = current.expiresAt,
+                version = current.version,
+                createdAt = current.createdAt,
+                updatedAt = now
+            )
+
+            assertThatThrownBy {
+                repository.save(invalidUpdate)
+            }.isInstanceOf(DataIntegrityViolationException::class.java)
+
+            val found = repository.findById("hold-1")!!
+            assertThat(found.version).isZero()
+            assertThat(found.status).isEqualTo(InventoryHoldStatus.HELD)
+            assertThat(found.dates).containsExactlyElementsOf(dates)
+        }
     }
 
     @Nested
@@ -78,10 +129,30 @@ class RdbInventoryHoldRepositoryTest @Autowired constructor(
         @Test
         fun `겹치는 날짜의 만료되지 않은 hold만 반환한다`() {
             insertDependencies()
+            insertReservationIntent("intent-expired", "hold-expired")
+            insertReservationIntent("intent-other-date", "hold-other-date")
+            insertReservationIntent("intent-released", "hold-released")
             repository.save(newHold(id = "hold-active"))
-            repository.save(newHold(id = "hold-expired", expiresAt = now.minusSeconds(1)))
-            repository.save(newHold(id = "hold-other-date", dates = listOf(LocalDate.of(2026, 5, 10))))
-            repository.save(newHold(id = "hold-released").release(now.minusSeconds(1)))
+            repository.save(
+                newHold(
+                    id = "hold-expired",
+                    reservationIntentId = "intent-expired",
+                    expiresAt = now.minusSeconds(1)
+                )
+            )
+            repository.save(
+                newHold(
+                    id = "hold-other-date",
+                    reservationIntentId = "intent-other-date",
+                    dates = listOf(LocalDate.of(2026, 5, 10))
+                )
+            )
+            repository.save(
+                newHold(
+                    id = "hold-released",
+                    reservationIntentId = "intent-released"
+                ).release(now.minusSeconds(1))
+            )
 
             val result = repository.findActiveByPropertyIdAndRoomTypeIdAndDates(
                 propertyId = "prop-1",
@@ -96,12 +167,13 @@ class RdbInventoryHoldRepositoryTest @Autowired constructor(
 
     private fun newHold(
         id: String = "hold-1",
+        reservationIntentId: String = "intent-1",
         dates: List<LocalDate> = this.dates,
         expiresAt: Instant = now.plusSeconds(900)
     ): InventoryHold =
         InventoryHold.create(
             id = id,
-            reservationIntentId = "intent-1",
+            reservationIntentId = reservationIntentId,
             propertyId = "prop-1",
             roomTypeId = "rt-1",
             dates = dates,
@@ -155,8 +227,13 @@ class RdbInventoryHoldRepositoryTest @Autowired constructor(
             .set(ROOM_TYPES.CREATED_AT, timestamp)
             .set(ROOM_TYPES.UPDATED_AT, timestamp)
             .execute()
+        insertReservationIntent("intent-1", "hold-1")
+    }
+
+    private fun insertReservationIntent(intentId: String, holdId: String) {
+        val timestamp = OffsetDateTime.ofInstant(now, ZoneOffset.UTC)
         dsl.insertInto(RESERVATION_INTENTS)
-            .set(RESERVATION_INTENTS.ID, "intent-1")
+            .set(RESERVATION_INTENTS.ID, intentId)
             .set(RESERVATION_INTENTS.MEMBER_ID, "member-1")
             .set(RESERVATION_INTENTS.PROPERTY_ID, "prop-1")
             .set(RESERVATION_INTENTS.ROOM_TYPE_ID, "rt-1")
@@ -174,8 +251,8 @@ class RdbInventoryHoldRepositoryTest @Autowired constructor(
             .set(RESERVATION_INTENTS.TOTAL_AMOUNT, BigDecimal("200000.00"))
             .set(RESERVATION_INTENTS.COMMISSION_AMOUNT, BigDecimal.ZERO)
             .set(RESERVATION_INTENTS.NET_AMOUNT, BigDecimal("200000.00"))
-            .set(RESERVATION_INTENTS.PAYMENT_ID, "payment-1")
-            .set(RESERVATION_INTENTS.HOLD_ID, "hold-1")
+            .set(RESERVATION_INTENTS.PAYMENT_ID, "payment-$intentId")
+            .set(RESERVATION_INTENTS.HOLD_ID, holdId)
             .set(RESERVATION_INTENTS.STATUS, "PAYMENT_WAITING")
             .set(RESERVATION_INTENTS.EXPIRES_AT, timestamp.plusMinutes(15))
             .set(RESERVATION_INTENTS.VERSION, 0L)

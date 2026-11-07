@@ -177,6 +177,21 @@ class MemberTest : BehaviorSpec({
         }
     }
 
+    given("회원 활성 여부를 판정할 때") {
+
+        `when`("ACTIVE 상태이면") {
+            then("활성 회원으로 판정한다") {
+                createMember().isActive() shouldBe true
+            }
+        }
+
+        `when`("INACTIVE 상태이면") {
+            then("활성 회원이 아닌 것으로 판정한다") {
+                createMember().deactivate().isActive() shouldBe false
+            }
+        }
+    }
+
     given("deactivate 시") {
 
         `when`("ACTIVE 상태에서 비활성화하면") {

@@ -14,6 +14,7 @@ import com.stayops.shared.domain.IdGenerator
 import com.stayops.shared.domain.Money
 import com.stayops.shared.exception.BusinessException
 import com.stayops.shared.exception.NotFoundException
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
 import java.time.Clock
@@ -25,6 +26,8 @@ class ReservationPaymentApplication(
     private val idGenerator: IdGenerator,
     private val clock: Clock
 ) : ReservationPaymentService {
+
+    private val log = LoggerFactory.getLogger(javaClass)
 
     override fun createPendingPayment(
         reservationId: String,
@@ -149,20 +152,29 @@ class ReservationPaymentApplication(
             savedPayment.id,
             PaymentOutboxType.CONFIRM_PAYMENT
         )
-        if (existingOutbox == null) {
-            paymentOutboxRepository.save(
-                PaymentOutboxMessage.createConfirmForReservationIntent(
-                    id = idGenerator.generate(),
-                    paymentId = savedPayment.id,
-                    reservationIntentId = reservationIntentId,
-                    memberId = memberId,
-                    paymentKey = paymentKey,
-                    orderId = savedPayment.orderId,
-                    amount = savedPayment.amount,
-                    now = clock.instant()
-                )
+        val outbox = existingOutbox ?: paymentOutboxRepository.save(
+            PaymentOutboxMessage.createConfirmForReservationIntent(
+                id = idGenerator.generate(),
+                paymentId = savedPayment.id,
+                reservationIntentId = reservationIntentId,
+                memberId = memberId,
+                paymentKey = paymentKey,
+                orderId = savedPayment.orderId,
+                amount = savedPayment.amount,
+                now = clock.instant()
             )
-        }
+        )
+
+        log.info(
+            "[결제 승인 요청 접수] event=payment_confirm_requested reservationIntentId={} reservationId=- " +
+                "paymentId={} outboxId={} orderId={} workerId=- retryCount={} outboxType={}",
+            reservationIntentId,
+            savedPayment.id,
+            outbox.id,
+            savedPayment.orderId,
+            outbox.retryCount,
+            outbox.type
+        )
 
         return savedPayment.toSnapshot()
     }
